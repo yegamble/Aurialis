@@ -12,8 +12,13 @@ const TEST_WAV = path.join(__dirname, "fixtures", "test-audio.wav");
 /** Upload the test WAV and wait for navigation to /master */
 async function uploadAndNavigate(page: Page) {
   await page.goto("/");
-  // The file input is hidden (aria-hidden) but Playwright can still set files on it
-  await page.locator('input[type="file"]').setInputFiles(TEST_WAV);
+  // Use filechooser interception: click the upload zone which programmatically
+  // triggers input.click(), Playwright intercepts it as a file chooser dialog
+  const [fileChooser] = await Promise.all([
+    page.waitForEvent("filechooser"),
+    page.getByRole("button", { name: /upload audio file/i }).click(),
+  ]);
+  await fileChooser.setFiles(TEST_WAV);
   // Upload progress animation takes ~1-2 seconds then navigates
   await page.waitForURL("**/master", { timeout: 15000 });
 }

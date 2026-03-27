@@ -88,8 +88,15 @@ export default function MasterPage() {
   };
 
   const handleOutputPresetChange = (preset: string) => {
-    const platform = preset.toLowerCase().replace(" ", "") as PlatformName;
-    if (PLATFORM_PRESETS[platform]) {
+    const platformMap: Record<string, PlatformName> = {
+      Spotify: "spotify",
+      "Apple Music": "appleMusic",
+      YouTube: "youtube",
+      SoundCloud: "soundcloud",
+      CD: "cd",
+    };
+    const platform = platformMap[preset];
+    if (platform && PLATFORM_PRESETS[platform]) {
       setParams(PLATFORM_PRESETS[platform]);
     }
   };

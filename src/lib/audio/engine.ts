@@ -72,6 +72,11 @@ export class AudioEngine {
     // Build processing chain (loads worklets, falls back to bypass on failure)
     this.chain = new ProcessingChain(this.context);
     await this.chain.init();
+    // Guard: engine may have been disposed during async chain.init() (React StrictMode)
+    if (this._disposed || !this.chain) {
+      this.context = null;
+      return;
+    }
     this.chain.onMetering = (data) => {
       const metering: MeteringData = {
         leftLevel: data.leftLevel,
@@ -95,6 +100,10 @@ export class AudioEngine {
   /** Apply a parameter change to the processing chain */
   updateParameter(key: keyof AudioParams, value: number): void {
     this.chain?.updateParam(key, value);
+  }
+
+  get isDisposed(): boolean {
+    return this._disposed;
   }
 
   get processingAvailable(): boolean {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -16,11 +16,13 @@ import { SpectrumDisplay } from "@/components/visualization/SpectrumDisplay";
 import { LevelMeter } from "@/components/visualization/LevelMeter";
 import { SimpleMastering } from "@/components/mastering/SimpleMastering";
 import { AdvancedMastering } from "@/components/mastering/AdvancedMastering";
+import { ABToggle } from "@/components/mastering/ABToggle";
 import { ExportPanel } from "@/components/export/ExportPanel";
 import { useAudioStore } from "@/lib/stores/audio-store";
 import { useUIStore } from "@/lib/stores/ui-store";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { useVisualization } from "@/hooks/useVisualization";
+import { applyIntensity, PLATFORM_PRESETS, type GenreName, type PlatformName } from "@/lib/audio/presets";
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -39,11 +41,13 @@ export default function MasterPage() {
     isLoaded,
     currentTime,
     duration,
+    isBypassed,
     play,
     pause,
     stop,
     seek,
     loadFile,
+    toggleBypass,
     engine,
   } = useAudioEngine();
 
@@ -53,7 +57,42 @@ export default function MasterPage() {
   // Simple mode state
   const params = useAudioStore((s) => s.params);
   const setParam = useAudioStore((s) => s.setParam);
+  const setParams = useAudioStore((s) => s.setParams);
   const metering = useAudioStore((s) => s.metering);
+
+  // Simple mode: genre and toggles
+  const [genre, setGenre] = useState<GenreName>("pop");
+  const [toggles, setToggles] = useState({
+    cleanup: false,
+    warm: false,
+    bright: false,
+    wide: false,
+    loud: false,
+  });
+
+  // Apply genre preset at current intensity
+  const handleGenreChange = (newGenre: string) => {
+    const g = newGenre as GenreName;
+    setGenre(g);
+    const intensity = params.satDrive; // intensity knob mapped to satDrive for now
+    setParams(applyIntensity(g, intensity));
+  };
+
+  const handleIntensityChange = (val: number) => {
+    setParam("satDrive", val);
+    setParams(applyIntensity(genre, val));
+  };
+
+  const handleToggle = (key: string) => {
+    setToggles((prev) => ({ ...prev, [key]: !prev[key as keyof typeof prev] }));
+  };
+
+  const handleOutputPresetChange = (preset: string) => {
+    const platform = preset.toLowerCase().replace(" ", "") as PlatformName;
+    if (PLATFORM_PRESETS[platform]) {
+      setParams(PLATFORM_PRESETS[platform]);
+    }
+  };
 
   // Load the file when the page mounts
   useEffect(() => {
@@ -106,6 +145,7 @@ export default function MasterPage() {
             <button
               key={m}
               onClick={() => setMode(m)}
+              data-testid={`mode-toggle-${m}`}
               className={`px-4 py-1.5 rounded-md text-xs transition-all capitalize ${
                 mode === m
                   ? "bg-[rgba(255,255,255,0.12)] text-white shadow-sm"
@@ -133,17 +173,11 @@ export default function MasterPage() {
               >
                 <SimpleMastering
                   intensity={params.satDrive}
-                  onIntensityChange={(v) => setParam("satDrive", v)}
-                  genre="hiphop"
-                  onGenreChange={() => {}}
-                  toggles={{
-                    cleanup: true,
-                    warm: true,
-                    bright: false,
-                    wide: false,
-                    loud: false,
-                  }}
-                  onToggle={() => {}}
+                  onIntensityChange={handleIntensityChange}
+                  genre={genre}
+                  onGenreChange={handleGenreChange}
+                  toggles={toggles}
+                  onToggle={handleToggle}
                   onAutoMaster={() => {}}
                 />
               </motion.div>
@@ -165,7 +199,7 @@ export default function MasterPage() {
                   tonePreset="Tape Warmth"
                   onTonePresetChange={() => {}}
                   outputPreset="Spotify"
-                  onOutputPresetChange={() => {}}
+                  onOutputPresetChange={handleOutputPresetChange}
                 />
               </motion.div>
             )}
@@ -217,6 +251,7 @@ export default function MasterPage() {
           />
 
           <div className="flex items-center justify-center gap-4">
+            <ABToggle isActive={isBypassed} onToggle={toggleBypass} />
             <button
               onClick={stop}
               className="w-10 h-10 rounded-full bg-[rgba(255,255,255,0.06)] flex items-center justify-center hover:bg-[rgba(255,255,255,0.1)] transition-colors"
@@ -257,17 +292,11 @@ export default function MasterPage() {
                 {mode === "simple" ? (
                   <SimpleMastering
                     intensity={params.satDrive}
-                    onIntensityChange={(v) => setParam("satDrive", v)}
-                    genre="hiphop"
-                    onGenreChange={() => {}}
-                    toggles={{
-                      cleanup: true,
-                      warm: true,
-                      bright: false,
-                      wide: false,
-                      loud: false,
-                    }}
-                    onToggle={() => {}}
+                    onIntensityChange={handleIntensityChange}
+                    genre={genre}
+                    onGenreChange={handleGenreChange}
+                    toggles={toggles}
+                    onToggle={handleToggle}
                     onAutoMaster={() => {}}
                   />
                 ) : (

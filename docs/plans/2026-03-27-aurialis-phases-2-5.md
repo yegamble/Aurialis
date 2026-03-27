@@ -176,11 +176,11 @@ Type: Feature
 - [x] Task 3: Node wrappers + EQ + Stereo Width
 - [x] Task 4: Processing chain + Engine integration
 - [x] Task 5: Parameter bridge + Presets
-- [ ] Task 6: A/B bypass + UI wiring
-- [ ] Task 7: Integration tests with programmatic test signals
+- [x] Task 6: A/B bypass + UI wiring
+- [x] Task 7: Integration tests with programmatic test signals
 - [ ] Task 8: Playwright E2E + CI workflow + commit/push
 
-**Total Tasks:** 8 | **Completed:** 5 | **Remaining:** 3
+**Total Tasks:** 8 | **Completed:** 7 | **Remaining:** 1
 
 ## Implementation Tasks
 

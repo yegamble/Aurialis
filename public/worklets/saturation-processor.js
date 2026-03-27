@@ -41,9 +41,9 @@ class SaturationProcessor extends AudioWorkletProcessor {
     const norm = Math.tanh(driveFactor);
     const wetGain = this._mix / 100;
     const dryGain = 1 - wetGain;
-    // LP filter coefficient for anti-alias (cutoff ≈ Nyquist/4, simple 1-pole IIR)
-    // α = exp(-2π * cutoff/sampleRate) where cutoff = sampleRate/8
-    const alpha = Math.exp(-2 * Math.PI * 0.125); // ≈ 0.4559
+    // LP filter coefficient for anti-alias (cutoff = Nyquist/4 of original rate = Nyquist of 4x upsampled signal)
+    // α = exp(-2π * f_c) where f_c = 0.25 (normalized, i.e. cutoff at sr/4)
+    const alpha = Math.exp(-2 * Math.PI * 0.25); // ≈ 0.2096
 
     for (let c = 0; c < numChannels; c++) {
       if (!this._lpState[c]) this._lpState[c] = 0;

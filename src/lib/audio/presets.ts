@@ -38,7 +38,8 @@ export type GenreName =
   | "jazz"
   | "classical"
   | "rnb"
-  | "podcast";
+  | "podcast"
+  | "lofi";
 
 export type PlatformName =
   | "spotify"
@@ -189,6 +190,24 @@ export const GENRE_PRESETS: Record<GenreName, AudioParams> = {
     eq12k: 0,
     satDrive: 0,
     stereoWidth: 100,
+    targetLufs: -16,
+    ceiling: -1,
+  },
+
+  lofi: {
+    ...DEFAULT_PARAMS,
+    threshold: -22,
+    ratio: 2.5,
+    attack: 40,
+    release: 400,
+    makeup: 2,
+    eq80: 1,
+    eq250: 1.5,
+    eq1k: 0,
+    eq4k: -1.5,
+    eq12k: -2,
+    satDrive: 30,
+    stereoWidth: 95,
     targetLufs: -16,
     ceiling: -1,
   },

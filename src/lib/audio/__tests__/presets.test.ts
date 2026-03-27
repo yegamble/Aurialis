@@ -9,9 +9,9 @@ import {
 } from "../presets";
 
 describe("Genre Presets", () => {
-  it("should define 8 genres", () => {
+  it("should define 9 genres", () => {
     const genres = Object.keys(GENRE_PRESETS);
-    expect(genres).toHaveLength(8);
+    expect(genres).toHaveLength(9);
   });
 
   it("should include all expected genre names", () => {

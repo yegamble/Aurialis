@@ -1,8 +1,11 @@
 "use client";
 
-import { useRef, useEffect, useCallback, useSyncExternalStore } from "react";
+import { useRef, useEffect, useCallback, useSyncExternalStore, useState } from "react";
 import { AudioEngine } from "@/lib/audio/engine";
 import { useAudioStore } from "@/lib/stores/audio-store";
+import { ParameterBridge } from "@/lib/audio/parameter-bridge";
+import { AudioBypass } from "@/lib/audio/bypass";
+import type { MeteringData } from "@/types/audio";
 
 interface AudioEngineSnapshot {
   isPlaying: boolean;
@@ -26,9 +29,13 @@ export function useAudioEngine() {
   const engineRef = useRef<AudioEngine | null>(null);
   const snapshotRef = useRef<AudioEngineSnapshot>({ ...defaultSnapshot });
   const listenersRef = useRef(new Set<() => void>());
+  const bridgeRef = useRef<ParameterBridge | null>(null);
+  const bypassRef = useRef<AudioBypass | null>(null);
+  const [isBypassed, setIsBypassed] = useState(false);
 
-  // Lazily create engine
-  if (!engineRef.current) {
+  // Create a fresh engine if none exists or if the previous one was disposed
+  // (React StrictMode disposes on unmount during double-mount cycle)
+  if (!engineRef.current || engineRef.current.isDisposed) {
     engineRef.current = new AudioEngine();
   }
 
@@ -95,23 +102,47 @@ export function useAudioEngine() {
       useAudioStore.getState().setCurrentTime(0);
     };
 
+    const onMetering = (data: unknown) => {
+      const m = data as MeteringData;
+      useAudioStore.getState().setMetering({
+        leftLevel: m.leftLevel,
+        rightLevel: m.rightLevel,
+        lufs: m.lufs,
+        shortTermLufs: m.shortTermLufs,
+        integratedLufs: m.integratedLufs,
+        truePeak: m.truePeak,
+        dynamicRange: m.dynamicRange,
+      });
+    };
+
     engine.on("statechange", onStateChange);
     engine.on("timeupdate", onTimeUpdate);
     engine.on("loaded", onLoaded);
     engine.on("ended", onEnded);
+    engine.on("metering", onMetering);
+
+    // Initialize parameter bridge (connects Zustand params to engine)
+    bridgeRef.current = new ParameterBridge(engine);
 
     return () => {
       engine.off("statechange", onStateChange);
       engine.off("timeupdate", onTimeUpdate);
       engine.off("loaded", onLoaded);
       engine.off("ended", onEnded);
+      engine.off("metering", onMetering);
+      bridgeRef.current?.destroy();
+      bridgeRef.current = null;
     };
   }, [engine, updateSnapshot]);
 
-  // Dispose on unmount
+  // Dispose on unmount; null the ref so next render creates a fresh engine
+  // (handles React StrictMode double-mount: cleanup → remount gets fresh engine)
   useEffect(() => {
     return () => {
       engine.dispose();
+      if (engineRef.current === engine) {
+        engineRef.current = null;
+      }
     };
   }, [engine]);
 
@@ -158,12 +189,23 @@ export function useAudioEngine() {
     [engine]
   );
 
+  const toggleBypass = useCallback(() => {
+    if (!bypassRef.current) {
+      // Create bypass lazily using engine's internal nodes via a simple flag on engine
+      // For now, use the engine's processingAvailable flag as a bypass signal
+    }
+    const next = !isBypassed;
+    setIsBypassed(next);
+    // Signal chain bypass via engine (future: AudioBypass instance)
+  }, [isBypassed]);
+
   return {
     // State
     isPlaying: snapshot.isPlaying,
     isLoaded: snapshot.isLoaded,
     currentTime: snapshot.currentTime,
     duration: snapshot.duration,
+    isBypassed,
 
     // Actions
     play,
@@ -172,6 +214,7 @@ export function useAudioEngine() {
     seek,
     loadFile,
     loadBuffer,
+    toggleBypass,
 
     // Engine ref for visualization hooks
     engine,

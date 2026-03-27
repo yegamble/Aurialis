@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import type { MeteringData } from "@/types/audio";
+export type { MeteringData };
 
 export interface AudioParams {
   inputGain: number;
@@ -20,14 +22,6 @@ export interface AudioParams {
   targetLufs: number;
   ceiling: number;
   limiterRelease: number;
-}
-
-export interface MeteringData {
-  leftLevel: number;
-  rightLevel: number;
-  lufs: number;
-  truePeak: number;
-  dynamicRange: number;
 }
 
 export interface AudioState {
@@ -72,7 +66,7 @@ const defaultParams: AudioParams = {
   eq1k: 0,
   eq4k: 0,
   eq12k: 0,
-  satDrive: 40,
+  satDrive: 0,
   stereoWidth: 100,
   bassMonoFreq: 200,
   midGain: 0,
@@ -86,6 +80,8 @@ const defaultMetering: MeteringData = {
   leftLevel: 0,
   rightLevel: 0,
   lufs: -Infinity,
+  shortTermLufs: -Infinity,
+  integratedLufs: -Infinity,
   truePeak: -Infinity,
   dynamicRange: 0,
 };

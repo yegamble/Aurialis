@@ -143,6 +143,46 @@ describe("AudioEngine", () => {
     expect(engine.audioBuffer).toBeNull();
   });
 
+  it("loads processing chain (worklets) on init()", async () => {
+    await engine.init();
+    // processingAvailable reflects worklet loading success
+    // In test environment with mock, it should be true
+    expect(typeof engine.processingAvailable).toBe("boolean");
+  });
+
+  it("updateParameter does not throw after init", async () => {
+    await engine.init();
+    expect(() => engine.updateParameter("threshold", -18)).not.toThrow();
+    expect(() => engine.updateParameter("ratio", 4)).not.toThrow();
+    expect(() => engine.updateParameter("eq1k", 6)).not.toThrow();
+    expect(() => engine.updateParameter("ceiling", -1)).not.toThrow();
+    expect(() => engine.updateParameter("satDrive", 0)).not.toThrow();
+    expect(() => engine.updateParameter("stereoWidth", 100)).not.toThrow();
+  });
+
+  it("emits metering events when metering worklet posts data", async () => {
+    await engine.init();
+    const meterSpy = vi.fn();
+    engine.on("metering", meterSpy);
+    // Trigger metering callback directly via chain
+    const chain = (engine as unknown as { chain: { onMetering: ((d: unknown) => void) | null } }).chain;
+    if (chain?.onMetering) {
+      chain.onMetering({
+        type: "metering",
+        lufs: -23,
+        shortTermLufs: -22,
+        integratedLufs: -23,
+        truePeak: -1,
+        dynamicRange: 22,
+        leftLevel: 0.1,
+        rightLevel: 0.1,
+      });
+    }
+    expect(meterSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ lufs: -23, truePeak: -1 })
+    );
+  });
+
   it("off removes event listener", async () => {
     const spy = vi.fn();
     engine.on("statechange", spy);

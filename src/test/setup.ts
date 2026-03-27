@@ -1,12 +1,34 @@
 /// <reference types="vitest" />
 import "@testing-library/jest-dom/vitest";
 
+// AudioWorklet mock — must be defined before MockAudioContext
+class MockAudioWorklet {
+  addModule = vi.fn().mockResolvedValue(undefined);
+}
+
+// AudioWorkletNode mock — wraps a port for message passing
+class MockAudioWorkletNode {
+  port = {
+    postMessage: vi.fn(),
+    onmessage: null as ((e: MessageEvent) => void) | null,
+  };
+  connect = vi.fn();
+  disconnect = vi.fn();
+  constructor(_ctx: unknown, _name: string, _opts?: unknown) {}
+}
+
+Object.defineProperty(globalThis, "AudioWorkletNode", {
+  value: MockAudioWorkletNode,
+  writable: true,
+});
+
 // Mock AudioContext for tests
 class MockAudioContext {
   sampleRate = 44100;
   state: AudioContextState = "running";
   destination = {} as AudioDestinationNode;
   currentTime = 0;
+  audioWorklet = new MockAudioWorklet();
 
   createGain() {
     return {
@@ -52,11 +74,11 @@ class MockAudioContext {
     };
   }
 
-  createChannelSplitter() {
+  createChannelSplitter(_numberOfOutputs?: number) {
     return { connect: vi.fn(), disconnect: vi.fn() };
   }
 
-  createChannelMerger() {
+  createChannelMerger(_numberOfInputs?: number) {
     return { connect: vi.fn(), disconnect: vi.fn() };
   }
 

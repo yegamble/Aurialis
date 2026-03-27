@@ -1,0 +1,103 @@
+/**
+ * CompressorProcessor — AudioWorklet
+ * Envelope follower + gain computer + attack/release smoothing + makeup gain.
+ * Matches src/lib/audio/dsp/compressor.ts and src/lib/audio/dsp/envelope.ts logic.
+ */
+class CompressorProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    // Default params
+    this._threshold = -18; // dBFS
+    this._ratio = 4;
+    this._attack = 0.020;  // seconds
+    this._release = 0.250; // seconds
+    this._knee = 6;        // dB
+    this._makeup = 0;      // dB
+    this._enabled = true;
+
+    // State
+    this._envelope = 0; // current envelope level (linear)
+    this._gr = 0;       // current gain reduction (dB)
+
+    this.port.onmessage = (e) => {
+      const { param, value } = e.data;
+      if (param === 'threshold') this._threshold = value;
+      else if (param === 'ratio') this._ratio = value;
+      else if (param === 'attack') this._attack = value / 1000; // ms → s
+      else if (param === 'release') this._release = value / 1000;
+      else if (param === 'knee') this._knee = value;
+      else if (param === 'makeup') this._makeup = value;
+      else if (param === 'enabled') this._enabled = value;
+    };
+  }
+
+  process(inputs, outputs) {
+    const input = inputs[0];
+    const output = outputs[0];
+    if (!input || !input[0]) return true;
+
+    const sr = sampleRate;
+    const attackCoeff = Math.exp(-1 / (this._attack * sr));
+    const releaseCoeff = Math.exp(-1 / (this._release * sr));
+    const makeupLin = Math.pow(10, this._makeup / 20);
+    const numChannels = Math.min(input.length, output.length);
+    const blockSize = input[0].length;
+
+    if (!this._enabled) {
+      for (let c = 0; c < numChannels; c++) {
+        output[c].set(input[c]);
+      }
+      return true;
+    }
+
+    for (let i = 0; i < blockSize; i++) {
+      // Mix to mono for level detection
+      let level = 0;
+      for (let c = 0; c < numChannels; c++) {
+        level += Math.abs(input[c][i]);
+      }
+      level /= numChannels;
+
+      // Envelope follower (peak with attack/release)
+      if (level > this._envelope) {
+        this._envelope = attackCoeff * this._envelope + (1 - attackCoeff) * level;
+      } else {
+        this._envelope = releaseCoeff * this._envelope + (1 - releaseCoeff) * level;
+      }
+
+      // Convert to dB
+      const inputDb = this._envelope > 0 ? 20 * Math.log10(this._envelope) : -120;
+
+      // Gain computer
+      const gr = this._computeGainReduction(inputDb);
+
+      // Apply gain reduction to all channels
+      const gainLin = Math.pow(10, gr / 20) * makeupLin;
+      for (let c = 0; c < numChannels; c++) {
+        output[c][i] = input[c][i] * gainLin;
+      }
+      this._gr = gr;
+    }
+
+    // Post gain reduction data at 30Hz (every ~1470 samples at 44.1kHz)
+    this.port.postMessage({ type: 'gr', value: this._gr });
+    return true;
+  }
+
+  _computeGainReduction(inputDb) {
+    const { _threshold: threshold, _ratio: ratio, _knee: knee } = this;
+    const halfKnee = knee / 2;
+    const overshoot = inputDb - threshold;
+
+    if (knee > 0 && overshoot >= -halfKnee && overshoot <= halfKnee) {
+      const x = overshoot + halfKnee;
+      const r = ratio === Infinity ? 1e10 : ratio;
+      return (1 / r - 1) * (x * x) / (2 * knee);
+    }
+    if (overshoot <= -halfKnee) return 0;
+    if (ratio === Infinity) return -overshoot;
+    return overshoot * (1 / ratio - 1);
+  }
+}
+
+registerProcessor('compressor-processor', CompressorProcessor);

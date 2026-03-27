@@ -1,5 +1,7 @@
-import type { AudioEngineEventType } from "@/types/audio";
+import type { AudioEngineEventType, MeteringData } from "@/types/audio";
 import { loadAudioFile } from "./loader";
+import { ProcessingChain } from "./chain";
+import type { AudioParams } from "@/lib/stores/audio-store";
 
 type EventCallback = (data?: unknown) => void;
 
@@ -10,6 +12,7 @@ export class AudioEngine {
   private inputGain: GainNode | null = null;
   private outputGain: GainNode | null = null;
   private analyser: AnalyserNode | null = null;
+  private chain: ProcessingChain | null = null;
 
   private _isPlaying = false;
   private _startTime = 0;
@@ -66,10 +69,36 @@ export class AudioEngine {
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.8;
 
-    // Signal chain: inputGain -> outputGain -> analyser -> destination
-    this.inputGain.connect(this.outputGain);
+    // Build processing chain (loads worklets, falls back to bypass on failure)
+    this.chain = new ProcessingChain(this.context);
+    await this.chain.init();
+    this.chain.onMetering = (data) => {
+      const metering: MeteringData = {
+        leftLevel: data.leftLevel,
+        rightLevel: data.rightLevel,
+        lufs: data.lufs,
+        shortTermLufs: data.shortTermLufs,
+        integratedLufs: data.integratedLufs,
+        truePeak: data.truePeak,
+        dynamicRange: data.dynamicRange,
+      };
+      this.emit("metering", metering);
+    };
+
+    // Signal chain: inputGain → [ProcessingChain] → outputGain → analyser → destination
+    this.inputGain.connect(this.chain.input);
+    this.chain.output.connect(this.outputGain);
     this.outputGain.connect(this.analyser);
     this.analyser.connect(this.context.destination);
+  }
+
+  /** Apply a parameter change to the processing chain */
+  updateParameter(key: keyof AudioParams, value: number): void {
+    this.chain?.updateParam(key, value);
+  }
+
+  get processingAvailable(): boolean {
+    return this.chain?.processingAvailable ?? false;
   }
 
   async loadFile(file: File): Promise<void> {
@@ -248,6 +277,7 @@ export class AudioEngine {
     this.stopRaf();
 
     this.inputGain?.disconnect();
+    this.chain?.dispose();
     this.outputGain?.disconnect();
     this.analyser?.disconnect();
 
@@ -260,6 +290,7 @@ export class AudioEngine {
     this.inputGain = null;
     this.outputGain = null;
     this.analyser = null;
+    this.chain = null;
     this.listeners.clear();
   }
 

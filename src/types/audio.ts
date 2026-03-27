@@ -18,8 +18,11 @@ export interface AudioEngineState {
 export interface MeteringData {
   leftLevel: number;
   rightLevel: number;
-  leftPeak: number;
-  rightPeak: number;
+  lufs: number;
+  shortTermLufs: number;
+  integratedLufs: number;
+  truePeak: number;
+  dynamicRange: number;
 }
 
 export interface VisualizationData {
@@ -33,7 +36,9 @@ export type AudioEngineEventType =
   | "timeupdate"
   | "loaded"
   | "ended"
-  | "error";
+  | "error"
+  | "metering"
+  | "paramchange";
 
 export interface AudioEngineEvent {
   type: AudioEngineEventType;

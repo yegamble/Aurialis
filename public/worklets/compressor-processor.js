@@ -16,8 +16,9 @@ class CompressorProcessor extends AudioWorkletProcessor {
     this._enabled = true;
 
     // State
-    this._envelope = 0; // current envelope level (linear)
-    this._gr = 0;       // current gain reduction (dB)
+    this._envelope = 0;    // current envelope level (linear)
+    this._gr = 0;          // current gain reduction (dB)
+    this._frameCount = 0;  // for 30Hz throttle
 
     this.port.onmessage = (e) => {
       const { param, value } = e.data;
@@ -79,8 +80,11 @@ class CompressorProcessor extends AudioWorkletProcessor {
       this._gr = gr;
     }
 
-    // Post gain reduction data at 30Hz (every ~1470 samples at 44.1kHz)
-    this.port.postMessage({ type: 'gr', value: this._gr });
+    // Post gain reduction data at ~30Hz (every 45 blocks at 44.1kHz / 128 samples = ~30Hz)
+    if (this._frameCount % 45 === 0) {
+      this.port.postMessage({ type: 'gr', value: this._gr });
+    }
+    this._frameCount++;
     return true;
   }
 

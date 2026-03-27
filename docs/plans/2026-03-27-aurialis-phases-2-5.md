@@ -1,7 +1,7 @@
 # Aurialis Phase 2: DSP Processing Chain
 
 Created: 2026-03-27
-Status: PENDING
+Status: COMPLETE
 Approved: Yes
 Iterations: 0
 Worktree: No
@@ -178,9 +178,9 @@ Type: Feature
 - [x] Task 5: Parameter bridge + Presets
 - [x] Task 6: A/B bypass + UI wiring
 - [x] Task 7: Integration tests with programmatic test signals
-- [ ] Task 8: Playwright E2E + CI workflow + commit/push
+- [x] Task 8: Playwright E2E + CI workflow + commit/push
 
-**Total Tasks:** 8 | **Completed:** 7 | **Remaining:** 1
+**Total Tasks:** 8 | **Completed:** 8 | **Remaining:** 0
 
 ## Implementation Tasks
 
@@ -340,7 +340,7 @@ Type: Feature
 
 **Files:**
 - Create: `src/lib/audio/parameter-bridge.ts` — Subscribes to Zustand store, calls engine.updateParameter() on change. Debounces rapid slider movements (16ms). Maps simple mode (intensity + genre + toggles) to advanced parameter values.
-- Create: `src/lib/audio/presets.ts` — Genre presets: Pop, Rock, HipHop, Electronic, Jazz, Classical, R&B, Podcast → complete AudioParams objects. Platform presets: Spotify (-14 LUFS/-1 dBTP), Apple Music (-16/-1), YouTube (-14/-1), SoundCloud (-14/-1), CD (-9/-0.1). Intensity 0-100 interpolates between neutral and genre target.
+- Create: `src/lib/audio/presets.ts` — Genre presets: Pop, Rock, HipHop, Electronic, Jazz, Classical, R&B, Podcast, LoFi (9 genres) → complete AudioParams objects. Platform presets: Spotify (-14 LUFS/-1 dBTP), Apple Music (-16/-1), YouTube (-14/-1), SoundCloud (-14/-1), CD (-9/-0.1). Intensity 0-100 interpolates between neutral and genre target.
 - Test: `src/lib/audio/__tests__/presets.test.ts`
 - Test: `src/lib/audio/__tests__/parameter-bridge.test.ts`
 

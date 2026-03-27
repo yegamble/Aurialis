@@ -22,9 +22,16 @@ export default defineConfig({
         "src/test/**",
         "src/**/*.test.{ts,tsx}",
         "src/**/*.spec.{ts,tsx}",
-        "src/app/components/ui/**",
-        "src/components/ui/**",
+        // UI components and pages are tested via Playwright E2E — exclude from unit coverage
+        "src/app/**",
+        "src/components/**",
+        "src/hooks/**",
       ],
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 70,
+      },
     },
   },
 });

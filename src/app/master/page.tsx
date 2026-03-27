@@ -23,6 +23,48 @@ import { useUIStore } from "@/lib/stores/ui-store";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { useVisualization } from "@/hooks/useVisualization";
 import { applyIntensity, PLATFORM_PRESETS, type GenreName, type PlatformName } from "@/lib/audio/presets";
+import type { AudioParams as StoreAudioParams } from "@/lib/stores/audio-store";
+
+// ─── Toggle offsets (additive deltas on top of base genre preset) ─────────────
+const TOGGLE_OFFSETS: Record<string, Partial<StoreAudioParams>> = {
+  cleanup:  { threshold: -5, ratio: 1.0, attack: -15, release: -100, makeup: 1.0 },
+  warm:     { eq250: 2.0, satDrive: 15 },
+  bright:   { eq4k: 1.5, eq12k: 2.5 },
+  wide:     { stereoWidth: 50 },
+  loud:     { makeup: 3.0, ceiling: 0.5 },
+  deharsh:  { eq4k: -3.0, eq1k: -1.5 },
+  glueComp: { threshold: -5, ratio: 1.5, attack: 20, release: 100, makeup: 1.5 },
+};
+
+const PARAM_MIN: Partial<Record<keyof StoreAudioParams, number>> = {
+  threshold: -40, ratio: 1, attack: 0.1, release: 10, makeup: -12,
+  eq80: -12, eq250: -12, eq1k: -12, eq4k: -12, eq12k: -12,
+  satDrive: 0, stereoWidth: 0, ceiling: -6, targetLufs: -24,
+};
+const PARAM_MAX: Partial<Record<keyof StoreAudioParams, number>> = {
+  threshold: 0, ratio: 20, attack: 100, release: 1000, makeup: 12,
+  eq80: 12, eq250: 12, eq1k: 12, eq4k: 12, eq12k: 12,
+  satDrive: 100, stereoWidth: 200, ceiling: 0, targetLufs: -6,
+};
+
+function applyToggles(
+  base: StoreAudioParams,
+  activeToggles: Record<string, boolean>
+): StoreAudioParams {
+  const result = { ...base };
+  for (const [key, isActive] of Object.entries(activeToggles)) {
+    if (!isActive) continue;
+    const offsets = TOGGLE_OFFSETS[key];
+    if (!offsets) continue;
+    for (const [k, delta] of Object.entries(offsets) as [keyof StoreAudioParams, number][]) {
+      const cur = (result[k] as number) ?? 0;
+      const min = PARAM_MIN[k] ?? -Infinity;
+      const max = PARAM_MAX[k] ?? Infinity;
+      (result[k] as number) = Math.max(min, Math.min(max, cur + delta));
+    }
+  }
+  return result;
+}
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -60,31 +102,44 @@ export default function MasterPage() {
   const setParams = useAudioStore((s) => s.setParams);
   const metering = useAudioStore((s) => s.metering);
 
-  // Simple mode: genre and toggles
+  // Simple mode: genre, intensity (0-100), and toggles
   const [genre, setGenre] = useState<GenreName>("pop");
+  const [intensity, setIntensity] = useState(50);
   const [toggles, setToggles] = useState({
     cleanup: false,
     warm: false,
     bright: false,
     wide: false,
     loud: false,
+    deharsh: false,
+    glueComp: false,
   });
 
-  // Apply genre preset at current intensity
+  // Re-compute params whenever genre/intensity/toggles change
+  const recomputeParams = (
+    g: GenreName,
+    intVal: number,
+    activeToggles: typeof toggles
+  ) => {
+    const base = applyIntensity(g, intVal);
+    setParams(applyToggles(base, activeToggles));
+  };
+
   const handleGenreChange = (newGenre: string) => {
     const g = newGenre as GenreName;
     setGenre(g);
-    const intensity = params.satDrive; // intensity knob mapped to satDrive for now
-    setParams(applyIntensity(g, intensity));
+    recomputeParams(g, intensity, toggles);
   };
 
   const handleIntensityChange = (val: number) => {
-    setParam("satDrive", val);
-    setParams(applyIntensity(genre, val));
+    setIntensity(val);
+    recomputeParams(genre, val, toggles);
   };
 
   const handleToggle = (key: string) => {
-    setToggles((prev) => ({ ...prev, [key]: !prev[key as keyof typeof prev] }));
+    const newToggles = { ...toggles, [key]: !toggles[key as keyof typeof toggles] };
+    setToggles(newToggles);
+    recomputeParams(genre, intensity, newToggles);
   };
 
   const handleOutputPresetChange = (preset: string) => {
@@ -179,7 +234,7 @@ export default function MasterPage() {
                 transition={{ duration: 0.2 }}
               >
                 <SimpleMastering
-                  intensity={params.satDrive}
+                  intensity={intensity}
                   onIntensityChange={handleIntensityChange}
                   genre={genre}
                   onGenreChange={handleGenreChange}
@@ -201,8 +256,8 @@ export default function MasterPage() {
                   onParamChange={(k, v) =>
                     setParam(k as keyof typeof params, v)
                   }
-                  dynamics={{ deharsh: true, glueComp: true }}
-                  onDynamicsToggle={() => {}}
+                  dynamics={{ deharsh: toggles.deharsh, glueComp: toggles.glueComp }}
+                  onDynamicsToggle={handleToggle}
                   tonePreset="Tape Warmth"
                   onTonePresetChange={() => {}}
                   outputPreset="Spotify"
@@ -298,7 +353,7 @@ export default function MasterPage() {
               <div className="pt-2">
                 {mode === "simple" ? (
                   <SimpleMastering
-                    intensity={params.satDrive}
+                    intensity={intensity}
                     onIntensityChange={handleIntensityChange}
                     genre={genre}
                     onGenreChange={handleGenreChange}
@@ -312,12 +367,12 @@ export default function MasterPage() {
                     onParamChange={(k, v) =>
                       setParam(k as keyof typeof params, v)
                     }
-                    dynamics={{ deharsh: true, glueComp: true }}
-                    onDynamicsToggle={() => {}}
+                    dynamics={{ deharsh: toggles.deharsh, glueComp: toggles.glueComp }}
+                    onDynamicsToggle={handleToggle}
                     tonePreset="Tape Warmth"
                     onTonePresetChange={() => {}}
                     outputPreset="Spotify"
-                    onOutputPresetChange={() => {}}
+                    onOutputPresetChange={handleOutputPresetChange}
                   />
                 )}
               </div>

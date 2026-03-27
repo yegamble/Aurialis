@@ -12,13 +12,12 @@ const TEST_WAV = path.join(__dirname, "fixtures", "test-audio.wav");
 /** Upload the test WAV and wait for navigation to /master */
 async function uploadAndNavigate(page: Page) {
   await page.goto("/");
-  // Use filechooser interception: click the upload zone which programmatically
-  // triggers input.click(), Playwright intercepts it as a file chooser dialog
-  const [fileChooser] = await Promise.all([
-    page.waitForEvent("filechooser"),
-    page.getByRole("button", { name: /upload audio file/i }).click(),
-  ]);
-  await fileChooser.setFiles(TEST_WAV);
+  // Wait for React to fully hydrate before setting files
+  await page
+    .getByRole("button", { name: /upload audio file/i })
+    .waitFor({ state: "visible" });
+  // Set files directly on the hidden input (works once React is hydrated)
+  await page.locator('input[type="file"]').setInputFiles(TEST_WAV);
   // Upload progress animation takes ~1-2 seconds then navigates
   await page.waitForURL("**/master", { timeout: 15000 });
 }
@@ -72,7 +71,7 @@ test.describe("Mode Toggle", () => {
       "true"
     );
     // Advanced panel shows Parametric EQ section
-    await expect(page.getByText("Parametric EQ")).toBeVisible();
+    await expect(page.getByText("Parametric EQ").first()).toBeVisible();
   });
 });
 
@@ -83,7 +82,7 @@ test.describe("TS-002: Preset Selection", () => {
     await uploadAndNavigate(page);
     await page.getByTestId("mode-toggle-advanced").click();
     // Wait for advanced panel to be visible
-    await expect(page.getByText("Parametric EQ")).toBeVisible();
+    await expect(page.getByText("Parametric EQ").first()).toBeVisible();
   });
 
   test("Spotify preset sets Target LUFS to -14", async ({ page }) => {
@@ -100,7 +99,7 @@ test.describe("TS-002: Preset Selection", () => {
   });
 
   test("CD preset sets Target LUFS to -9", async ({ page }) => {
-    await page.getByRole("button", { name: "CD" }).click();
+    await page.getByRole("button", { name: "CD", exact: true }).click();
     const slider = page.getByRole("slider", { name: "Target LUFS" });
     await expect(slider).toHaveValue("-9");
   });
@@ -160,7 +159,7 @@ test.describe("Advanced Controls", () => {
   test.beforeEach(async ({ page }) => {
     await uploadAndNavigate(page);
     await page.getByTestId("mode-toggle-advanced").click();
-    await expect(page.getByText("Parametric EQ")).toBeVisible();
+    await expect(page.getByText("Parametric EQ").first()).toBeVisible();
   });
 
   test("1kHz EQ slider exists with correct range", async ({ page }) => {

@@ -153,6 +153,66 @@ test.describe("TS-003: Transport Controls", () => {
   });
 });
 
+// ─── TS-004: Auto Master ──────────────────────────────────────────────────────
+
+test.describe("TS-004: Auto Master", () => {
+  test.beforeEach(async ({ page }) => {
+    await uploadAndNavigate(page);
+  });
+
+  test("Auto Master button is visible in Simple mode", async ({ page }) => {
+    await expect(
+      page.getByRole("button", { name: /auto master/i })
+    ).toBeVisible();
+  });
+
+  test("clicking Auto Master changes advanced slider values from defaults", async ({
+    page,
+  }) => {
+    // Switch to advanced mode and record the initial threshold value
+    await page.getByTestId("mode-toggle-advanced").click();
+    await expect(page.getByText("Parametric EQ").first()).toBeVisible();
+    const thresholdBefore = await page
+      .getByRole("slider", { name: "Threshold" })
+      .inputValue();
+
+    // Switch back to simple, click Auto Master
+    await page.getByTestId("mode-toggle-simple").click();
+    await page.getByRole("button", { name: /auto master/i }).click();
+
+    // Switch to advanced and verify threshold changed
+    await page.getByTestId("mode-toggle-advanced").click();
+    await expect(page.getByText("Parametric EQ").first()).toBeVisible();
+    const thresholdAfter = await page
+      .getByRole("slider", { name: "Threshold" })
+      .inputValue();
+
+    // Auto Master should have set a different threshold than the default
+    expect(Number(thresholdAfter)).not.toBe(Number(thresholdBefore));
+  });
+});
+
+// ─── TS-005: WAV Export ───────────────────────────────────────────────────────
+
+test.describe("TS-005: WAV Export", () => {
+  test.beforeEach(async ({ page }) => {
+    await uploadAndNavigate(page);
+  });
+
+  test("Export WAV button is visible", async ({ page }) => {
+    await expect(
+      page.getByRole("button", { name: /export wav/i })
+    ).toBeVisible();
+  });
+
+  test("clicking Export WAV triggers a file download", async ({ page }) => {
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: /export wav/i }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/\.wav$/i);
+  });
+});
+
 // ─── EQ Slider Interaction ────────────────────────────────────────────────────
 
 test.describe("Advanced Controls", () => {

@@ -130,6 +130,29 @@ export function peakingCoeffs(
 }
 
 /**
+ * 2nd-order Butterworth low-pass filter coefficients.
+ *
+ * @param fc Center frequency in Hz
+ * @param Q  Quality factor (0.7071 for Butterworth)
+ * @param fs Sample rate in Hz
+ */
+export function lowPassCoeffs(fc: number, Q: number, fs: number): BiquadCoeffs {
+  const omega = (2 * Math.PI * fc) / fs;
+  const sinO = Math.sin(omega);
+  const cosO = Math.cos(omega);
+  const alpha = sinO / (2 * Q);
+
+  const a0 = 1 + alpha;
+  const b0 = (1 - cosO) / 2 / a0;
+  const b1 = (1 - cosO) / a0;
+  const b2 = (1 - cosO) / 2 / a0;
+  const a1 = (-2 * cosO) / a0;
+  const a2 = (1 - alpha) / a0;
+
+  return { b0, b1, b2, a1, a2 };
+}
+
+/**
  * Low-shelf filter coefficients.
  *
  * @param fc     Center/transition frequency in Hz

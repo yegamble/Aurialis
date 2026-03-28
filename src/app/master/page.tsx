@@ -24,6 +24,10 @@ import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { useVisualization } from "@/hooks/useVisualization";
 import { applyIntensity, PLATFORM_PRESETS, type GenreName, type PlatformName } from "@/lib/audio/presets";
 import type { AudioParams as StoreAudioParams } from "@/lib/stores/audio-store";
+import { analyzeAudio } from "@/lib/audio/analysis";
+import { computeAutoMasterParams } from "@/lib/audio/auto-master";
+import { exportWav } from "@/lib/audio/export";
+import type { ExportSettings } from "@/components/export/ExportPanel";
 
 // ─── Toggle offsets (additive deltas on top of base genre preset) ─────────────
 const TOGGLE_OFFSETS: Record<string, Partial<StoreAudioParams>> = {
@@ -102,6 +106,9 @@ export default function MasterPage() {
   const setParams = useAudioStore((s) => s.setParams);
   const metering = useAudioStore((s) => s.metering);
 
+  // Export state
+  const [isExporting, setIsExporting] = useState(false);
+
   // Simple mode: genre, intensity (0-100), and toggles
   const [genre, setGenre] = useState<GenreName>("pop");
   const [intensity, setIntensity] = useState(50);
@@ -140,6 +147,30 @@ export default function MasterPage() {
     const newToggles = { ...toggles, [key]: !toggles[key as keyof typeof toggles] };
     setToggles(newToggles);
     recomputeParams(genre, intensity, newToggles);
+  };
+
+  const handleExport = async (settings: ExportSettings) => {
+    const audioBuffer = engine?.audioBuffer;
+    if (!audioBuffer || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportWav(audioBuffer, params, {
+        sampleRate: settings.sampleRate,
+        bitDepth: settings.bitDepth,
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleAutoMaster = () => {
+    const audioBuffer = engine?.audioBuffer;
+    if (!audioBuffer) return;
+    const analysis = analyzeAudio(audioBuffer);
+    const result = computeAutoMasterParams(analysis);
+    setGenre(result.genre);
+    setIntensity(result.intensity);
+    setParams(result.params);
   };
 
   const handleOutputPresetChange = (preset: string) => {
@@ -240,7 +271,7 @@ export default function MasterPage() {
                   onGenreChange={handleGenreChange}
                   toggles={toggles}
                   onToggle={handleToggle}
-                  onAutoMaster={() => {}}
+                  onAutoMaster={handleAutoMaster}
                 />
               </motion.div>
             ) : (
@@ -341,7 +372,7 @@ export default function MasterPage() {
           </div>
 
           <SpectrumDisplay data={spectrumData} />
-          <ExportPanel />
+          <ExportPanel onExport={handleExport} isExporting={isExporting} />
 
           <div className="lg:hidden">
             <details className="group">
@@ -359,7 +390,7 @@ export default function MasterPage() {
                     onGenreChange={handleGenreChange}
                     toggles={toggles}
                     onToggle={handleToggle}
-                    onAutoMaster={() => {}}
+                    onAutoMaster={handleAutoMaster}
                   />
                 ) : (
                   <AdvancedMastering

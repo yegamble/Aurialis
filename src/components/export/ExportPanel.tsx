@@ -4,7 +4,35 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { motion } from "motion/react";
 
-export function ExportPanel() {
+export interface ExportSettings {
+  sampleRate: number;
+  bitDepth: 16 | 24 | 32;
+}
+
+interface ExportPanelProps {
+  onExport?: (settings: ExportSettings) => Promise<void>;
+  isExporting?: boolean;
+}
+
+const FORMAT_PRESETS: Record<string, ExportSettings> = {
+  streaming: { sampleRate: 44100, bitDepth: 16 },
+  cd:        { sampleRate: 44100, bitDepth: 16 },
+  hires:     { sampleRate: 96000, bitDepth: 24 },
+};
+
+const SR_MAP: Record<string, number> = {
+  "44.1 kHz": 44100,
+  "48 kHz":   48000,
+  "96 kHz":   96000,
+};
+
+const BD_MAP: Record<string, 16 | 24 | 32> = {
+  "16-bit":       16,
+  "24-bit":       24,
+  "32-bit float": 32,
+};
+
+export function ExportPanel({ onExport, isExporting = false }: ExportPanelProps) {
   const [format, setFormat] = useState("cd");
   const [sampleRate, setSampleRate] = useState("44.1 kHz");
   const [bitDepth, setBitDepth] = useState("16-bit");
@@ -16,6 +44,24 @@ export function ExportPanel() {
     { id: "hires", label: "Hi-Res" },
   ];
 
+  const handleFormatChange = (id: string) => {
+    setFormat(id);
+    const preset = FORMAT_PRESETS[id];
+    if (preset) {
+      setSampleRate(Object.entries(SR_MAP).find(([, v]) => v === preset.sampleRate)?.[0] ?? "44.1 kHz");
+      setBitDepth(Object.entries(BD_MAP).find(([, v]) => v === preset.bitDepth)?.[0] ?? "16-bit");
+    }
+  };
+
+  const handleExport = () => {
+    if (!onExport || isExporting) return;
+    const settings: ExportSettings = {
+      sampleRate: SR_MAP[sampleRate] ?? 44100,
+      bitDepth: BD_MAP[bitDepth] ?? 16,
+    };
+    onExport(settings);
+  };
+
   return (
     <div className="rounded-2xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] p-5 space-y-4">
       <p className="text-[rgba(255,255,255,0.6)] text-xs uppercase tracking-wider">
@@ -26,7 +72,7 @@ export function ExportPanel() {
         {formats.map((f) => (
           <button
             key={f.id}
-            onClick={() => setFormat(f.id)}
+            onClick={() => handleFormatChange(f.id)}
             className={`flex-1 py-1.5 rounded-md text-xs transition-all ${
               format === f.id
                 ? "bg-[rgba(255,255,255,0.1)] text-white"
@@ -60,12 +106,16 @@ export function ExportPanel() {
       </div>
 
       <motion.button
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
-        className="w-full py-3 rounded-xl bg-gradient-to-r from-[#30d158] to-[#34c759] text-white text-sm flex items-center justify-center gap-2 shadow-[0_2px_16px_rgba(48,209,88,0.25)]"
+        onClick={handleExport}
+        disabled={isExporting || !onExport}
+        whileHover={!isExporting ? { scale: 1.01 } : {}}
+        whileTap={!isExporting ? { scale: 0.99 } : {}}
+        className={`w-full py-3 rounded-xl bg-gradient-to-r from-[#30d158] to-[#34c759] text-white text-sm flex items-center justify-center gap-2 shadow-[0_2px_16px_rgba(48,209,88,0.25)] transition-opacity ${
+          isExporting || !onExport ? "opacity-50 cursor-not-allowed" : ""
+        }`}
       >
         <Download className="w-4 h-4" />
-        Export WAV
+        {isExporting ? "Exporting…" : "Export WAV"}
       </motion.button>
     </div>
   );

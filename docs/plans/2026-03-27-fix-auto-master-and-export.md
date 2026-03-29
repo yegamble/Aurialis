@@ -1,7 +1,7 @@
 # Fix Auto Master & WAV Export
 
 Created: 2026-03-27
-Status: PENDING
+Status: COMPLETE
 Approved: Yes
 Iterations: 0
 Worktree: No
@@ -70,8 +70,8 @@ Type: Bugfix
 - [x] Task 2: Implement WAV Export (encoder + renderer + orchestrator + wiring)
 - [x] Task 3: Unit tests for analysis, auto-master, and WAV encoder
 - [x] Task 4: Playwright E2E tests for Auto Master and Export
-- [ ] Task 5: Verify — full suite + build
-      **Tasks:** 5 | **Done:** 4
+- [x] Task 5: Verify — full suite + build
+      **Tasks:** 5 | **Done:** 5
 
 ## Tasks
 

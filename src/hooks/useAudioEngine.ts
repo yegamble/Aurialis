@@ -4,7 +4,6 @@ import { useRef, useEffect, useCallback, useSyncExternalStore, useState } from "
 import { AudioEngine } from "@/lib/audio/engine";
 import { useAudioStore } from "@/lib/stores/audio-store";
 import { ParameterBridge } from "@/lib/audio/parameter-bridge";
-import { AudioBypass } from "@/lib/audio/bypass";
 import type { MeteringData } from "@/types/audio";
 
 interface AudioEngineSnapshot {
@@ -30,7 +29,6 @@ export function useAudioEngine() {
   const snapshotRef = useRef<AudioEngineSnapshot>({ ...defaultSnapshot });
   const listenersRef = useRef(new Set<() => void>());
   const bridgeRef = useRef<ParameterBridge | null>(null);
-  const bypassRef = useRef<AudioBypass | null>(null);
   const [isBypassed, setIsBypassed] = useState(false);
 
   // Create a fresh engine if none exists or if the previous one was disposed
@@ -190,14 +188,10 @@ export function useAudioEngine() {
   );
 
   const toggleBypass = useCallback(() => {
-    if (!bypassRef.current) {
-      // Create bypass lazily using engine's internal nodes via a simple flag on engine
-      // For now, use the engine's processingAvailable flag as a bypass signal
-    }
     const next = !isBypassed;
     setIsBypassed(next);
-    // Signal chain bypass via engine (future: AudioBypass instance)
-  }, [isBypassed]);
+    engine.setBypass(next);
+  }, [isBypassed, engine]);
 
   return {
     // State

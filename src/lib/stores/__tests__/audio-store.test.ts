@@ -15,7 +15,9 @@ describe("audio-store", () => {
     expect(state.duration).toBe(0);
     expect(state.isLoaded).toBe(false);
     expect(state.params.threshold).toBe(-18);
-    expect(state.params.ratio).toBe(3);
+    expect(state.params.ratio).toBe(2);       // matches DEFAULT_PARAMS in presets.ts
+    expect(state.params.attack).toBe(30);     // matches DEFAULT_PARAMS in presets.ts
+    expect(state.params.release).toBe(300);   // matches DEFAULT_PARAMS in presets.ts
     expect(state.params.targetLufs).toBe(-14);
     expect(state.params.ceiling).toBe(-1);
   });
@@ -51,8 +53,8 @@ describe("audio-store", () => {
     expect(params.threshold).toBe(-30);
     expect(params.ratio).toBe(4);
     expect(params.attack).toBe(10);
-    // Unchanged params preserved
-    expect(params.release).toBe(250);
+    // Unchanged params preserved (default release is 300 per DEFAULT_PARAMS)
+    expect(params.release).toBe(300);
   });
 
   it("sets metering data", () => {

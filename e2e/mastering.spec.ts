@@ -206,10 +206,57 @@ test.describe("TS-005: WAV Export", () => {
   });
 
   test("clicking Export WAV triggers a file download", async ({ page }) => {
+    test.setTimeout(60000); // OfflineAudioContext rendering can take ~20s under load
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: /export wav/i }).click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toMatch(/\.wav$/i);
+  });
+});
+
+// ─── TS-006: Toggle Consistency ───────────────────────────────────────────────
+
+test.describe("TS-006: Toggle Engage/Disengage Consistency", () => {
+  test.beforeEach(async ({ page }) => {
+    await uploadAndNavigate(page);
+  });
+
+  test("toggling Warm ON then OFF leaves Ratio unchanged", async ({ page }) => {
+    // Record Ratio before any toggle interaction
+    await page.getByTestId("mode-toggle-advanced").click();
+    await expect(page.getByText("Parametric EQ").first()).toBeVisible();
+    const ratioBefore = await page.getByRole("slider", { name: "Ratio" }).inputValue();
+
+    // Toggle Warm ON then OFF in simple mode
+    await page.getByTestId("mode-toggle-simple").click();
+    const warmBtn = page.getByRole("button", { name: /^warm$/i });
+    await warmBtn.click();
+    await expect(warmBtn).toHaveAttribute("aria-pressed", "true");
+    await warmBtn.click();
+    await expect(warmBtn).toHaveAttribute("aria-pressed", "false");
+
+    // Ratio must be unchanged — warm only affects eq250 and satDrive
+    await page.getByTestId("mode-toggle-advanced").click();
+    await expect(page.getByText("Parametric EQ").first()).toBeVisible();
+    const ratioAfter = await page.getByRole("slider", { name: "Ratio" }).inputValue();
+    expect(ratioAfter).toBe(ratioBefore);
+  });
+
+  test("Auto Master resets all quick toggles to OFF", async ({ page }) => {
+    // Turn Warm toggle ON
+    const warmBtn = page.getByRole("button", { name: /^warm$/i });
+    await warmBtn.click();
+    await expect(warmBtn).toHaveAttribute("aria-pressed", "true");
+
+    // Click Auto Master
+    await page.getByRole("button", { name: /auto master/i }).click();
+
+    // All quick toggles should now be OFF
+    for (const toggleName of ["Clean Up", "Warm", "Bright", "Wide", "Loud"]) {
+      await expect(
+        page.getByRole("button", { name: new RegExp(`^${toggleName}$`, "i") })
+      ).toHaveAttribute("aria-pressed", "false");
+    }
   });
 });
 

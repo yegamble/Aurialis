@@ -132,6 +132,15 @@ export default function MasterPage() {
     setParams(applyToggles(base, activeToggles));
   };
 
+  // Sync store params with the genre/intensity system on mount.
+  // The store initializes with neutral defaults; this aligns them with the
+  // actual genre+intensity+toggles state so the first toggle doesn't cause
+  // an unexpected param jump.
+  useEffect(() => {
+    recomputeParams(genre, intensity, toggles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally run once — captures initial genre/intensity/toggles
+
   const handleGenreChange = (newGenre: string) => {
     const g = newGenre as GenreName;
     setGenre(g);
@@ -168,9 +177,14 @@ export default function MasterPage() {
     if (!audioBuffer) return;
     const analysis = analyzeAudio(audioBuffer);
     const result = computeAutoMasterParams(analysis);
+    const resetToggles = {
+      cleanup: false, warm: false, bright: false,
+      wide: false, loud: false, deharsh: false, glueComp: false,
+    };
     setGenre(result.genre);
     setIntensity(result.intensity);
-    setParams(result.params);
+    setToggles(resetToggles);
+    recomputeParams(result.genre, result.intensity, resetToggles);
   };
 
   const handleOutputPresetChange = (preset: string) => {

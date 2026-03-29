@@ -1,6 +1,7 @@
 import type { AudioEngineEventType, MeteringData } from "@/types/audio";
 import { loadAudioFile } from "./loader";
 import { ProcessingChain } from "./chain";
+import { AudioBypass } from "./bypass";
 import type { AudioParams } from "@/lib/stores/audio-store";
 
 type EventCallback = (data?: unknown) => void;
@@ -14,6 +15,7 @@ export class AudioEngine {
   private analyser: AnalyserNode | null = null;
   private chain: ProcessingChain | null = null;
 
+  private _bypass: AudioBypass | null = null;
   private _isPlaying = false;
   private _startTime = 0;
   private _startOffset = 0;
@@ -100,6 +102,16 @@ export class AudioEngine {
   /** Apply a parameter change to the processing chain */
   updateParameter(key: keyof AudioParams, value: number): void {
     this.chain?.updateParam(key, value);
+  }
+
+  /** Engage or disengage A/B bypass. When active, audio skips the processing chain. */
+  setBypass(active: boolean): void {
+    if (!this.inputGain || !this.chain || !this.outputGain) return;
+    if (!this._bypass) {
+      this._bypass = new AudioBypass(this.inputGain, this.chain, this.outputGain);
+    }
+    if (active) this._bypass.enable();
+    else this._bypass.disable();
   }
 
   get isDisposed(): boolean {
@@ -300,6 +312,7 @@ export class AudioEngine {
     this.outputGain = null;
     this.analyser = null;
     this.chain = null;
+    this._bypass = null;
     this.listeners.clear();
   }
 

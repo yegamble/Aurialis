@@ -54,12 +54,14 @@ export interface AudioState {
   reset: () => void;
 }
 
+// Must match DEFAULT_PARAMS in src/lib/audio/presets.ts — both define the neutral
+// processing baseline. Mismatches cause param jumps on the first simple-mode interaction.
 const defaultParams: AudioParams = {
   inputGain: 0,
   threshold: -18,
-  ratio: 3,
-  attack: 20,
-  release: 250,
+  ratio: 2,
+  attack: 30,
+  release: 300,
   makeup: 0,
   eq80: 0,
   eq250: 0,

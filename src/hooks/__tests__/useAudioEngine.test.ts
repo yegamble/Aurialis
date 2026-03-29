@@ -187,4 +187,26 @@ describe("useAudioEngine", () => {
 
     expect(disposeSpy).toHaveBeenCalledOnce();
   });
+
+  it("toggleBypass calls engine.setBypass and updates isBypassed", () => {
+    const { result } = renderHook(() => useAudioEngine());
+
+    const setBypassSpy = vi.spyOn(result.current.engine, "setBypass");
+
+    expect(result.current.isBypassed).toBe(false);
+
+    act(() => {
+      result.current.toggleBypass();
+    });
+
+    expect(result.current.isBypassed).toBe(true);
+    expect(setBypassSpy).toHaveBeenCalledWith(true);
+
+    act(() => {
+      result.current.toggleBypass();
+    });
+
+    expect(result.current.isBypassed).toBe(false);
+    expect(setBypassSpy).toHaveBeenCalledWith(false);
+  });
 });

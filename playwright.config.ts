@@ -19,9 +19,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // In CI, use the pre-built app (`npm run build` runs before E2E).
+    // In CI, use the pre-built app (`pnpm run build` runs before E2E).
     // In dev, use the dev server for fast iteration.
-    command: process.env.CI ? "npm run start" : "npm run dev",
+    command: process.env.CI ? "pnpm run start" : "pnpm run dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
   },

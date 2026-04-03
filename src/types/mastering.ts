@@ -1,0 +1,32 @@
+/** Shared domain types for the mastering engine and UI controls. */
+
+export interface AudioParams {
+  inputGain: number;
+  threshold: number;
+  ratio: number;
+  attack: number;
+  release: number;
+  makeup: number;
+  eq80: number;
+  eq250: number;
+  eq1k: number;
+  eq4k: number;
+  eq12k: number;
+  satDrive: number;
+  stereoWidth: number;
+  bassMonoFreq: number;
+  midGain: number;
+  sideGain: number;
+  targetLufs: number;
+  ceiling: number;
+  limiterRelease: number;
+}
+
+export type ToggleName =
+  | "cleanup"
+  | "warm"
+  | "bright"
+  | "wide"
+  | "loud"
+  | "deharsh"
+  | "glueComp";

@@ -27,6 +27,7 @@ import { analyzeAudio } from "@/lib/audio/analysis";
 import { computeAutoMasterParams } from "@/lib/audio/auto-master";
 import { exportWav } from "@/lib/audio/export";
 import type { ExportSettings } from "@/components/export/ExportPanel";
+import type { ToggleName, AudioParams } from "@/types/mastering";
 import {
   applySimpleToggles,
   applyTonePreset,
@@ -36,7 +37,7 @@ import {
   type TonePresetName,
 } from "@/lib/audio/ui-presets";
 
-const INITIAL_TOGGLES = {
+const INITIAL_TOGGLES: Record<ToggleName, boolean> = {
   cleanup: false,
   warm: false,
   bright: false,
@@ -114,10 +115,9 @@ export default function MasterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentionally run once — captures initial genre/intensity/toggles
 
-  const handleGenreChange = (newGenre: string) => {
-    const g = newGenre as GenreName;
-    setGenre(g);
-    recomputeParams(g, intensity, toggles);
+  const handleGenreChange = (newGenre: GenreName) => {
+    setGenre(newGenre);
+    recomputeParams(newGenre, intensity, toggles);
   };
 
   const handleIntensityChange = (val: number) => {
@@ -125,20 +125,19 @@ export default function MasterPage() {
     recomputeParams(genre, val, toggles);
   };
 
-  const handleToggle = (key: string) => {
-    const newToggles = { ...toggles, [key]: !toggles[key as keyof typeof toggles] };
+  const handleToggle = (key: ToggleName) => {
+    const newToggles = { ...toggles, [key]: !toggles[key] };
     setToggles(newToggles);
     recomputeParams(genre, intensity, newToggles);
   };
 
-  const handleAdvancedParamChange = (key: string, value: number) => {
+  const handleAdvancedParamChange = (key: keyof AudioParams, value: number) => {
     setTonePreset(null);
-    setParam(key as keyof typeof params, value);
+    setParam(key, value);
   };
 
-  const handleTonePresetChange = (preset: string) => {
-    const requestedPreset = preset as TonePresetName;
-    const nextPreset = tonePreset === requestedPreset ? null : requestedPreset;
+  const handleTonePresetChange = (preset: TonePresetName) => {
+    const nextPreset = tonePreset === preset ? null : preset;
     setParams(applyTonePreset(params, tonePreset, nextPreset));
     setTonePreset(nextPreset);
   };
@@ -151,6 +150,7 @@ export default function MasterPage() {
       await exportWav(audioBuffer, params, {
         sampleRate: settings.sampleRate,
         bitDepth: settings.bitDepth,
+        dither: settings.dither,
       });
     } finally {
       setIsExporting(false);
@@ -169,8 +169,8 @@ export default function MasterPage() {
     recomputeParams(result.genre, result.intensity, resetToggles);
   };
 
-  const handleOutputPresetChange = (preset: string) => {
-    const selectedPreset = preset as OutputPresetName;
+  const handleOutputPresetChange = (preset: OutputPresetName) => {
+    const selectedPreset = preset;
     const platform = OUTPUT_PRESET_PLATFORM_MAP[selectedPreset];
     if (platform && PLATFORM_PRESETS[platform]) {
       setOutputPreset(selectedPreset);
@@ -183,6 +183,7 @@ export default function MasterPage() {
     if (!matchesOutputPreset(params, outputPreset)) {
       setOutputPreset(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only targetLufs and ceiling are checked
   }, [outputPreset, params.targetLufs, params.ceiling]);
 
   // Load the file when the page mounts

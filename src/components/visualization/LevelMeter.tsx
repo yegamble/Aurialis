@@ -11,6 +11,29 @@ interface LevelMeterProps {
   target: number;
 }
 
+function MeterBar({ level, label }: { level: number; label: string }) {
+  const clipped = level > 0.95;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[rgba(255,255,255,0.4)] text-xs w-3">
+        {label}
+      </span>
+      <div className="flex-1 h-3 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
+        <motion.div
+          className="h-full rounded-full"
+          style={{
+            background: clipped
+              ? "linear-gradient(90deg, #30d158, #ffd60a, #ff453a)"
+              : "linear-gradient(90deg, #0a84ff, #5ac8fa)",
+          }}
+          animate={{ width: `${Math.min(level * 100, 100)}%` }}
+          transition={{ duration: 0.05 }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function LevelMeter({
   leftLevel,
   rightLevel,
@@ -19,29 +42,6 @@ export function LevelMeter({
   dynamicRange,
   target,
 }: LevelMeterProps) {
-  const MeterBar = ({ level, label }: { level: number; label: string }) => {
-    const clipped = level > 0.95;
-    return (
-      <div className="flex items-center gap-2">
-        <span className="text-[rgba(255,255,255,0.4)] text-xs w-3">
-          {label}
-        </span>
-        <div className="flex-1 h-3 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
-          <motion.div
-            className="h-full rounded-full"
-            style={{
-              background: clipped
-                ? "linear-gradient(90deg, #30d158, #ffd60a, #ff453a)"
-                : "linear-gradient(90deg, #0a84ff, #5ac8fa)",
-            }}
-            animate={{ width: `${Math.min(level * 100, 100)}%` }}
-            transition={{ duration: 0.05 }}
-          />
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="rounded-2xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] p-5 space-y-4">
       <div className="flex items-baseline justify-between">

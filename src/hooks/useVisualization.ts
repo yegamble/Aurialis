@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import type { AudioEngine } from "@/lib/audio/engine";
 import { extractWaveformPeaks, normalizeSpectrumData } from "@/lib/audio/visualization";
 
@@ -20,24 +20,16 @@ interface VisualizationState {
  * - peakLevels: Live L/R peak levels for meters
  */
 export function useVisualization(engine: AudioEngine): VisualizationState {
-  const [waveformPeaks, setWaveformPeaks] = useState<number[]>([]);
   const [spectrumData, setSpectrumData] = useState<number[]>([]);
   const [peakLevels, setPeakLevels] = useState({ left: 0, right: 0 });
   const rafRef = useRef<number | null>(null);
-  const prevBufferRef = useRef<AudioBuffer | null>(null);
 
-  // Compute static waveform when buffer changes
-  useEffect(() => {
+  // Compute static waveform peaks from buffer (pure derivation, no side effects)
+  const waveformPeaks = useMemo(() => {
     const buffer = engine.audioBuffer;
-    if (buffer && buffer !== prevBufferRef.current) {
-      prevBufferRef.current = buffer;
-      const peaks = extractWaveformPeaks(buffer, WAVEFORM_BARS);
-      setWaveformPeaks(peaks);
-    } else if (!buffer) {
-      prevBufferRef.current = null;
-      setWaveformPeaks([]);
-    }
-  }, [engine, engine.audioBuffer]);
+    if (!buffer) return [];
+    return extractWaveformPeaks(buffer, WAVEFORM_BARS);
+  }, [engine.audioBuffer]);
 
   // rAF loop for live spectrum and peak data
   useEffect(() => {

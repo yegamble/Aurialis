@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { motion } from "motion/react";
+import type { DitherType } from "@/lib/audio/wav-encoder";
 
 export interface ExportSettings {
   sampleRate: number;
   bitDepth: 16 | 24 | 32;
+  dither?: DitherType;
 }
 
 interface ExportPanelProps {
@@ -53,11 +55,17 @@ export function ExportPanel({ onExport, isExporting = false }: ExportPanelProps)
     }
   };
 
+  const DITHER_MAP: Record<string, DitherType> = {
+    "None": "none",
+    "TPDF": "tpdf",
+  };
+
   const handleExport = () => {
     if (!onExport || isExporting) return;
     const settings: ExportSettings = {
       sampleRate: SR_MAP[sampleRate] ?? 44100,
       bitDepth: BD_MAP[bitDepth] ?? 16,
+      dither: DITHER_MAP[dither] ?? "tpdf",
     };
     onExport(settings);
   };
@@ -102,7 +110,7 @@ export function ExportPanel({ onExport, isExporting = false }: ExportPanelProps)
           label="Dither"
           value={dither}
           onChange={setDither}
-          options={["None", "TPDF", "Noise Shaped"]}
+          options={["None", "TPDF"]}
         />
       </div>
 

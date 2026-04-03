@@ -33,11 +33,13 @@ export function useAudioEngine() {
 
   // Create a fresh engine if none exists or if the previous one was disposed
   // (React StrictMode disposes on unmount during double-mount cycle)
+  /* eslint-disable react-hooks/refs -- intentional lazy init pattern for StrictMode */
   if (!engineRef.current || engineRef.current.isDisposed) {
     engineRef.current = new AudioEngine();
   }
 
   const engine = engineRef.current;
+  /* eslint-enable react-hooks/refs */
 
   // Subscribe/getSnapshot pattern for useSyncExternalStore
   const subscribe = useCallback((listener: () => void) => {
@@ -131,6 +133,7 @@ export function useAudioEngine() {
       bridgeRef.current?.destroy();
       bridgeRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/refs -- engine is a stable local derived from ref init above
   }, [engine, updateSnapshot]);
 
   // Dispose on unmount; null the ref so next render creates a fresh engine

@@ -2,16 +2,18 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import type { AudioParams } from "@/types/mastering";
+import type { TonePresetName, OutputPresetName } from "@/lib/audio/ui-presets";
 
 interface AdvancedMasteringProps {
-  params: Record<string, number>;
-  onParamChange: (key: string, val: number) => void;
+  params: AudioParams;
+  onParamChange: (key: keyof AudioParams, val: number) => void;
   dynamics: { deharsh: boolean; glueComp: boolean };
   onDynamicsToggle: (key: "deharsh" | "glueComp") => void;
-  tonePreset: string | null;
-  onTonePresetChange: (preset: string) => void;
-  outputPreset: string | null;
-  onOutputPresetChange: (preset: string) => void;
+  tonePreset: TonePresetName | null;
+  onTonePresetChange: (preset: TonePresetName) => void;
+  outputPreset: OutputPresetName | null;
+  onOutputPresetChange: (preset: OutputPresetName) => void;
 }
 
 function Slider({
@@ -217,7 +219,7 @@ export function AdvancedMastering({
       {/* Tone */}
       <Section title="Tone">
         <div className="flex gap-2 mb-3">
-          {["Add Air", "Tape Warmth", "Cut Mud"].map((p) => (
+          {(["Add Air", "Tape Warmth", "Cut Mud"] as const).map((p) => (
             <ToggleButton
               key={p}
               label={p}
@@ -230,13 +232,13 @@ export function AdvancedMastering({
 
       {/* EQ */}
       <Section title="Parametric EQ">
-        {[
+        {([
           { key: "eq80", label: "80 Hz" },
           { key: "eq250", label: "250 Hz" },
           { key: "eq1k", label: "1 kHz" },
           { key: "eq4k", label: "4 kHz" },
           { key: "eq12k", label: "12 kHz" },
-        ].map((band) => (
+        ] as const).map((band) => (
           <Slider
             key={band.key}
             label={band.label}
@@ -306,7 +308,7 @@ export function AdvancedMastering({
       {/* Output / Limiter */}
       <Section title="Output">
         <div className="flex gap-2 mb-3 flex-wrap">
-          {["Spotify", "Apple Music", "YouTube", "SoundCloud", "CD"].map(
+          {(["Spotify", "Apple Music", "YouTube", "SoundCloud", "CD"] as const).map(
             (p) => (
               <button
                 key={p}

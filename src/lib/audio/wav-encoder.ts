@@ -16,7 +16,18 @@ const FORMAT_IEEE_FLOAT = 3;
  * @param bitDepth  16 (PCM int), 24 (PCM int), or 32 (IEEE float)
  * @returns ArrayBuffer containing a valid RIFF/WAV file
  */
-export function encodeWav(buffer: AudioBuffer, bitDepth: BitDepth): ArrayBuffer {
+export type DitherType = "none" | "tpdf";
+
+/**
+ * Generate TPDF (Triangular Probability Density Function) dither noise.
+ * Sum of two uniform random values in [-0.5, 0.5] → triangular distribution in [-1, 1].
+ * Scaled to ±1 LSB at the target bit depth.
+ */
+function tpdfNoise(): number {
+  return (Math.random() - 0.5) + (Math.random() - 0.5);
+}
+
+export function encodeWav(buffer: AudioBuffer, bitDepth: BitDepth, dither: DitherType = "tpdf"): ArrayBuffer {
   const numChannels = buffer.numberOfChannels;
   const numSamples = buffer.length;
   const sampleRate = buffer.sampleRate;
@@ -65,18 +76,25 @@ export function encodeWav(buffer: AudioBuffer, bitDepth: BitDepth): ArrayBuffer 
     for (let c = 0; c < numChannels; c++) {
       const sample = Math.max(-1, Math.min(1, channels[c][i]));
       if (bitDepth === 32) {
+        // 32-bit float: no dither needed
         view.setFloat32(offset, sample, true);
         offset += 4;
       } else if (bitDepth === 24) {
-        // Convert to signed 24-bit integer
-        const int24 = Math.round(sample * 8388607);
+        // 24-bit PCM with optional TPDF dither
+        const scale = 8388607;
+        const scaled = sample * scale;
+        const dithered = dither === "tpdf" ? scaled + tpdfNoise() : scaled;
+        const int24 = Math.round(Math.max(-scale, Math.min(scale, dithered)));
         view.setUint8(offset, int24 & 0xff);
         view.setUint8(offset + 1, (int24 >> 8) & 0xff);
         view.setUint8(offset + 2, (int24 >> 16) & 0xff);
         offset += 3;
       } else {
-        // 16-bit PCM
-        view.setInt16(offset, Math.round(sample * 0x7fff), true);
+        // 16-bit PCM with optional TPDF dither
+        const scale = 0x7fff;
+        const scaled = sample * scale;
+        const dithered = dither === "tpdf" ? scaled + tpdfNoise() : scaled;
+        view.setInt16(offset, Math.round(Math.max(-scale, Math.min(scale, dithered))), true);
         offset += 2;
       }
     }

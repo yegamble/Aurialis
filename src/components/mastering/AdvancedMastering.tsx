@@ -8,9 +8,9 @@ interface AdvancedMasteringProps {
   onParamChange: (key: string, val: number) => void;
   dynamics: { deharsh: boolean; glueComp: boolean };
   onDynamicsToggle: (key: "deharsh" | "glueComp") => void;
-  tonePreset: string;
+  tonePreset: string | null;
   onTonePresetChange: (preset: string) => void;
-  outputPreset: string;
+  outputPreset: string | null;
   onOutputPresetChange: (preset: string) => void;
 }
 
@@ -344,7 +344,7 @@ export function AdvancedMastering({
           onChange={(v) => onParamChange("ceiling", v)}
         />
         <Slider
-          label="Release"
+          label="Limiter Release"
           value={params.limiterRelease ?? 100}
           min={10}
           max={500}

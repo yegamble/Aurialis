@@ -22,53 +22,29 @@ import { useAudioStore } from "@/lib/stores/audio-store";
 import { useUIStore } from "@/lib/stores/ui-store";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { useVisualization } from "@/hooks/useVisualization";
-import { applyIntensity, PLATFORM_PRESETS, type GenreName, type PlatformName } from "@/lib/audio/presets";
-import type { AudioParams as StoreAudioParams } from "@/lib/stores/audio-store";
+import { applyIntensity, PLATFORM_PRESETS, type GenreName } from "@/lib/audio/presets";
 import { analyzeAudio } from "@/lib/audio/analysis";
 import { computeAutoMasterParams } from "@/lib/audio/auto-master";
 import { exportWav } from "@/lib/audio/export";
 import type { ExportSettings } from "@/components/export/ExportPanel";
+import {
+  applySimpleToggles,
+  applyTonePreset,
+  matchesOutputPreset,
+  OUTPUT_PRESET_PLATFORM_MAP,
+  type OutputPresetName,
+  type TonePresetName,
+} from "@/lib/audio/ui-presets";
 
-// ─── Toggle offsets (additive deltas on top of base genre preset) ─────────────
-const TOGGLE_OFFSETS: Record<string, Partial<StoreAudioParams>> = {
-  cleanup:  { threshold: -5, ratio: 1.0, attack: -15, release: -100, makeup: 1.0 },
-  warm:     { eq250: 2.0, satDrive: 15 },
-  bright:   { eq4k: 1.5, eq12k: 2.5 },
-  wide:     { stereoWidth: 50 },
-  loud:     { makeup: 3.0, ceiling: 0.5 },
-  deharsh:  { eq4k: -3.0, eq1k: -1.5 },
-  glueComp: { threshold: -5, ratio: 1.5, attack: 20, release: 100, makeup: 1.5 },
+const INITIAL_TOGGLES = {
+  cleanup: false,
+  warm: false,
+  bright: false,
+  wide: false,
+  loud: false,
+  deharsh: false,
+  glueComp: false,
 };
-
-const PARAM_MIN: Partial<Record<keyof StoreAudioParams, number>> = {
-  threshold: -40, ratio: 1, attack: 0.1, release: 10, makeup: -12,
-  eq80: -12, eq250: -12, eq1k: -12, eq4k: -12, eq12k: -12,
-  satDrive: 0, stereoWidth: 0, ceiling: -6, targetLufs: -24,
-};
-const PARAM_MAX: Partial<Record<keyof StoreAudioParams, number>> = {
-  threshold: 0, ratio: 20, attack: 100, release: 1000, makeup: 12,
-  eq80: 12, eq250: 12, eq1k: 12, eq4k: 12, eq12k: 12,
-  satDrive: 100, stereoWidth: 200, ceiling: 0, targetLufs: -6,
-};
-
-function applyToggles(
-  base: StoreAudioParams,
-  activeToggles: Record<string, boolean>
-): StoreAudioParams {
-  const result = { ...base };
-  for (const [key, isActive] of Object.entries(activeToggles)) {
-    if (!isActive) continue;
-    const offsets = TOGGLE_OFFSETS[key];
-    if (!offsets) continue;
-    for (const [k, delta] of Object.entries(offsets) as [keyof StoreAudioParams, number][]) {
-      const cur = (result[k] as number) ?? 0;
-      const min = PARAM_MIN[k] ?? -Infinity;
-      const max = PARAM_MAX[k] ?? Infinity;
-      (result[k] as number) = Math.max(min, Math.min(max, cur + delta));
-    }
-  }
-  return result;
-}
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -112,15 +88,11 @@ export default function MasterPage() {
   // Simple mode: genre, intensity (0-100), and toggles
   const [genre, setGenre] = useState<GenreName>("pop");
   const [intensity, setIntensity] = useState(50);
-  const [toggles, setToggles] = useState({
-    cleanup: false,
-    warm: false,
-    bright: false,
-    wide: false,
-    loud: false,
-    deharsh: false,
-    glueComp: false,
-  });
+  const [toggles, setToggles] = useState({ ...INITIAL_TOGGLES });
+  const [tonePreset, setTonePreset] = useState<TonePresetName | null>(null);
+  const [outputPreset, setOutputPreset] = useState<OutputPresetName | null>(
+    null
+  );
 
   // Re-compute params whenever genre/intensity/toggles change
   const recomputeParams = (
@@ -129,7 +101,8 @@ export default function MasterPage() {
     activeToggles: typeof toggles
   ) => {
     const base = applyIntensity(g, intVal);
-    setParams(applyToggles(base, activeToggles));
+    setTonePreset(null);
+    setParams(applySimpleToggles(base, activeToggles));
   };
 
   // Sync store params with the genre/intensity system on mount.
@@ -158,6 +131,18 @@ export default function MasterPage() {
     recomputeParams(genre, intensity, newToggles);
   };
 
+  const handleAdvancedParamChange = (key: string, value: number) => {
+    setTonePreset(null);
+    setParam(key as keyof typeof params, value);
+  };
+
+  const handleTonePresetChange = (preset: string) => {
+    const requestedPreset = preset as TonePresetName;
+    const nextPreset = tonePreset === requestedPreset ? null : requestedPreset;
+    setParams(applyTonePreset(params, tonePreset, nextPreset));
+    setTonePreset(nextPreset);
+  };
+
   const handleExport = async (settings: ExportSettings) => {
     const audioBuffer = engine?.audioBuffer;
     if (!audioBuffer || isExporting) return;
@@ -177,10 +162,7 @@ export default function MasterPage() {
     if (!audioBuffer) return;
     const analysis = analyzeAudio(audioBuffer);
     const result = computeAutoMasterParams(analysis);
-    const resetToggles = {
-      cleanup: false, warm: false, bright: false,
-      wide: false, loud: false, deharsh: false, glueComp: false,
-    };
+    const resetToggles = { ...INITIAL_TOGGLES };
     setGenre(result.genre);
     setIntensity(result.intensity);
     setToggles(resetToggles);
@@ -188,18 +170,20 @@ export default function MasterPage() {
   };
 
   const handleOutputPresetChange = (preset: string) => {
-    const platformMap: Record<string, PlatformName> = {
-      Spotify: "spotify",
-      "Apple Music": "appleMusic",
-      YouTube: "youtube",
-      SoundCloud: "soundcloud",
-      CD: "cd",
-    };
-    const platform = platformMap[preset];
+    const selectedPreset = preset as OutputPresetName;
+    const platform = OUTPUT_PRESET_PLATFORM_MAP[selectedPreset];
     if (platform && PLATFORM_PRESETS[platform]) {
+      setOutputPreset(selectedPreset);
       setParams(PLATFORM_PRESETS[platform]);
     }
   };
+
+  useEffect(() => {
+    if (!outputPreset) return;
+    if (!matchesOutputPreset(params, outputPreset)) {
+      setOutputPreset(null);
+    }
+  }, [outputPreset, params.targetLufs, params.ceiling]);
 
   // Load the file when the page mounts
   useEffect(() => {
@@ -298,14 +282,12 @@ export default function MasterPage() {
               >
                 <AdvancedMastering
                   params={{ ...params }}
-                  onParamChange={(k, v) =>
-                    setParam(k as keyof typeof params, v)
-                  }
+                  onParamChange={handleAdvancedParamChange}
                   dynamics={{ deharsh: toggles.deharsh, glueComp: toggles.glueComp }}
                   onDynamicsToggle={handleToggle}
-                  tonePreset="Tape Warmth"
-                  onTonePresetChange={() => {}}
-                  outputPreset="Spotify"
+                  tonePreset={tonePreset}
+                  onTonePresetChange={handleTonePresetChange}
+                  outputPreset={outputPreset}
                   onOutputPresetChange={handleOutputPresetChange}
                 />
               </motion.div>
@@ -409,14 +391,12 @@ export default function MasterPage() {
                 ) : (
                   <AdvancedMastering
                     params={{ ...params }}
-                    onParamChange={(k, v) =>
-                      setParam(k as keyof typeof params, v)
-                    }
+                    onParamChange={handleAdvancedParamChange}
                     dynamics={{ deharsh: toggles.deharsh, glueComp: toggles.glueComp }}
                     onDynamicsToggle={handleToggle}
-                    tonePreset="Tape Warmth"
-                    onTonePresetChange={() => {}}
-                    outputPreset="Spotify"
+                    tonePreset={tonePreset}
+                    onTonePresetChange={handleTonePresetChange}
+                    outputPreset={outputPreset}
                     onOutputPresetChange={handleOutputPresetChange}
                   />
                 )}

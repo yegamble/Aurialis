@@ -73,6 +73,7 @@ export function ExportPanel({ onExport, isExporting = false }: ExportPanelProps)
           <button
             key={f.id}
             onClick={() => handleFormatChange(f.id)}
+            aria-pressed={format === f.id}
             className={`flex-1 py-1.5 rounded-md text-xs transition-all ${
               format === f.id
                 ? "bg-[rgba(255,255,255,0.1)] text-white"

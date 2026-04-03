@@ -4,13 +4,15 @@
 
 import type { AudioParams } from "@/lib/stores/audio-store";
 import { renderOffline } from "./renderer";
-import { encodeWav, type BitDepth } from "./wav-encoder";
+import { encodeWav, type BitDepth, type DitherType } from "./wav-encoder";
 
 export interface ExportOptions {
   /** Target sample rate in Hz (e.g. 44100, 48000, 96000) */
   sampleRate: number;
   /** Bit depth for WAV encoding */
   bitDepth: BitDepth;
+  /** Dither type for integer encoding (default: "tpdf") */
+  dither?: DitherType;
   /** Suggested filename for the download (without extension) */
   filename?: string;
 }
@@ -32,7 +34,7 @@ export async function exportWav(
   const rendered = await renderOffline(sourceBuffer, params, options.sampleRate);
 
   // 2. Encode to WAV
-  const wavData = encodeWav(rendered, options.bitDepth);
+  const wavData = encodeWav(rendered, options.bitDepth, options.dither);
 
   // 3. Trigger browser download
   const blob = new Blob([wavData], { type: "audio/wav" });

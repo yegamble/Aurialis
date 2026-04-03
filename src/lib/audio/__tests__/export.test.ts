@@ -16,6 +16,16 @@ function mockBuffer(numSamples = 100, sampleRate = 44100): AudioBuffer {
   } as unknown as AudioBuffer;
 }
 
+function mockAnchorDownload() {
+  const anchor = { href: "", download: "", style: { display: "" }, click: vi.fn() };
+  vi.spyOn(document, "createElement").mockReturnValue(anchor as unknown as HTMLElement);
+  vi.spyOn(document.body, "appendChild").mockReturnValue(anchor as unknown as Node);
+  vi.spyOn(document.body, "removeChild").mockReturnValue(anchor as unknown as Node);
+  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+  return anchor;
+}
+
 describe("exportWav", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -26,6 +36,7 @@ describe("exportWav", () => {
       .spyOn(renderer, "renderOffline")
       .mockResolvedValue(mockBuffer());
     vi.spyOn(encoder, "encodeWav").mockReturnValue(new ArrayBuffer(8));
+    mockAnchorDownload();
 
     const src = mockBuffer();
     await exportWav(src, DEFAULT_PARAMS, { sampleRate: 44100, bitDepth: 16 });
@@ -39,22 +50,17 @@ describe("exportWav", () => {
     const encodeSpy = vi
       .spyOn(encoder, "encodeWav")
       .mockReturnValue(new ArrayBuffer(8));
+    mockAnchorDownload();
 
     await exportWav(mockBuffer(), DEFAULT_PARAMS, { sampleRate: 44100, bitDepth: 24 });
 
-    expect(encodeSpy).toHaveBeenCalledWith(rendered, 24);
+    expect(encodeSpy).toHaveBeenCalledWith(rendered, 24, undefined);
   });
 
   it("triggers a download via anchor click with .wav extension", async () => {
     vi.spyOn(renderer, "renderOffline").mockResolvedValue(mockBuffer());
     vi.spyOn(encoder, "encodeWav").mockReturnValue(new ArrayBuffer(8));
-
-    const anchor = { href: "", download: "", style: { display: "" }, click: vi.fn() };
-    vi.spyOn(document, "createElement").mockReturnValue(
-      anchor as unknown as HTMLElement
-    );
-    vi.spyOn(document.body, "appendChild").mockReturnValue(anchor as unknown as Node);
-    vi.spyOn(document.body, "removeChild").mockReturnValue(anchor as unknown as Node);
+    const anchor = mockAnchorDownload();
 
     await exportWav(mockBuffer(), DEFAULT_PARAMS, {
       sampleRate: 44100,
@@ -69,12 +75,7 @@ describe("exportWav", () => {
   it("uses 'mastered' as default filename", async () => {
     vi.spyOn(renderer, "renderOffline").mockResolvedValue(mockBuffer());
     vi.spyOn(encoder, "encodeWav").mockReturnValue(new ArrayBuffer(8));
-    const anchor = { href: "", download: "", style: { display: "" }, click: vi.fn() };
-    vi.spyOn(document, "createElement").mockReturnValue(
-      anchor as unknown as HTMLElement
-    );
-    vi.spyOn(document.body, "appendChild").mockReturnValue(anchor as unknown as Node);
-    vi.spyOn(document.body, "removeChild").mockReturnValue(anchor as unknown as Node);
+    const anchor = mockAnchorDownload();
 
     await exportWav(mockBuffer(), DEFAULT_PARAMS, { sampleRate: 44100, bitDepth: 16 });
 

@@ -5,7 +5,7 @@
  * applyIntensity() linearly interpolates between neutral defaults and genre preset.
  */
 
-import type { AudioParams } from "@/lib/stores/audio-store";
+import type { AudioParams } from "@/types/mastering";
 
 /** Neutral default parameters — flat EQ, gentle compression, unity gain */
 export const DEFAULT_PARAMS: AudioParams = {

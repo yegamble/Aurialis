@@ -273,12 +273,9 @@ export class AudioEngine {
       if (abs > peak) peak = abs;
     }
 
-    // Approximate stereo from mono analyser (real stereo comes in Phase 2 with metering worklet)
-    const jitter = (Math.random() - 0.5) * 0.03;
-    return {
-      left: Math.min(1, peak),
-      right: Math.min(1, peak + jitter),
-    };
+    // Mono fallback — real stereo metering comes from the metering worklet via chain.onMetering
+    const level = Math.min(1, peak);
+    return { left: level, right: level };
   }
 
   on(event: AudioEngineEventType, callback: EventCallback): void {

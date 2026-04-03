@@ -1,28 +1,8 @@
 import { create } from "zustand";
 import type { MeteringData } from "@/types/audio";
-export type { MeteringData };
-
-export interface AudioParams {
-  inputGain: number;
-  threshold: number;
-  ratio: number;
-  attack: number;
-  release: number;
-  makeup: number;
-  eq80: number;
-  eq250: number;
-  eq1k: number;
-  eq4k: number;
-  eq12k: number;
-  satDrive: number;
-  stereoWidth: number;
-  bassMonoFreq: number;
-  midGain: number;
-  sideGain: number;
-  targetLufs: number;
-  ceiling: number;
-  limiterRelease: number;
-}
+import type { AudioParams } from "@/types/mastering";
+import { DEFAULT_PARAMS } from "@/lib/audio/presets";
+export type { MeteringData, AudioParams };
 
 export interface AudioState {
   // File
@@ -54,30 +34,6 @@ export interface AudioState {
   reset: () => void;
 }
 
-// Must match DEFAULT_PARAMS in src/lib/audio/presets.ts — both define the neutral
-// processing baseline. Mismatches cause param jumps on the first simple-mode interaction.
-const defaultParams: AudioParams = {
-  inputGain: 0,
-  threshold: -18,
-  ratio: 2,
-  attack: 30,
-  release: 300,
-  makeup: 0,
-  eq80: 0,
-  eq250: 0,
-  eq1k: 0,
-  eq4k: 0,
-  eq12k: 0,
-  satDrive: 0,
-  stereoWidth: 100,
-  bassMonoFreq: 200,
-  midGain: 0,
-  sideGain: 0,
-  targetLufs: -14,
-  ceiling: -1,
-  limiterRelease: 100,
-};
-
 const defaultMetering: MeteringData = {
   leftLevel: 0,
   rightLevel: 0,
@@ -95,7 +51,7 @@ export const useAudioStore = create<AudioState>((set) => ({
   currentTime: 0,
   duration: 0,
   isLoaded: false,
-  params: { ...defaultParams },
+  params: { ...DEFAULT_PARAMS },
   metering: { ...defaultMetering },
 
   setFile: (file) => set({ file }),
@@ -119,7 +75,7 @@ export const useAudioStore = create<AudioState>((set) => ({
       currentTime: 0,
       duration: 0,
       isLoaded: false,
-      params: { ...defaultParams },
+      params: { ...DEFAULT_PARAMS },
       metering: { ...defaultMetering },
     }),
 }));

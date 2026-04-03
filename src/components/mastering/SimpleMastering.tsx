@@ -1,52 +1,21 @@
 "use client";
 
-import { useState, useRef } from "react";
-import {
-  Music,
-  Star,
-  Zap,
-  Guitar,
-  Radio,
-  Disc3,
-  Headphones,
-  Waves,
-  Mic,
-  Sparkles,
-  Sun,
-  Maximize2,
-  Volume2,
-  Wand2,
-} from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Wand2 } from "lucide-react";
 import { motion } from "motion/react";
+import type { GenreName } from "@/lib/audio/presets";
+import type { ToggleName } from "@/types/mastering";
+import { GENRE_OPTIONS, QUICK_TOGGLE_OPTIONS } from "@/lib/audio/option-metadata";
 
 interface SimpleMasteringProps {
   intensity: number;
   onIntensityChange: (val: number) => void;
-  genre: string;
-  onGenreChange: (genre: string) => void;
-  toggles: Record<string, boolean>;
-  onToggle: (key: string) => void;
+  genre: GenreName;
+  onGenreChange: (genre: GenreName) => void;
+  toggles: Record<ToggleName, boolean>;
+  onToggle: (key: ToggleName) => void;
   onAutoMaster: () => void;
 }
-
-const genres = [
-  { id: "hiphop", label: "Hip-Hop", icon: Music },
-  { id: "pop", label: "Pop", icon: Star },
-  { id: "rock", label: "Rock", icon: Zap },
-  { id: "electronic", label: "Electronic", icon: Guitar },
-  { id: "jazz", label: "Jazz", icon: Disc3 },
-  { id: "classical", label: "Classical", icon: Headphones },
-  { id: "lofi", label: "Lo-Fi", icon: Waves },
-  { id: "podcast", label: "Podcast", icon: Mic },
-];
-
-const quickToggles = [
-  { id: "cleanup", label: "Clean Up", icon: Sparkles },
-  { id: "warm", label: "Warm", icon: Sun },
-  { id: "bright", label: "Bright", icon: Radio },
-  { id: "wide", label: "Wide", icon: Maximize2 },
-  { id: "loud", label: "Loud", icon: Volume2 },
-];
 
 export function SimpleMastering({
   intensity,
@@ -59,7 +28,9 @@ export function SimpleMastering({
 }: SimpleMasteringProps) {
   const [isDragging, setIsDragging] = useState(false);
   const intensityRef = useRef(intensity);
-  intensityRef.current = intensity;
+  useEffect(() => {
+    intensityRef.current = intensity;
+  }, [intensity]);
 
   return (
     <div className="space-y-6 p-1">
@@ -169,7 +140,7 @@ export function SimpleMastering({
           Genre
         </p>
         <div className="grid grid-cols-4 gap-2">
-          {genres.map((g) => (
+          {GENRE_OPTIONS.map((g) => (
             <button
               key={g.id}
               onClick={() => onGenreChange(g.id)}
@@ -195,7 +166,7 @@ export function SimpleMastering({
           Quick Toggles
         </p>
         <div className="flex flex-wrap gap-2">
-          {quickToggles.map((t) => (
+          {QUICK_TOGGLE_OPTIONS.map((t) => (
             <button
               key={t.id}
               onClick={() => onToggle(t.id)}

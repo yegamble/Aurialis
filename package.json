@@ -12,9 +12,12 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:generate-signals": "node e2e/fixtures/generate-test-wav.mjs"
+    "test:generate-signals": "node e2e/fixtures/generate-test-wav.mjs",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "^1.18.0",
     "@radix-ui/react-dialog": "1.1.6",
     "@radix-ui/react-progress": "1.1.2",
     "@radix-ui/react-scroll-area": "1.2.3",
@@ -50,7 +53,8 @@
     "postcss": "8.5.3",
     "tailwindcss": "4.1.12",
     "typescript": "5.8.3",
-    "vitest": "3.1.2"
+    "vitest": "3.1.2",
+    "wrangler": "^4.80.0"
   },
   "packageManager": "pnpm@10.33.0"
 }

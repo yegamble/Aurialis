@@ -28,6 +28,11 @@ playwright-report/
 # vercel
 .vercel
 
+# cloudflare
+.wrangler/
+.open-next/
+.dev.vars
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -42,6 +42,12 @@ export const GENRE_OPTIONS: GenreOption[] = [
   { id: "podcast", label: "Podcast", icon: Mic },
 ];
 
+// Compile-time exhaustiveness: fails if a GenreName is missing from GENRE_OPTIONS
+const _genreCheck: Record<GenreName, true> = Object.fromEntries(
+  GENRE_OPTIONS.map((g) => [g.id, true])
+) as Record<GenreName, true>;
+void _genreCheck;
+
 /** Quick toggle options shown in SimpleMastering (5 of 7 toggles). */
 export const QUICK_TOGGLE_OPTIONS: ToggleOption[] = [
   { id: "cleanup", label: "Clean Up", icon: Sparkles },

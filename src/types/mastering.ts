@@ -30,3 +30,7 @@ export type ToggleName =
   | "loud"
   | "deharsh"
   | "glueComp";
+
+// Re-exports for convenient single-import access
+export type { GenreName, PlatformName } from "@/lib/audio/presets";
+export type { TonePresetName, OutputPresetName } from "@/lib/audio/ui-presets";

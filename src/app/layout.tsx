@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Waveish - Professional Audio Mastering",
+  title: "Aurialis - Professional Audio Mastering",
   description: "Professional audio mastering in your browser",
 };
 
@@ -20,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} antialiased`}>{children}</body>
+      <body suppressHydrationWarning className={`${inter.variable} antialiased`}>{children}</body>
     </html>
   );
 }

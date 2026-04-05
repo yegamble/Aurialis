@@ -229,7 +229,7 @@ export default function MasterPage() {
             <div className="w-7 h-7 rounded-lg bg-gradient-to-b from-[#0a84ff] to-[#0066cc] flex items-center justify-center">
               <Headphones className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="text-white text-sm">Waveish</span>
+            <span className="text-white text-sm">Aurialis</span>
           </div>
         </div>
         <div className="flex bg-[rgba(255,255,255,0.06)] rounded-lg p-0.5">

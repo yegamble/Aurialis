@@ -232,7 +232,7 @@ test.describe("Upload flow", () => {
     const chooser = await chooserPromise;
     expect(chooser.isMultiple()).toBe(false);
 
-    await expect(page.getByText("Waveish")).toBeVisible();
+    await expect(page.getByText("Aurialis")).toBeVisible();
   });
 
   test("uploading a WAV file navigates to mastering and shows file info", async ({

@@ -74,6 +74,36 @@ export default function MixPage() {
     checkBackendHealth().then((h) => setBackendAvailable(h.ok));
   }, []);
 
+  // Pick up files passed from home page via sessionStorage
+  useEffect(() => {
+    const urlsJson = sessionStorage.getItem("pendingMixUrls");
+    const namesJson = sessionStorage.getItem("pendingMixFiles");
+    if (!urlsJson || !namesJson) return;
+
+    sessionStorage.removeItem("pendingMixUrls");
+    sessionStorage.removeItem("pendingMixFiles");
+
+    const urls: string[] = JSON.parse(urlsJson);
+    const names: string[] = JSON.parse(namesJson);
+
+    (async () => {
+      try {
+        const files = await Promise.all(
+          urls.map(async (url, i) => {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            URL.revokeObjectURL(url);
+            return new File([blob], names[i], { type: blob.type });
+          })
+        );
+        await handleStemsLoaded(files);
+      } catch (e) {
+        setLoadError(e instanceof Error ? e.message : "Failed to load files");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleStartSeparation = useCallback(
     async (file: File, model: string) => {
       setShowModelSelect(false);
@@ -374,7 +404,7 @@ export default function MixPage() {
             <div className="w-7 h-7 rounded-lg bg-gradient-to-b from-[#0a84ff] to-[#0066cc] flex items-center justify-center">
               <Headphones className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="text-white text-sm">Waveish</span>
+            <span className="text-white text-sm">Aurialis</span>
             <span className="text-[rgba(255,255,255,0.3)] text-xs">/ Mix</span>
           </div>
         </div>

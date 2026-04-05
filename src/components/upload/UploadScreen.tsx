@@ -5,48 +5,49 @@ import { motion } from "motion/react";
 import { Upload, Music, Headphones, Download, Sparkles } from "lucide-react";
 
 interface UploadScreenProps {
-  onFileUploaded: (file: File) => void;
+  onFilesUploaded: (files: File[]) => void;
 }
 
-export function UploadScreen({ onFileUploaded }: UploadScreenProps) {
+export function UploadScreen({ onFilesUploaded }: UploadScreenProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = useCallback(
-    (file: File) => {
+  const handleFiles = useCallback(
+    (files: File[]) => {
+      if (files.length === 0) return;
       setUploadProgress(0);
       const interval = setInterval(() => {
         setUploadProgress((prev) => {
           if (prev === null) return 0;
           if (prev >= 100) {
             clearInterval(interval);
-            setTimeout(() => onFileUploaded(file), 300);
+            setTimeout(() => onFilesUploaded(files), 300);
             return 100;
           }
           return prev + Math.random() * 15 + 5;
         });
       }, 80);
     },
-    [onFileUploaded]
+    [onFilesUploaded]
   );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-      const file = e.dataTransfer.files[0];
-      if (file) handleFile(file);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) handleFiles(files);
     },
-    [handleFile]
+    [handleFiles]
   );
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) handleFile(file);
+      const files = Array.from(e.target.files ?? []);
+      if (files.length > 0) handleFiles(files);
     },
-    [handleFile]
+    [handleFiles]
   );
 
   return (
@@ -66,7 +67,7 @@ export function UploadScreen({ onFileUploaded }: UploadScreenProps) {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#0a84ff] to-[#0066cc] flex items-center justify-center">
             <Headphones className="w-5 h-5 text-white" />
           </div>
-          <h1 className="text-[2.5rem] tracking-tight text-white">Waveish</h1>
+          <h1 className="text-[2.5rem] tracking-tight text-white">Aurialis</h1>
         </div>
         <p className="text-[rgba(255,255,255,0.5)] tracking-wide">
           Professional audio mastering in your browser
@@ -82,7 +83,7 @@ export function UploadScreen({ onFileUploaded }: UploadScreenProps) {
         <div
           role="button"
           tabIndex={0}
-          aria-label="Upload audio file. Drop audio here or click to browse."
+          aria-label="Upload audio files. Drop audio here or click to browse."
           onDragOver={(e) => {
             e.preventDefault();
             setIsDragging(true);
@@ -134,7 +135,7 @@ export function UploadScreen({ onFileUploaded }: UploadScreenProps) {
                   Drop audio here or click to browse
                 </p>
                 <p className="text-[rgba(255,255,255,0.35)] text-sm">
-                  WAV, MP3, FLAC, OGG, AAC, M4A
+                  WAV, MP3, FLAC, OGG, AAC, M4A &middot; Multiple files or ZIP for stem mixing
                 </p>
               </div>
             </>
@@ -143,7 +144,8 @@ export function UploadScreen({ onFileUploaded }: UploadScreenProps) {
         <input
           ref={inputRef}
           type="file"
-          accept="audio/*"
+          accept="audio/*,.zip"
+          multiple
           className="hidden"
           onChange={handleChange}
           aria-hidden="true"

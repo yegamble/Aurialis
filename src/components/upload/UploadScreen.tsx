@@ -2,8 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { motion } from "motion/react";
-import { Upload, Music, Headphones, Download, Sparkles, Layers } from "lucide-react";
-import Link from "next/link";
+import { Upload, Music, Headphones, Download, Sparkles } from "lucide-react";
 
 interface UploadScreenProps {
   onFileUploaded: (file: File) => void;
@@ -149,24 +148,6 @@ export function UploadScreen({ onFileUploaded }: UploadScreenProps) {
           onChange={handleChange}
           aria-hidden="true"
         />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        className="mt-6 relative z-10"
-      >
-        <Link
-          href="/mix"
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.06)] hover:border-[rgba(255,255,255,0.2)] transition-all text-[rgba(255,255,255,0.6)] hover:text-white text-sm"
-        >
-          <Layers className="w-4 h-4" />
-          Mix Stems
-          <span className="text-[rgba(255,255,255,0.3)] text-xs ml-1">
-            Upload &amp; mix multiple tracks
-          </span>
-        </Link>
       </motion.div>
 
       <motion.div

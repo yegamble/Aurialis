@@ -3,36 +3,27 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UploadScreen } from "@/components/upload/UploadScreen";
-import { useAudioStore } from "@/lib/stores/audio-store";
-import { validateFile, AudioLoadError } from "@/lib/audio/loader";
 
 export default function UploadPage() {
   const router = useRouter();
-  const setFile = useAudioStore((s) => s.setFile);
   const [error, setError] = useState<string | null>(null);
 
   const handleFileUploaded = useCallback(
     (file: File) => {
       setError(null);
-      try {
-        const result = validateFile(file);
-        if (result.warning) {
-          // Could show warning toast - for now just log
-          console.warn(result.warning);
-        }
-      } catch (e) {
-        if (e instanceof AudioLoadError) {
-          setError(e.message);
-          return;
-        }
-        setError("Failed to process file");
-        return;
-      }
+      // All uploads go to /mix — single files get separated, multi/ZIP go to mixer directly
+      // Store the file temporarily for the mix page to pick up
+      sessionStorage.setItem("pendingUpload", "true");
 
-      setFile(file);
-      router.push("/master");
+      // Create a temporary URL so the mix page can access the file
+      const url = URL.createObjectURL(file);
+      sessionStorage.setItem("pendingFile", url);
+      sessionStorage.setItem("pendingFileName", file.name);
+      sessionStorage.setItem("pendingFileType", file.type);
+
+      router.push("/mix");
     },
-    [setFile, router]
+    [router]
   );
 
   return (

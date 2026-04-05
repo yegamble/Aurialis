@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - smart-split-temp:/tmp/smart-split
+    shm_size: "4g"
+    environment:
+      - PYTHONUNBUFFERED=1
+    # GPU support — requires nvidia-container-toolkit on host.
+    # Remove the deploy section to run on CPU only (slower ~5x).
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  smart-split-temp:

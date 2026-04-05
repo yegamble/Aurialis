@@ -16,9 +16,9 @@ const STEM_FILES = [
 ];
 
 async function navigateToMix(page: Page) {
-  await page.goto("/");
-  await page.getByRole("link", { name: /mix stems/i }).click();
-  await page.waitForURL("**/mix", { timeout: 10000 });
+  await page.goto("/mix");
+  // Wait for the page to be interactive (upload zone visible)
+  await page.getByTestId("stem-upload-zone").waitFor({ state: "visible", timeout: 15000 });
 }
 
 async function uploadStems(page: Page, files: string[]) {
@@ -33,9 +33,20 @@ async function uploadStems(page: Page, files: string[]) {
 test.describe("TS-001: Multi-File Stem Upload", () => {
   test("navigate to /mix from home page", async ({ page }) => {
     await page.goto("/");
+    await page.waitForLoadState("networkidle");
     const mixLink = page.getByRole("link", { name: /mix stems/i });
     await expect(mixLink).toBeVisible();
+
+    // Dev server Fast Refresh can interrupt client navigation — retry once
     await mixLink.click();
+    try {
+      await page.waitForURL("**/mix", { timeout: 5000 });
+    } catch {
+      // Fast Refresh may have reloaded to "/" — retry
+      await page.waitForLoadState("networkidle");
+      await page.getByRole("link", { name: /mix stems/i }).click();
+      await page.waitForURL("**/mix", { timeout: 10000 });
+    }
     await expect(page).toHaveURL(/\/mix/);
   });
 
@@ -43,11 +54,12 @@ test.describe("TS-001: Multi-File Stem Upload", () => {
     await navigateToMix(page);
     await uploadStems(page, STEM_FILES);
 
-    // Verify stems appear
-    await expect(page.getByText("bass.wav")).toBeVisible();
-    await expect(page.getByText("vocals.wav")).toBeVisible();
-    await expect(page.getByText("drums.wav")).toBeVisible();
-    await expect(page.getByText("guitar.wav")).toBeVisible();
+    // Verify stems appear (scope to timeline to avoid strict mode violations from duplicate text)
+    const timeline = page.getByTestId("stem-timeline");
+    await expect(timeline.getByText("bass.wav")).toBeVisible();
+    await expect(timeline.getByText("vocals.wav")).toBeVisible();
+    await expect(timeline.getByText("drums.wav")).toBeVisible();
+    await expect(timeline.getByText("guitar.wav")).toBeVisible();
   });
 
   test("shows stem count after upload", async ({ page }) => {
@@ -80,11 +92,12 @@ test.describe("TS-002: ZIP Upload", () => {
       timeout: 30000,
     });
 
-    // Verify stems extracted from ZIP
-    await expect(page.getByText("bass.wav")).toBeVisible();
-    await expect(page.getByText("vocals.wav")).toBeVisible();
-    await expect(page.getByText("drums.wav")).toBeVisible();
-    await expect(page.getByText("guitar.wav")).toBeVisible();
+    // Verify stems extracted from ZIP (use timeline to avoid strict mode violation from duplicate text)
+    const timeline = page.getByTestId("stem-timeline");
+    await expect(timeline.getByText("bass.wav")).toBeVisible();
+    await expect(timeline.getByText("vocals.wav")).toBeVisible();
+    await expect(timeline.getByText("drums.wav")).toBeVisible();
+    await expect(timeline.getByText("guitar.wav")).toBeVisible();
     await expect(page.getByText(/4 stems loaded/i)).toBeVisible();
   });
 });

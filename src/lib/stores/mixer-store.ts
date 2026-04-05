@@ -15,6 +15,7 @@ export interface MixerState {
   masterVolume: number;
   isAutoMixing: boolean;
   selectedStemId: string | null;
+  originalMixBuffer: AudioBuffer | null;
 
   addStems: (newStems: StemTrack[]) => void;
   removeStem: (id: string) => void;
@@ -46,6 +47,7 @@ export const useMixerStore = create<MixerState>((set) => ({
   masterVolume: 0,
   isAutoMixing: false,
   selectedStemId: null,
+  originalMixBuffer: null,
 
   addStems: (newStems) =>
     set((state) => {
@@ -110,5 +112,6 @@ export const useMixerStore = create<MixerState>((set) => ({
       masterVolume: 0,
       isAutoMixing: false,
       selectedStemId: null,
+      originalMixBuffer: null,
     }),
 }));

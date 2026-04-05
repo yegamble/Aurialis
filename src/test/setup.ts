@@ -74,6 +74,36 @@ class MockAudioContext {
     };
   }
 
+  createStereoPanner() {
+    return {
+      pan: { value: 0, linearRampToValueAtTime: vi.fn() },
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    };
+  }
+
+  createDynamicsCompressor() {
+    return {
+      threshold: { value: -24 },
+      ratio: { value: 12 },
+      knee: { value: 30 },
+      attack: { value: 0.003 },
+      release: { value: 0.25 },
+      reduction: 0,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    };
+  }
+
+  createWaveShaper() {
+    return {
+      curve: null as Float32Array | null,
+      oversample: "none" as OversampleType,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    };
+  }
+
   createChannelSplitter(_numberOfOutputs?: number) {
     return { connect: vi.fn(), disconnect: vi.fn() };
   }
@@ -131,6 +161,18 @@ Object.defineProperty(globalThis, "OfflineAudioContext", {
   value: MockOfflineAudioContext,
   writable: true,
 });
+
+// Polyfill Blob.prototype.arrayBuffer for jsdom (used by stem-loader)
+if (typeof Blob !== "undefined" && !Blob.prototype.arrayBuffer) {
+  Blob.prototype.arrayBuffer = function () {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(this);
+    });
+  };
+}
 
 // Mock URL.createObjectURL
 Object.defineProperty(URL, "createObjectURL", {

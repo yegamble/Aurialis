@@ -153,6 +153,32 @@ describe("auto-mixer", () => {
       expect(m.threshold).toBeLessThan(0);
     });
 
+    it("applies sum attenuation to prevent clipping with many stems", () => {
+      const stems = [
+        makeAnalyzedStem("s1", "vocals", -18),
+        makeAnalyzedStem("s2", "drums", -18),
+        makeAnalyzedStem("s3", "bass", -18),
+        makeAnalyzedStem("s4", "guitar", -18),
+      ];
+
+      const result = generateAutoMix(stems);
+
+      // With 4 stems at -18 dBFS each, sum attenuation = -10*log10(4) - 3 ≈ -9 dB
+      // So each stem volume should be around -9 + role_offset (not 0)
+      for (const [, params] of Object.entries(result.stemParams)) {
+        expect(params.volume).toBeLessThan(0);
+      }
+    });
+
+    it("no sum attenuation for single stem", () => {
+      const stems = [makeAnalyzedStem("s1", "vocals", -18)];
+
+      const result = generateAutoMix(stems);
+
+      // Single stem: gainAdjust = -18 - (-18) = 0, roleOffset = +2, no sum attenuation
+      expect(result.stemParams.s1.volume).toBe(2);
+    });
+
     it("handles single stem", () => {
       const stems = [makeAnalyzedStem("s1", "vocals")];
 

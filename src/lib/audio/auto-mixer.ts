@@ -72,15 +72,15 @@ function getPan(
 type EQ5 = [number, number, number, number, number];
 
 const STEM_EQ: Partial<Record<StemClassification, EQ5>> = {
-  vocals: [0, -1, 1, 3, 2],      // Cut mud, presence boost, air
-  drums: [1, 0, 0, 2, 1],         // Sub weight, presence, air
-  bass: [2, 1, -1, 0, 0],         // Boost lows, cut mids
-  guitar: [0, -2, 1, 2, 0],       // Cut mud, presence
-  keys: [0, 0, 0, 1, 1],          // Gentle brightness
-  synth: [0, 0, 0, 1, 2],         // Brightness, air
-  strings: [0, 0, 1, 1, 2],       // Presence, air
-  fx: [0, 0, 0, 0, 0],            // Flat
-  other: [0, 0, 0, 0, 0],         // Flat
+  vocals: [0, -1.5, 0.5, 1.5, 1],  // Cut mud, gentle presence, air
+  drums: [0.5, 0, -0.5, 1, 0.5],   // Slight sub, presence, air
+  bass: [1, 0.5, -1.5, 0, 0],      // Boost lows, cut mids
+  guitar: [0, -2, 0.5, 1, 0],      // Cut mud, gentle presence
+  keys: [0, 0, 0, 0.5, 0.5],       // Gentle brightness
+  synth: [0, 0, 0, 0.5, 1],        // Brightness, air
+  strings: [0, 0, 0.5, 0.5, 1],    // Gentle presence, air
+  fx: [0, 0, 0, 0, 0],             // Flat
+  other: [0, 0, 0, 0, 0],          // Flat
 };
 
 // --- Per-stem compression presets ---
@@ -94,12 +94,12 @@ interface CompPreset {
 }
 
 const STEM_COMP: Partial<Record<StemClassification, CompPreset>> = {
-  vocals: { threshold: -20, ratio: 3, attack: 15, release: 200, makeup: 2 },
-  drums: { threshold: -16, ratio: 4, attack: 5, release: 80, makeup: 3 },
-  bass: { threshold: -18, ratio: 3, attack: 30, release: 200, makeup: 2 },
-  guitar: { threshold: -22, ratio: 2.5, attack: 20, release: 250, makeup: 1 },
-  keys: { threshold: -24, ratio: 2, attack: 25, release: 300, makeup: 1 },
-  synth: { threshold: -24, ratio: 2, attack: 20, release: 250, makeup: 1 },
+  vocals: { threshold: -20, ratio: 2.5, attack: 15, release: 200, makeup: 0 },
+  drums: { threshold: -18, ratio: 3, attack: 5, release: 80, makeup: 0 },
+  bass: { threshold: -20, ratio: 2.5, attack: 30, release: 200, makeup: 0 },
+  guitar: { threshold: -22, ratio: 2, attack: 20, release: 250, makeup: 0 },
+  keys: { threshold: -24, ratio: 2, attack: 25, release: 300, makeup: 0 },
+  synth: { threshold: -24, ratio: 2, attack: 20, release: 250, makeup: 0 },
   strings: { threshold: -26, ratio: 1.5, attack: 40, release: 400, makeup: 0 },
   fx: { threshold: -30, ratio: 1.5, attack: 30, release: 300, makeup: 0 },
   other: { threshold: -24, ratio: 2, attack: 20, release: 250, makeup: 0 },
@@ -125,14 +125,22 @@ export function generateAutoMix(stems: AnalyzedStem[]): AutoMixResult {
   const stemParams: Record<string, StemChannelParams> = {};
   const panState: PanState = { leftCount: 0, rightCount: 0 };
 
+  // Sum attenuation: when mixing N stems, reduce each to prevent clipping.
+  // Equal-power summing rule: attenuate by 10*log10(N) dB.
+  // Additional -3 dB headroom for EQ boosts and compression makeup.
+  const sumAttenuation =
+    stems.length > 1
+      ? -(10 * Math.log10(stems.length)) - 3
+      : 0;
+
   for (let i = 0; i < stems.length; i++) {
     const stem = stems[i];
     const cls = stem.classification;
 
-    // Gain staging: normalize to target RMS + role offset
+    // Gain staging: normalize to target RMS + role offset + sum attenuation
     const gainAdjust = TARGET_RMS - stem.features.rmsEnergy;
     const roleOffset = ROLE_OFFSETS[cls] ?? 0;
-    const volume = gainAdjust + roleOffset;
+    const volume = gainAdjust + roleOffset + sumAttenuation;
 
     // Pan placement
     const pan = getPan(cls, i, panState);

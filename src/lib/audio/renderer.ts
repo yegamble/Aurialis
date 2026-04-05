@@ -1,14 +1,23 @@
 /**
  * Offline renderer — processes audio through the mastering chain using
- * OfflineAudioContext and returns the rendered AudioBuffer.
+ * OfflineAudioContext for EQ, then applies compressor, saturation,
+ * stereo width, and limiter inline via pure DSP functions.
  */
 
 import type { AudioParams } from "@/lib/stores/audio-store";
+import {
+  computeGainReduction,
+  makeAttackReleaseCoeffs,
+} from "./dsp/compressor";
+import { applySaturation, drivePctToFactor } from "./dsp/saturation";
+import { processLimiter, dbToLin } from "./dsp/limiter";
 
 /**
- * Render source audio through a simplified EQ chain in OfflineAudioContext.
- * Compressor, limiter, and saturation DSP is applied inline after rendering
- * (avoids AudioWorklet dependency in OfflineAudioContext).
+ * Render source audio through the full mastering chain offline.
+ *
+ * 1. OfflineAudioContext handles EQ (BiquadFilter) + input gain + resampling
+ * 2. Compressor, saturation, stereo width, and limiter are applied inline
+ *    on the rendered buffer using pure DSP functions (no AudioWorklet needed).
  *
  * @param sourceBuffer  Input AudioBuffer to process
  * @param params        Mastering parameters
@@ -21,7 +30,6 @@ export async function renderOffline(
   targetSampleRate: number
 ): Promise<AudioBuffer> {
   const numChannels = sourceBuffer.numberOfChannels;
-  // Compute output length at target sample rate
   const outputLength = Math.round(sourceBuffer.duration * targetSampleRate);
 
   const offlineCtx = new OfflineAudioContext(numChannels, outputLength, targetSampleRate);
@@ -63,20 +71,147 @@ export async function renderOffline(
   eq12k.frequency.value = 12000;
   eq12k.gain.value = params.eq12k;
 
-  // Output gain (makeup)
-  const outputGain = offlineCtx.createGain();
-  outputGain.gain.value = Math.pow(10, params.makeup / 20);
-
-  // Connect chain: source → inputGain → EQ bands → outputGain → destination
+  // Connect chain: source → inputGain → EQ bands → destination
+  // (No output gain node — makeup is part of the compressor stage below)
   source.connect(inputGain);
   inputGain.connect(eq80);
   eq80.connect(eq250);
   eq250.connect(eq1k);
   eq1k.connect(eq4k);
   eq4k.connect(eq12k);
-  eq12k.connect(outputGain);
-  outputGain.connect(offlineCtx.destination);
+  eq12k.connect(offlineCtx.destination);
 
   source.start(0);
-  return offlineCtx.startRendering();
+  const rendered = await offlineCtx.startRendering();
+
+  // --- Inline DSP: Compressor → Saturation → Stereo Width → Limiter ---
+  // Matches the real-time chain order in chain.ts
+
+  const channels: Float32Array[] = [];
+  for (let c = 0; c < rendered.numberOfChannels; c++) {
+    channels.push(rendered.getChannelData(c));
+  }
+  const sr = rendered.sampleRate;
+
+  // 1. Compressor (mirrors compressor-processor.js algorithm)
+  applyCompressor(channels, params, sr);
+
+  // 2. Saturation
+  if (params.satDrive > 0) {
+    const driveFactor = drivePctToFactor(params.satDrive);
+    for (let c = 0; c < channels.length; c++) {
+      const processed = applySaturation(channels[c], driveFactor);
+      channels[c].set(processed);
+    }
+  }
+
+  // 3. Stereo Width (M/S processing, only for stereo)
+  if (channels.length >= 2) {
+    const needsWidth = params.stereoWidth !== 100 || params.midGain !== 0 || params.sideGain !== 0;
+    if (needsWidth) {
+      applyStereoWidth(channels[0], channels[1], params);
+    }
+  }
+
+  // 4. Limiter
+  const ceilingLin = dbToLin(params.ceiling);
+  // Convert limiterRelease from ms to appropriate coefficients
+  const limiterReleaseSamples = Math.round((params.limiterRelease / 1000) * sr);
+  const releaseCoeff = limiterReleaseSamples > 0
+    ? Math.exp(-1 / limiterReleaseSamples)
+    : 0.9999;
+  const lookaheadSamples = Math.round(0.0015 * sr); // ~1.5ms lookahead
+  for (let c = 0; c < channels.length; c++) {
+    const limited = processLimiter(channels[c], ceilingLin, lookaheadSamples, 0.001, releaseCoeff);
+    channels[c].set(limited);
+  }
+
+  return rendered;
+}
+
+/**
+ * Apply compressor inline — mirrors the compressor-processor.js worklet algorithm.
+ * Per-sample envelope follower + gain computer + attack/release smoothing + makeup.
+ */
+function applyCompressor(
+  channels: Float32Array[],
+  params: AudioParams,
+  sampleRate: number
+): void {
+  const numChannels = channels.length;
+  const numSamples = channels[0].length;
+
+  const { attack: attackCoeff, release: releaseCoeff } = makeAttackReleaseCoeffs(
+    params.attack / 1000, // ms → s
+    params.release / 1000,
+    sampleRate
+  );
+
+  const makeupLin = Math.pow(10, params.makeup / 20);
+  const knee = 6; // Matches worklet default (AudioParams has no knee field)
+
+  let envelope = 0;
+
+  for (let i = 0; i < numSamples; i++) {
+    // Mix to mono for level detection (same as worklet)
+    let level = 0;
+    for (let c = 0; c < numChannels; c++) {
+      level += Math.abs(channels[c][i]);
+    }
+    level /= numChannels;
+
+    // Envelope follower (peak with attack/release)
+    if (level > envelope) {
+      envelope = attackCoeff * envelope + (1 - attackCoeff) * level;
+    } else {
+      envelope = releaseCoeff * envelope + (1 - releaseCoeff) * level;
+    }
+
+    // Convert to dB
+    const inputDb = envelope > 0 ? 20 * Math.log10(envelope) : -120;
+
+    // Gain computer
+    const gr = computeGainReduction(inputDb, {
+      threshold: params.threshold,
+      ratio: params.ratio,
+      knee,
+    });
+
+    // Apply gain reduction + makeup to all channels
+    const gainLin = Math.pow(10, gr / 20) * makeupLin;
+    for (let c = 0; c < numChannels; c++) {
+      channels[c][i] *= gainLin;
+    }
+  }
+}
+
+/**
+ * Apply stereo width via Mid/Side processing.
+ * Modifies L and R channels in-place.
+ */
+function applyStereoWidth(
+  left: Float32Array,
+  right: Float32Array,
+  params: AudioParams
+): void {
+  const widthScale = params.stereoWidth / 100;
+  const midGainLin = Math.pow(10, params.midGain / 20);
+  const sideGainLin = Math.pow(10, params.sideGain / 20);
+
+  for (let i = 0; i < left.length; i++) {
+    const l = left[i];
+    const r = right[i];
+
+    // M/S encode
+    const mid = (l + r) * 0.5;
+    const side = (l - r) * 0.5;
+
+    // Apply gains
+    const midOut = mid * midGainLin;
+    const sideOut = side * widthScale * sideGainLin;
+
+    // M/S decode
+    left[i] = midOut + sideOut;
+    right[i] = midOut - sideOut;
+  }
 }

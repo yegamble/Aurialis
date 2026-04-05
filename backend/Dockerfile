@@ -1,24 +1,23 @@
 # Smart Split Backend — Demucs stem separation service
-# Supports both GPU (nvidia-docker) and CPU-only modes.
+# CPU-only by default. Works on macOS, Linux, and Windows.
 #
 # Build: docker compose build
 # Run:   docker compose up
 
-FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04 AS gpu-base
+FROM python:3.11-slim
 
-# Install Python 3.11
+# Install ffmpeg (required by Demucs)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 python3.11-venv python3-pip ffmpeg \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
-
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
 
 WORKDIR /app
 
-# Install Python dependencies
+# Install Python dependencies (CPU-only PyTorch)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir \
+    torch torchaudio --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements.txt
 
 # Pre-download Demucs models so first run doesn't stall
 RUN python -c "\

@@ -1,4 +1,4 @@
-# Waveish
+# Aurialis
 
 Browser-based audio mastering application. Upload a track, choose a genre preset or tweak parameters manually, and export a mastered WAV file.
 

@@ -21,9 +21,13 @@ export async function renderMix(
   }
 
   // Calculate total duration (max stem duration + offset)
-  const totalDuration = Math.max(
-    ...stems.map((s) => s.duration + s.offset)
-  );
+  let totalDuration = 0;
+  for (const stem of stems) {
+    const duration = stem.duration + stem.offset;
+    if (duration > totalDuration) {
+      totalDuration = duration;
+    }
+  }
   const totalSamples = Math.ceil(totalDuration * targetSampleRate);
 
   const offlineCtx = new OfflineAudioContext(

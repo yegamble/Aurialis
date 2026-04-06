@@ -5,6 +5,7 @@ Supports htdemucs (4 stems) and htdemucs_6s (6 stems).
 
 import os
 import uuid
+import time
 import threading
 import tempfile
 import soundfile as sf
@@ -85,11 +86,28 @@ def _run_separation(
         # Add batch dimension: (channels, samples) → (1, channels, samples)
         wav = wav.unsqueeze(0).to(device)
 
-        # 50% — running separation
+        # 50–89% — running separation (progress estimated by audio duration)
         update_job(job_id, progress=50)
+
+        audio_duration = wav.shape[-1] / sr
+        estimated_seconds = max(30, audio_duration * 0.7)
+
+        stop_event = threading.Event()
+
+        def _tick_progress():
+            start = time.time()
+            while not stop_event.wait(2):
+                frac = min((time.time() - start) / estimated_seconds, 0.95)
+                update_job(job_id, progress=50 + int(frac * 39))
+
+        ticker = threading.Thread(target=_tick_progress, daemon=True)
+        ticker.start()
 
         with torch.no_grad():
             sources = apply_model(model, wav, device=device)
+
+        stop_event.set()
+        ticker.join()
 
         # sources shape: (1, num_sources, channels, samples)
         sources = sources.squeeze(0).cpu()

@@ -6,9 +6,9 @@
 
 FROM python:3.11-slim
 
-# Install ffmpeg (required by Demucs)
+# Install ffmpeg (required by Demucs) and libsndfile1 (required by soundfile)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
+    ffmpeg libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -16,7 +16,7 @@ WORKDIR /app
 # Install Python dependencies (CPU-only PyTorch)
 COPY requirements.txt .
 RUN pip install --no-cache-dir \
-    torch torchaudio --index-url https://download.pytorch.org/whl/cpu \
+    torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 
 # Pre-download Demucs models so first run doesn't stall

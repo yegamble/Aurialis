@@ -7,8 +7,9 @@ import os
 import uuid
 import threading
 import tempfile
-import torchaudio
+import soundfile as sf
 import torch
+import torchaudio
 from pathlib import Path
 
 from jobs import Job, StemInfo, create_job, update_job
@@ -70,8 +71,11 @@ def _run_separation(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model.to(device)
 
-        # Load audio
-        wav, sr = torchaudio.load(input_path)
+        # Load audio via soundfile (torchaudio 2.9+ requires torchcodec/CUDA)
+        data, sr = sf.read(input_path, dtype="float32")
+        wav = torch.from_numpy(data.T if data.ndim > 1 else data).float()
+        if wav.dim() == 1:
+            wav = wav.unsqueeze(0)
 
         # Resample to model's sample rate if needed
         if sr != model.samplerate:
@@ -100,7 +104,7 @@ def _run_separation(
             if i >= sources.shape[0]:
                 break
             stem_path = os.path.join(output_dir, f"{name}.wav")
-            torchaudio.save(stem_path, sources[i], sr)
+            sf.write(stem_path, sources[i].numpy().T, sr)
             stems.append(StemInfo(name=name, path=stem_path, ready=True))
 
         # 100% — done

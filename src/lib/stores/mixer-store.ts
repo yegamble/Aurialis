@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { MAX_STEMS } from "@/types/mixer";
 import type { StemTrack, StemChannelParams } from "@/types/mixer";
+import type { AudioParams } from "@/types/mastering";
+import { DEFAULT_PARAMS } from "@/lib/audio/presets";
 
 function computeDuration(stems: StemTrack[]): number {
   if (stems.length === 0) return 0;
@@ -13,6 +15,7 @@ export interface MixerState {
   currentTime: number;
   duration: number;
   masterVolume: number;
+  masterParams: AudioParams;
   isAutoMixing: boolean;
   selectedStemId: string | null;
   originalMixBuffer: AudioBuffer | null;
@@ -31,6 +34,7 @@ export interface MixerState {
   ) => void;
   setStemOffset: (stemId: string, offset: number) => void;
   setAutoMixResults: (results: Record<string, StemChannelParams>) => void;
+  setMasterParams: (params: Partial<AudioParams>) => void;
   setIsPlaying: (playing: boolean) => void;
   setCurrentTime: (time: number) => void;
   setMasterVolume: (volume: number) => void;
@@ -45,6 +49,7 @@ export const useMixerStore = create<MixerState>((set) => ({
   currentTime: 0,
   duration: 0,
   masterVolume: 0,
+  masterParams: { ...DEFAULT_PARAMS },
   isAutoMixing: false,
   selectedStemId: null,
   originalMixBuffer: null,
@@ -97,6 +102,11 @@ export const useMixerStore = create<MixerState>((set) => ({
       ),
     })),
 
+  setMasterParams: (params) =>
+    set((state) => ({
+      masterParams: { ...state.masterParams, ...params },
+    })),
+
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   setCurrentTime: (currentTime) => set({ currentTime }),
   setMasterVolume: (masterVolume) => set({ masterVolume }),
@@ -110,6 +120,7 @@ export const useMixerStore = create<MixerState>((set) => ({
       currentTime: 0,
       duration: 0,
       masterVolume: 0,
+      masterParams: { ...DEFAULT_PARAMS },
       isAutoMixing: false,
       selectedStemId: null,
       originalMixBuffer: null,

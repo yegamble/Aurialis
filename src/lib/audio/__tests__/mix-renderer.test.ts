@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { renderMix } from "../mix-renderer";
 import { DEFAULT_CHANNEL_PARAMS } from "@/types/mixer";
+import { DEFAULT_PARAMS } from "../presets";
 import type { StemTrack } from "@/types/mixer";
 
 function makeStem(overrides: Partial<StemTrack> = {}): StemTrack {
@@ -129,5 +130,14 @@ describe("mix-renderer", () => {
 
     const result = await renderMix([stem], 48000);
     expect(result.sampleRate).toBe(48000);
+  });
+
+  it("applies the master bus when master params are provided", async () => {
+    const stem = makeStem({ id: "s1" });
+
+    const result = await renderMix([stem], 44100, DEFAULT_PARAMS);
+
+    expect(result).toBeDefined();
+    expect(result.sampleRate).toBe(44100);
   });
 });

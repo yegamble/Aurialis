@@ -12,6 +12,30 @@ import type {
 
 // --- Feature extraction functions (exported for testing) ---
 
+function getAnalysisSamples(buffer: AudioBuffer): Float32Array {
+  if (buffer.numberOfChannels <= 1) {
+    return buffer.getChannelData(0);
+  }
+
+  const length = buffer.length;
+  const mixed = new Float32Array(length);
+  const channels = Math.min(buffer.numberOfChannels, 2);
+
+  for (let c = 0; c < channels; c++) {
+    const input = buffer.getChannelData(c);
+    for (let i = 0; i < length; i++) {
+      mixed[i] += input[i];
+    }
+  }
+
+  const scale = 1 / channels;
+  for (let i = 0; i < length; i++) {
+    mixed[i] *= scale;
+  }
+
+  return mixed;
+}
+
 /** Compute RMS energy in dBFS. */
 export function computeRMS(samples: Float32Array): number {
   let sum = 0;
@@ -20,6 +44,58 @@ export function computeRMS(samples: Float32Array): number {
   }
   const rms = Math.sqrt(sum / samples.length);
   return rms > 0 ? 20 * Math.log10(rms) : -120;
+}
+
+/**
+ * Compute active RMS in dBFS, ignoring long stretches of silence.
+ * Uses 50ms windows and keeps windows above a relative gate.
+ */
+export function computeActiveRMS(
+  samples: Float32Array,
+  sampleRate: number
+): number {
+  const windowSamples = Math.max(1, Math.floor(sampleRate * 0.05));
+  const numWindows = Math.floor(samples.length / windowSamples);
+  if (numWindows === 0) {
+    return computeRMS(samples);
+  }
+
+  const windowRms = new Float32Array(numWindows);
+  let maxWindowDb = -120;
+
+  for (let w = 0; w < numWindows; w++) {
+    let sum = 0;
+    const start = w * windowSamples;
+    for (let i = start; i < start + windowSamples; i++) {
+      sum += samples[i] * samples[i];
+    }
+    const rms = Math.sqrt(sum / windowSamples);
+    windowRms[w] = rms;
+    const rmsDb = rms > 0 ? 20 * Math.log10(rms) : -120;
+    if (rmsDb > maxWindowDb) {
+      maxWindowDb = rmsDb;
+    }
+  }
+
+  const gateDb = Math.max(-60, maxWindowDb - 24);
+  let activeEnergy = 0;
+  let activeWindows = 0;
+
+  for (let w = 0; w < windowRms.length; w++) {
+    const rms = windowRms[w];
+    const rmsDb = rms > 0 ? 20 * Math.log10(rms) : -120;
+    if (rmsDb >= gateDb) {
+      activeEnergy += rms * rms;
+      activeWindows++;
+    }
+  }
+
+  if (activeWindows === 0) {
+    return computeRMS(samples);
+  }
+
+  const activeRms = Math.sqrt(activeEnergy / activeWindows);
+  return activeRms > 0 ? 20 * Math.log10(activeRms) : -120;
 }
 
 /** Compute crest factor (peak-to-RMS ratio) in dB. */
@@ -318,14 +394,14 @@ export function analyzeStem(
   buffer: AudioBuffer,
   filename: string
 ): AnalyzedStem {
-  const samples = buffer.getChannelData(0);
+  const samples = getAnalysisSamples(buffer);
   const sr = buffer.sampleRate;
 
   const features: StemFeatures = {
     spectralCentroid: computeSpectralCentroid(samples, sr),
     spectralRolloff: computeSpectralRolloff(samples, sr),
     transientDensity: computeTransientDensity(samples, sr),
-    rmsEnergy: computeRMS(samples),
+    rmsEnergy: computeActiveRMS(samples, sr),
     crestFactor: computeCrestFactor(samples),
     bandEnergy: computeBandEnergy(samples, sr),
     zeroCrossingRate: computeZeroCrossingRate(samples),

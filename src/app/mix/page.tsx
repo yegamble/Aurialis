@@ -39,6 +39,7 @@ export default function MixPage() {
   const router = useRouter();
   const stems = useMixerStore((s) => s.stems);
   const isAutoMixing = useMixerStore((s) => s.isAutoMixing);
+  const masterParams = useMixerStore((s) => s.masterParams);
 
   const {
     isPlaying,
@@ -163,15 +164,15 @@ export default function MixPage() {
 
           for (const stem of stemBuffers) {
             const stemType = stem.name.replace(".wav", "") as import("@/types/mixer").StemClassification;
-            const samples = stem.buffer.getChannelData(0);
-            const repaired = applySmartRepair(samples, {
-              stemType,
-              sampleRate: stem.buffer.sampleRate,
-              mixSamples,
-            });
-            // Write repaired data back
-            const channel = stem.buffer.getChannelData(0);
-            channel.set(repaired);
+            for (let c = 0; c < stem.buffer.numberOfChannels; c++) {
+              const samples = stem.buffer.getChannelData(c);
+              const repaired = applySmartRepair(samples, {
+                stemType,
+                sampleRate: stem.buffer.sampleRate,
+                mixSamples,
+              });
+              stem.buffer.getChannelData(c).set(repaired);
+            }
           }
         }
 
@@ -326,18 +327,18 @@ export default function MixPage() {
     try {
       // Dynamic import to keep initial bundle light
       const { renderMix } = await import("@/lib/audio/mix-renderer");
-      const { encodeWav } = await import("@/lib/audio/wav-encoder");
       const { useAudioStore } = await import("@/lib/stores/audio-store");
 
       const rendered = await renderMix(stems, 44100);
+      const { encodeWav } = await import("@/lib/audio/wav-encoder");
       const wavData = encodeWav(rendered, 16);
-      const blob = new Blob([wavData], { type: "audio/wav" });
-      const syntheticFile = new File([blob], "mixed-stems.wav", {
+      const syntheticFile = new File([new Blob([wavData], { type: "audio/wav" })], "mixed-stems.wav", {
         type: "audio/wav",
       });
 
       useAudioStore.getState().setFile(syntheticFile);
       useAudioStore.getState().setAudioBuffer(rendered);
+      useAudioStore.getState().setParams(masterParams);
 
       router.push("/master");
     } catch (e) {
@@ -356,7 +357,7 @@ export default function MixPage() {
       const { renderMix } = await import("@/lib/audio/mix-renderer");
       const { encodeWav } = await import("@/lib/audio/wav-encoder");
 
-      const rendered = await renderMix(stems, 44100);
+      const rendered = await renderMix(stems, 44100, masterParams);
       const wavData = encodeWav(rendered, 16);
       const blob = new Blob([wavData], { type: "audio/wav" });
 

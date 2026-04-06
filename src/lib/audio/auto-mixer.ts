@@ -20,6 +20,8 @@ export interface AutoMixResult {
 // --- Gain staging ---
 
 const TARGET_RMS = -18; // Target RMS in dBFS
+const MAX_AUTO_GAIN_BOOST_DB = 8;
+const MIN_AUTO_GAIN_CUT_DB = -18;
 
 /** Role-based gain offsets (relative to target RMS). */
 const ROLE_OFFSETS: Partial<Record<StemClassification, number>> = {
@@ -140,7 +142,11 @@ export function generateAutoMix(stems: AnalyzedStem[]): AutoMixResult {
     // Gain staging: normalize to target RMS + role offset + sum attenuation
     const gainAdjust = TARGET_RMS - stem.features.rmsEnergy;
     const roleOffset = ROLE_OFFSETS[cls] ?? 0;
-    const volume = gainAdjust + roleOffset + sumAttenuation;
+    const unclampedVolume = gainAdjust + roleOffset + sumAttenuation;
+    const volume = Math.max(
+      MIN_AUTO_GAIN_CUT_DB,
+      Math.min(MAX_AUTO_GAIN_BOOST_DB, unclampedVolume)
+    );
 
     // Pan placement
     const pan = getPan(cls, i, panState);

@@ -112,6 +112,7 @@ export function useMixEngine() {
 
   const play = useCallback(async () => {
     await engine.init();
+    engine.applyMasterParams(useMixerStore.getState().masterParams);
     await engine.play();
   }, [engine]);
 
@@ -129,6 +130,7 @@ export function useMixEngine() {
   const loadStems = useCallback(
     async (files: File[]) => {
       await engine.init();
+      engine.applyMasterParams(useMixerStore.getState().masterParams);
 
       useMixerStore.getState().setIsAutoMixing(false);
 
@@ -230,6 +232,9 @@ export function useMixEngine() {
         case "compRelease":
           engine.updateStemCompressor(stemId, { release: value as number });
           break;
+        case "compMakeup":
+          engine.updateStemCompressor(stemId, { makeup: value as number });
+          break;
         case "satDrive":
           engine.updateStemSaturation(stemId, value as number);
           break;
@@ -284,16 +289,18 @@ export function useMixEngine() {
     });
 
     // Generate auto-mix params
-    const { stemParams, masterParams: _masterParams } =
+    const { stemParams, masterParams } =
       generateAutoMix(analyzed);
 
     // Apply to store
     useMixerStore.getState().setAutoMixResults(stemParams);
+    useMixerStore.getState().setMasterParams(masterParams);
 
     // Apply to engine
     for (const [stemId, params] of Object.entries(stemParams)) {
       engine.applyChannelParams(stemId, params);
     }
+    engine.applyMasterParams(masterParams);
 
     useMixerStore.getState().setIsAutoMixing(false);
   }, [engine]);

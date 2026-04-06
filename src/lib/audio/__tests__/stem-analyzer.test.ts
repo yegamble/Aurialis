@@ -3,6 +3,7 @@ import {
   analyzeStem,
   classifyFromFilename,
   computeRMS,
+  computeActiveRMS,
   computeCrestFactor,
   computeSpectralCentroid,
   computeTransientDensity,
@@ -75,6 +76,23 @@ describe("stem-analyzer", () => {
       const data = buffer.getChannelData(0);
       const rms = computeRMS(data);
       expect(rms).toBeLessThan(-90);
+    });
+  });
+
+  describe("computeActiveRMS", () => {
+    it("ignores long silent sections when estimating level", () => {
+      const sampleRate = 44100;
+      const buffer = makeBuffer((i) => {
+        const activeSamples = Math.floor(sampleRate * 0.25);
+        return i < activeSamples ? sineWave(440, 0.5)(i, sampleRate) : 0;
+      }, 1, sampleRate);
+      const data = buffer.getChannelData(0);
+
+      const fullRms = computeRMS(data);
+      const activeRms = computeActiveRMS(data, sampleRate);
+
+      expect(activeRms).toBeGreaterThan(fullRms + 4);
+      expect(activeRms).toBeLessThan(-6);
     });
   });
 
@@ -239,6 +257,28 @@ describe("stem-analyzer", () => {
       expect(result.features.crestFactor).toBeDefined();
       expect(result.features.bandEnergy).toBeDefined();
       expect(result.features.zeroCrossingRate).toBeDefined();
+    });
+
+    it("uses stereo content rather than a single channel for level analysis", () => {
+      const sampleRate = 44100;
+      const length = sampleRate;
+      const left = new Float32Array(length);
+      const right = new Float32Array(length);
+      for (let i = 0; i < length; i++) {
+        right[i] = sineWave(440, 0.5)(i, sampleRate);
+      }
+
+      const buffer = {
+        duration: 1,
+        sampleRate,
+        numberOfChannels: 2,
+        length,
+        getChannelData: vi.fn((channel: number) => (channel === 0 ? left : right)),
+      } as unknown as AudioBuffer;
+
+      const result = analyzeStem(buffer, "test.wav");
+
+      expect(result.features.rmsEnergy).toBeGreaterThan(-20);
     });
 
     it("classifies drum-like signal with high transients", () => {

@@ -4,6 +4,8 @@
  */
 
 import type { StemTrack } from "@/types/mixer";
+import type { AudioParams } from "@/types/mastering";
+import { renderOffline } from "./renderer";
 
 /**
  * Render all stems mixed into a single stereo AudioBuffer offline.
@@ -11,7 +13,8 @@ import type { StemTrack } from "@/types/mixer";
  */
 export async function renderMix(
   stems: StemTrack[],
-  targetSampleRate: number
+  targetSampleRate: number,
+  masterParams?: AudioParams
 ): Promise<AudioBuffer> {
   if (stems.length === 0) {
     throw new Error("No stems to render");
@@ -109,5 +112,8 @@ export async function renderMix(
     source.start(stem.offset);
   }
 
-  return offlineCtx.startRendering();
+  const stemMix = await offlineCtx.startRendering();
+  return masterParams
+    ? renderOffline(stemMix, masterParams, targetSampleRate)
+    : stemMix;
 }

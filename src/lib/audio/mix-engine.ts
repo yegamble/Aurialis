@@ -1,12 +1,17 @@
 /**
  * MixEngine — manages multiple audio stems with per-stem channel strips
- * and a summing bus. Output connects to the existing ProcessingChain.
+ * and a summing bus. Output feeds the existing ProcessingChain for a
+ * master-bus stage before reaching the destination.
  *
- * Per-stem graph: Source → Volume → Pan → EQ(×5) → Compressor → Saturation → ChannelGain
- * All channels → SummingBus (GainNode) → output
+ * Per-stem graph:
+ * Source → Volume → Pan → EQ(×5) → Compressor → Makeup → Saturation → ChannelGain
+ * All channels → SummingBus → ProcessingChain → MasterGain → output
  */
 
 import type { StemTrack, StemChannelParams } from "@/types/mixer";
+import { ProcessingChain } from "./chain";
+import type { AudioParams } from "@/types/mastering";
+import { DEFAULT_PARAMS } from "./presets";
 
 type EventCallback = (data?: unknown) => void;
 type MixEngineEvent = "statechange" | "timeupdate" | "ended";
@@ -19,6 +24,7 @@ interface StemChannel {
   panner: StereoPannerNode;
   eqBands: BiquadFilterNode[];
   compressor: DynamicsCompressorNode;
+  makeupGain: GainNode;
   saturation: WaveShaperNode;
   channelGain: GainNode; // final output of this channel (used for mute)
   offset: number;
@@ -38,9 +44,14 @@ function makeSaturationCurve(drive: number): Float32Array {
   return curve;
 }
 
+function getSaturationCurve(drive: number): Float32Array | null {
+  return drive > 0 ? makeSaturationCurve(drive) : null;
+}
+
 export class MixEngine {
   private _ctx: AudioContext | null = null;
   private _summingBus: GainNode | null = null;
+  private _masterChain: ProcessingChain | null = null;
   private _masterGain: GainNode | null = null;
   private _channels = new Map<string, StemChannel>();
   private _isPlaying = false;
@@ -99,9 +110,13 @@ export class MixEngine {
 
     this._ctx = new AudioContext({ latencyHint: "playback" });
     this._summingBus = this._ctx.createGain();
+    this._masterChain = new ProcessingChain(this._ctx);
     this._masterGain = this._ctx.createGain();
-    this._summingBus.connect(this._masterGain);
+    await this._masterChain.init();
+    this._summingBus.connect(this._masterChain.input);
+    this._masterChain.output.connect(this._masterGain);
     this._masterGain.connect(this._ctx.destination);
+    this.applyMasterParams(DEFAULT_PARAMS);
   }
 
   addStem(stem: StemTrack): void {
@@ -138,22 +153,27 @@ export class MixEngine {
     compressor.attack.value = stem.channelParams.compAttack / 1000; // ms→s
     compressor.release.value = stem.channelParams.compRelease / 1000;
 
+    // Compressor makeup gain
+    const makeupGain = ctx.createGain();
+    makeupGain.gain.value = Math.pow(10, stem.channelParams.compMakeup / 20);
+
     // Saturation (WaveShaperNode)
     const saturation = ctx.createWaveShaper();
-    saturation.curve = makeSaturationCurve(stem.channelParams.satDrive) as unknown as Float32Array;
+    saturation.curve = getSaturationCurve(stem.channelParams.satDrive);
     saturation.oversample = "4x";
 
     // Channel output gain (used for mute)
     const channelGain = ctx.createGain();
 
-    // Wire: volume → pan → eq0 → eq1 → ... → eq4 → compressor → saturation → channelGain → summingBus
+    // Wire: volume → pan → eq0 → eq1 → ... → eq4 → compressor → makeup → saturation → channelGain → summingBus
     volumeGain.connect(panner);
     panner.connect(eqBands[0]);
     for (let i = 0; i < eqBands.length - 1; i++) {
       eqBands[i].connect(eqBands[i + 1]);
     }
     eqBands[eqBands.length - 1].connect(compressor);
-    compressor.connect(saturation);
+    compressor.connect(makeupGain);
+    makeupGain.connect(saturation);
     saturation.connect(channelGain);
     channelGain.connect(this._summingBus);
 
@@ -165,6 +185,7 @@ export class MixEngine {
       panner,
       eqBands,
       compressor,
+      makeupGain,
       saturation,
       channelGain,
       offset: stem.offset,
@@ -185,6 +206,7 @@ export class MixEngine {
     ch.panner.disconnect();
     for (const band of ch.eqBands) band.disconnect();
     ch.compressor.disconnect();
+    ch.makeupGain.disconnect();
     ch.saturation.disconnect();
     ch.channelGain.disconnect();
 
@@ -295,6 +317,7 @@ export class MixEngine {
       ratio?: number;
       attack?: number;
       release?: number;
+      makeup?: number;
     }
   ): void {
     const ch = this._channels.get(stemId);
@@ -306,12 +329,14 @@ export class MixEngine {
       ch.compressor.attack.value = params.attack / 1000;
     if (params.release !== undefined)
       ch.compressor.release.value = params.release / 1000;
+    if (params.makeup !== undefined)
+      ch.makeupGain.gain.value = Math.pow(10, params.makeup / 20);
   }
 
   updateStemSaturation(stemId: string, drive: number): void {
     const ch = this._channels.get(stemId);
     if (!ch) return;
-    ch.saturation.curve = makeSaturationCurve(drive) as unknown as Float32Array;
+    ch.saturation.curve = getSaturationCurve(drive);
   }
 
   applyChannelParams(stemId: string, params: StemChannelParams): void {
@@ -325,10 +350,31 @@ export class MixEngine {
       ratio: params.compRatio,
       attack: params.compAttack,
       release: params.compRelease,
+      makeup: params.compMakeup,
     });
     this.updateStemSaturation(stemId, params.satDrive);
     this.setMute(stemId, params.mute);
     this.setSolo(stemId, params.solo);
+  }
+
+  applyMasterParams(params: AudioParams): void {
+    this._masterChain?.updateParam("threshold", params.threshold);
+    this._masterChain?.updateParam("ratio", params.ratio);
+    this._masterChain?.updateParam("attack", params.attack);
+    this._masterChain?.updateParam("release", params.release);
+    this._masterChain?.updateParam("makeup", params.makeup);
+    this._masterChain?.updateParam("eq80", params.eq80);
+    this._masterChain?.updateParam("eq250", params.eq250);
+    this._masterChain?.updateParam("eq1k", params.eq1k);
+    this._masterChain?.updateParam("eq4k", params.eq4k);
+    this._masterChain?.updateParam("eq12k", params.eq12k);
+    this._masterChain?.updateParam("satDrive", params.satDrive);
+    this._masterChain?.updateParam("stereoWidth", params.stereoWidth);
+    this._masterChain?.updateParam("bassMonoFreq", params.bassMonoFreq);
+    this._masterChain?.updateParam("midGain", params.midGain);
+    this._masterChain?.updateParam("sideGain", params.sideGain);
+    this._masterChain?.updateParam("ceiling", params.ceiling);
+    this._masterChain?.updateParam("limiterRelease", params.limiterRelease);
   }
 
   // --- Mute/Solo ---
@@ -414,12 +460,14 @@ export class MixEngine {
       ch.panner.disconnect();
       for (const band of ch.eqBands) band.disconnect();
       ch.compressor.disconnect();
+      ch.makeupGain.disconnect();
       ch.saturation.disconnect();
       ch.channelGain.disconnect();
     }
     this._channels.clear();
 
     this._summingBus?.disconnect();
+    this._masterChain?.dispose();
     this._masterGain?.disconnect();
 
     if (this._ctx && this._ctx.state !== "closed") {
@@ -428,6 +476,7 @@ export class MixEngine {
 
     this._ctx = null;
     this._summingBus = null;
+    this._masterChain = null;
     this._masterGain = null;
     this._listeners.clear();
   }

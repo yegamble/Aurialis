@@ -179,6 +179,14 @@ describe("auto-mixer", () => {
       expect(result.stemParams.s1.volume).toBe(2);
     });
 
+    it("clamps extreme boosts for sparse or silence-padded stems", () => {
+      const stems = [makeAnalyzedStem("s1", "keys", -70)];
+
+      const result = generateAutoMix(stems);
+
+      expect(result.stemParams.s1.volume).toBeLessThanOrEqual(8);
+    });
+
     it("handles single stem", () => {
       const stems = [makeAnalyzedStem("s1", "vocals")];
 

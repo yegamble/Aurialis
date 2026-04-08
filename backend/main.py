@@ -34,6 +34,7 @@ app.add_middleware(
 )
 
 TEMP_DIR = "/tmp/smart-split"
+ALLOWED_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
 
 
 def _detect_gpu() -> bool:
@@ -83,7 +84,9 @@ async def separate(
 
     # Save uploaded file to temp directory
     os.makedirs(TEMP_DIR, exist_ok=True)
-    suffix = os.path.splitext(file.filename)[1] or ".wav"
+    ext = os.path.splitext(file.filename)[1].lower()
+    suffix = ext if ext in ALLOWED_EXTENSIONS else ".wav"
+
     with tempfile.NamedTemporaryFile(
         dir=TEMP_DIR, suffix=suffix, delete=False
     ) as tmp:

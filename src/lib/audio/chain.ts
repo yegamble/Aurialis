@@ -126,6 +126,9 @@ export class ProcessingChain {
       case "makeup":
         this._compressor?.setMakeup(value);
         break;
+      case "sidechainHpfHz":
+        this._compressor?.setSidechainHpfHz(value);
+        break;
 
       // Saturation
       case "satDrive":

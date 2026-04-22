@@ -147,3 +147,64 @@ describe("applyIntensity", () => {
     expect(above.threshold).toBeCloseTo(hundred.threshold, 5);
   });
 });
+
+describe("Sidechain HPF per-genre values", () => {
+  it("DEFAULT_PARAMS.sidechainHpfHz === 100", () => {
+    expect(DEFAULT_PARAMS.sidechainHpfHz).toBe(100);
+  });
+
+  it("every genre preset has a sidechainHpfHz field", () => {
+    for (const [genre, params] of Object.entries(GENRE_PRESETS)) {
+      expect(
+        params.sidechainHpfHz,
+        `${genre}.sidechainHpfHz should be defined`
+      ).toBeDefined();
+      expect(params.sidechainHpfHz).toBeGreaterThanOrEqual(20);
+      expect(params.sidechainHpfHz).toBeLessThanOrEqual(300);
+    }
+  });
+
+  it("applies expected per-genre values at intensity 100", () => {
+    const expected: Record<string, number> = {
+      pop: 120,
+      rock: 120,
+      hiphop: 80,
+      electronic: 80,
+      jazz: 60,
+      classical: 60,
+      rnb: 100,
+      podcast: 120,
+      lofi: 100,
+    };
+    for (const [genre, hpf] of Object.entries(expected)) {
+      expect(
+        GENRE_PRESETS[genre as keyof typeof GENRE_PRESETS].sidechainHpfHz,
+        `${genre}.sidechainHpfHz`
+      ).toBe(hpf);
+    }
+  });
+
+  it("applyIntensity(hiphop, 0).sidechainHpfHz equals DEFAULT (100)", () => {
+    expect(applyIntensity("hiphop", 0).sidechainHpfHz).toBeCloseTo(100, 5);
+  });
+
+  it("applyIntensity(hiphop, 100).sidechainHpfHz equals preset (80)", () => {
+    expect(applyIntensity("hiphop", 100).sidechainHpfHz).toBeCloseTo(80, 5);
+  });
+
+  it("applyIntensity(hiphop, 50).sidechainHpfHz interpolates to 90", () => {
+    expect(applyIntensity("hiphop", 50).sidechainHpfHz).toBeCloseTo(90, 3);
+  });
+
+  it("applyIntensity(pop, 50).sidechainHpfHz interpolates to 110", () => {
+    expect(applyIntensity("pop", 50).sidechainHpfHz).toBeCloseTo(110, 3);
+  });
+
+  it("applyIntensity(classical, 100).sidechainHpfHz equals 60", () => {
+    expect(applyIntensity("classical", 100).sidechainHpfHz).toBeCloseTo(60, 5);
+  });
+
+  it("applyIntensity(podcast, 100).sidechainHpfHz equals 120", () => {
+    expect(applyIntensity("podcast", 100).sidechainHpfHz).toBeCloseTo(120, 5);
+  });
+});

@@ -60,6 +60,11 @@ export class CompressorNode {
     this._node?.port.postMessage({ param: "knee", value: dB });
   }
 
+  /** Set sidechain high-pass cutoff (Hz) applied to the detector path only. */
+  setSidechainHpfHz(hz: number): void {
+    this._node?.port.postMessage({ param: "sidechainHpfHz", value: hz });
+  }
+
   setBypass(bypass: boolean): void {
     this._bypassed = bypass;
     this._node?.port.postMessage({ param: "enabled", value: !bypass });

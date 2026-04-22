@@ -84,6 +84,16 @@ describe("CompressorNode", () => {
     });
   });
 
+  it("should post 'sidechainHpfHz' param message on setSidechainHpfHz()", async () => {
+    const comp = new CompressorNode(ctx);
+    await comp.init();
+    comp.setSidechainHpfHz(120);
+    expect(comp["_node"]!.port.postMessage).toHaveBeenCalledWith({
+      param: "sidechainHpfHz",
+      value: 120,
+    });
+  });
+
   it("should set GR callback via onGainReduction", async () => {
     const comp = new CompressorNode(ctx);
     await comp.init();

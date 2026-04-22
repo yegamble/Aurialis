@@ -7,6 +7,12 @@ export interface AudioParams {
   attack: number;
   release: number;
   makeup: number;
+  /**
+   * Sidechain high-pass filter cutoff in Hz applied to the compressor's detector
+   * signal (not the audio path). Prevents bass content from dominating gain
+   * reduction. Range 20–300 Hz. Default 100 Hz.
+   */
+  sidechainHpfHz: number;
   eq80: number;
   eq250: number;
   eq1k: number;

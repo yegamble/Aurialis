@@ -11,6 +11,10 @@ import {
 } from "./dsp/compressor";
 import { applySaturation, drivePctToFactor } from "./dsp/saturation";
 import { processLimiter, dbToLin } from "./dsp/limiter";
+import {
+  MultibandCompressorDSP,
+  type BandParams,
+} from "./dsp/multiband";
 
 /**
  * Render source audio through the full mastering chain offline.
@@ -95,6 +99,12 @@ export async function renderOffline(
 
   // 1. Compressor (mirrors compressor-processor.js algorithm)
   applyCompressor(channels, params, sr);
+
+  // 1b. Multiband compressor (skipped when multibandEnabled === 0 for
+  // bit-equivalent output vs. pre-P2 renders)
+  if (params.multibandEnabled > 0 && channels.length >= 2) {
+    applyMultiband(channels, params, sr);
+  }
 
   // 2. Saturation
   if (params.satDrive > 0) {
@@ -183,6 +193,47 @@ function applyCompressor(
       channels[c][i] *= gainLin;
     }
   }
+}
+
+/**
+ * Apply multiband compression inline — mirrors the multiband worklet.
+ * Processes stereo pair in place using `MultibandCompressorDSP` (the canonical
+ * pure-TS reference shared with the worklet).
+ *
+ * Mono buffers are ignored by the caller — the multiband stage requires L and R.
+ */
+function applyMultiband(
+  channels: Float32Array[],
+  params: AudioParams,
+  sampleRate: number
+): void {
+  const left = channels[0];
+  const right = channels[1];
+  const dsp = new MultibandCompressorDSP(sampleRate);
+  const outL = new Float32Array(left.length);
+  const outR = new Float32Array(right.length);
+
+  const band = (prefix: "mbLow" | "mbMid" | "mbHigh"): BandParams => ({
+    enabled: params[`${prefix}Enabled` as const],
+    solo: params[`${prefix}Solo` as const],
+    threshold: params[`${prefix}Threshold` as const],
+    ratio: params[`${prefix}Ratio` as const],
+    attack: params[`${prefix}Attack` as const] / 1000, // ms → s
+    release: params[`${prefix}Release` as const] / 1000,
+    makeup: params[`${prefix}Makeup` as const],
+    mode: params[`${prefix}Mode` as const],
+    msBalance: params[`${prefix}MsBalance` as const],
+  });
+
+  dsp.processStereo(
+    left,
+    right,
+    { low: band("mbLow"), mid: band("mbMid"), high: band("mbHigh") },
+    { lowMid: params.mbCrossLowMid, midHigh: params.mbCrossMidHigh },
+    { left: outL, right: outR }
+  );
+  left.set(outL);
+  right.set(outR);
 }
 
 /**

@@ -20,16 +20,36 @@ describe("ProcessingChain", () => {
     expect(chain.output).toBeDefined();
   });
 
-  it("should load all 4 worklets during init", async () => {
+  it("should load all 5 worklets during init (incl. multiband-compressor)", async () => {
     chain = new ProcessingChain(ctx);
     await chain.init();
-    expect(ctx.audioWorklet.addModule).toHaveBeenCalledTimes(4);
+    expect(ctx.audioWorklet.addModule).toHaveBeenCalledTimes(5);
     const calls = (ctx.audioWorklet.addModule as ReturnType<typeof vi.fn>).mock.calls;
     const paths = calls.map((c: unknown[]) => c[0] as string);
-    expect(paths.some((p) => p.includes("compressor"))).toBe(true);
+    expect(paths.some((p) => p.includes("compressor-processor"))).toBe(true);
+    expect(paths.some((p) => p.includes("multiband-compressor-processor"))).toBe(true);
     expect(paths.some((p) => p.includes("limiter"))).toBe(true);
     expect(paths.some((p) => p.includes("saturation"))).toBe(true);
     expect(paths.some((p) => p.includes("metering"))).toBe(true);
+  });
+
+  it("should route all multiband params without throwing", async () => {
+    chain = new ProcessingChain(ctx);
+    await chain.init();
+    expect(() => chain.updateParam("multibandEnabled", 1)).not.toThrow();
+    expect(() => chain.updateParam("mbCrossLowMid", 180)).not.toThrow();
+    expect(() => chain.updateParam("mbCrossMidHigh", 2200)).not.toThrow();
+    for (const band of ["Low", "Mid", "High"] as const) {
+      expect(() => chain.updateParam(`mb${band}Enabled` as const, 1)).not.toThrow();
+      expect(() => chain.updateParam(`mb${band}Solo` as const, 0)).not.toThrow();
+      expect(() => chain.updateParam(`mb${band}Threshold` as const, -20)).not.toThrow();
+      expect(() => chain.updateParam(`mb${band}Ratio` as const, 3)).not.toThrow();
+      expect(() => chain.updateParam(`mb${band}Attack` as const, 15)).not.toThrow();
+      expect(() => chain.updateParam(`mb${band}Release` as const, 150)).not.toThrow();
+      expect(() => chain.updateParam(`mb${band}Makeup` as const, 2)).not.toThrow();
+      expect(() => chain.updateParam(`mb${band}Mode` as const, "ms")).not.toThrow();
+      expect(() => chain.updateParam(`mb${band}MsBalance` as const, -0.3)).not.toThrow();
+    }
   });
 
   it("should fallback gracefully when worklet loading fails", async () => {

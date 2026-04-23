@@ -8,11 +8,16 @@
 import { EQNode } from "./nodes/eq";
 import { StereoWidthNode } from "./nodes/stereo-width";
 import { CompressorNode } from "./nodes/compressor";
+import {
+  MultibandCompressorNode,
+  type BandName,
+  type MultibandGainReduction,
+} from "./nodes/multiband-compressor";
 import { LimiterNode } from "./nodes/limiter";
 import { SaturationNode } from "./nodes/saturation";
 import { MeteringNode, type MeteringMessage } from "./nodes/metering";
 import type { AudioParams } from "@/lib/stores/audio-store";
-import type { SaturationMode } from "@/types/mastering";
+import type { MultibandMode, SaturationMode } from "@/types/mastering";
 
 export class ProcessingChain {
   private readonly _ctx: AudioContext;
@@ -20,6 +25,7 @@ export class ProcessingChain {
   private _outputGain: GainNode | null = null;
   private _eq: EQNode | null = null;
   private _compressor: CompressorNode | null = null;
+  private _multiband: MultibandCompressorNode | null = null;
   private _saturation: SaturationNode | null = null;
   private _stereoWidth: StereoWidthNode | null = null;
   private _limiter: LimiterNode | null = null;
@@ -27,6 +33,7 @@ export class ProcessingChain {
   private _processingAvailable = false;
 
   onMetering: ((data: MeteringMessage) => void) | null = null;
+  onMultibandGR: ((gr: MultibandGainReduction) => void) | null = null;
 
   constructor(ctx: AudioContext) {
     this._ctx = ctx;
@@ -53,12 +60,14 @@ export class ProcessingChain {
     // Try loading all worklets — fall back to bypass if any fail
     try {
       this._compressor = new CompressorNode(this._ctx);
+      this._multiband = new MultibandCompressorNode(this._ctx);
       this._limiter = new LimiterNode(this._ctx);
       this._saturation = new SaturationNode(this._ctx);
       this._metering = new MeteringNode(this._ctx);
 
       await Promise.all([
         this._compressor.init(),
+        this._multiband.init(),
         this._limiter.init(),
         this._saturation.init(),
         this._metering.init(),
@@ -68,14 +77,18 @@ export class ProcessingChain {
       this._metering.onMetering = (data) => {
         if (this.onMetering) this.onMetering(data);
       };
+      this._multiband.onGainReduction = (gr) => {
+        if (this.onMultibandGR) this.onMultibandGR(gr);
+      };
 
       this._eq = new EQNode(this._ctx);
       this._stereoWidth = new StereoWidthNode(this._ctx);
 
-      // Chain: inputGain → EQ → Compressor → Saturation → StereoWidth → Limiter → Metering → outputGain
+      // Chain: inputGain → EQ → Compressor → MultibandCompressor → Saturation → StereoWidth → Limiter → Metering → outputGain
       this._inputGain.connect(this._eq.input);
       this._eq.output.connect(this._compressor.input);
-      this._compressor.output.connect(this._saturation.input);
+      this._compressor.output.connect(this._multiband.input);
+      this._multiband.output.connect(this._saturation.input);
       this._saturation.output.connect(this._stereoWidth.input);
       this._stereoWidth.output.connect(this._limiter.input);
       this._limiter.output.connect(this._metering.input);
@@ -168,6 +181,104 @@ export class ProcessingChain {
       case "limiterRelease":
         this._limiter?.setRelease(n);
         break;
+
+      // Multiband (master + crossovers)
+      case "multibandEnabled":
+        this._multiband?.setEnabled(n);
+        break;
+      case "mbCrossLowMid":
+        this._multiband?.setCrossLowMid(n);
+        break;
+      case "mbCrossMidHigh":
+        this._multiband?.setCrossMidHigh(n);
+        break;
+
+      // Multiband — Low
+      case "mbLowEnabled":
+        this._multiband?.setBandEnabled("low", n);
+        break;
+      case "mbLowSolo":
+        this._multiband?.setBandSolo("low", n);
+        break;
+      case "mbLowThreshold":
+        this._multiband?.setBandThreshold("low", n);
+        break;
+      case "mbLowRatio":
+        this._multiband?.setBandRatio("low", n);
+        break;
+      case "mbLowAttack":
+        this._multiband?.setBandAttack("low", n);
+        break;
+      case "mbLowRelease":
+        this._multiband?.setBandRelease("low", n);
+        break;
+      case "mbLowMakeup":
+        this._multiband?.setBandMakeup("low", n);
+        break;
+      case "mbLowMode":
+        this._multiband?.setBandMode("low", value as MultibandMode);
+        break;
+      case "mbLowMsBalance":
+        this._multiband?.setBandMsBalance("low", n);
+        break;
+
+      // Multiband — Mid
+      case "mbMidEnabled":
+        this._multiband?.setBandEnabled("mid", n);
+        break;
+      case "mbMidSolo":
+        this._multiband?.setBandSolo("mid", n);
+        break;
+      case "mbMidThreshold":
+        this._multiband?.setBandThreshold("mid", n);
+        break;
+      case "mbMidRatio":
+        this._multiband?.setBandRatio("mid", n);
+        break;
+      case "mbMidAttack":
+        this._multiband?.setBandAttack("mid", n);
+        break;
+      case "mbMidRelease":
+        this._multiband?.setBandRelease("mid", n);
+        break;
+      case "mbMidMakeup":
+        this._multiband?.setBandMakeup("mid", n);
+        break;
+      case "mbMidMode":
+        this._multiband?.setBandMode("mid", value as MultibandMode);
+        break;
+      case "mbMidMsBalance":
+        this._multiband?.setBandMsBalance("mid", n);
+        break;
+
+      // Multiband — High
+      case "mbHighEnabled":
+        this._multiband?.setBandEnabled("high", n);
+        break;
+      case "mbHighSolo":
+        this._multiband?.setBandSolo("high", n);
+        break;
+      case "mbHighThreshold":
+        this._multiband?.setBandThreshold("high", n);
+        break;
+      case "mbHighRatio":
+        this._multiband?.setBandRatio("high", n);
+        break;
+      case "mbHighAttack":
+        this._multiband?.setBandAttack("high", n);
+        break;
+      case "mbHighRelease":
+        this._multiband?.setBandRelease("high", n);
+        break;
+      case "mbHighMakeup":
+        this._multiband?.setBandMakeup("high", n);
+        break;
+      case "mbHighMode":
+        this._multiband?.setBandMode("high", value as MultibandMode);
+        break;
+      case "mbHighMsBalance":
+        this._multiband?.setBandMsBalance("high", n);
+        break;
     }
   }
 
@@ -175,6 +286,7 @@ export class ProcessingChain {
     this._inputGain?.disconnect();
     this._eq?.dispose();
     this._compressor?.dispose();
+    this._multiband?.dispose();
     this._saturation?.dispose();
     this._stereoWidth?.dispose();
     this._limiter?.dispose();

@@ -2,7 +2,11 @@
 
 import { useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import type { AudioParams, SaturationMode } from "@/types/mastering";
+import type {
+  AudioParams,
+  MultibandMode,
+  SaturationMode,
+} from "@/types/mastering";
 import type { TonePresetName, OutputPresetName } from "@/lib/audio/ui-presets";
 
 interface AdvancedMasteringProps {
@@ -70,6 +74,61 @@ function SatModePills({
           `}
         >
           {mode.charAt(0).toUpperCase() + mode.slice(1)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Segmented radiogroup pill selector for MultibandMode (Stereo | M/S). */
+function ModePills({
+  value,
+  onChange,
+}: {
+  value: MultibandMode;
+  onChange: (v: MultibandMode) => void;
+}) {
+  const modes: readonly MultibandMode[] = ["stereo", "ms"];
+  const labels: Record<MultibandMode, string> = {
+    stereo: "Stereo",
+    ms: "M/S",
+  };
+  const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const handleKey = (e: React.KeyboardEvent<HTMLButtonElement>, idx: number) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    const delta = e.key === "ArrowRight" ? 1 : -1;
+    const nextIdx = (idx + delta + modes.length) % modes.length;
+    const next = modes[nextIdx];
+    onChange(next);
+    buttonRefs.current[nextIdx]?.focus();
+  };
+
+  return (
+    <div role="radiogroup" aria-label="Band mode" className="flex gap-1 mb-2">
+      {modes.map((mode, idx) => (
+        <button
+          key={mode}
+          ref={(el) => {
+            buttonRefs.current[idx] = el;
+          }}
+          type="button"
+          role="radio"
+          aria-checked={value === mode}
+          tabIndex={value === mode ? 0 : -1}
+          onClick={() => onChange(mode)}
+          onKeyDown={(e) => handleKey(e, idx)}
+          className={`
+            flex-1 px-2 py-1 text-[11px] rounded-md border transition-colors
+            ${
+              value === mode
+                ? "bg-[rgba(255,255,255,0.12)] border-[rgba(255,255,255,0.25)] text-white"
+                : "bg-transparent border-[rgba(255,255,255,0.08)] text-[rgba(255,255,255,0.55)] hover:bg-[rgba(255,255,255,0.05)]"
+            }
+          `}
+        >
+          {labels[mode]}
         </button>
       ))}
     </div>
@@ -190,6 +249,147 @@ function ToggleButton({
   );
 }
 
+type BandPrefix = "mbLow" | "mbMid" | "mbHigh";
+
+interface BandRowProps {
+  label: "Low" | "Mid" | "High";
+  prefix: BandPrefix;
+  params: AudioParams;
+  onParamChange: <K extends keyof AudioParams>(
+    key: K,
+    val: AudioParams[K]
+  ) => void;
+}
+
+function BandRow({ label, prefix, params, onParamChange }: BandRowProps) {
+  const [open, setOpen] = useState(false);
+  const enabledKey = `${prefix}Enabled` as const;
+  const soloKey = `${prefix}Solo` as const;
+  const thresholdKey = `${prefix}Threshold` as const;
+  const ratioKey = `${prefix}Ratio` as const;
+  const attackKey = `${prefix}Attack` as const;
+  const releaseKey = `${prefix}Release` as const;
+  const makeupKey = `${prefix}Makeup` as const;
+  const modeKey = `${prefix}Mode` as const;
+  const msBalanceKey = `${prefix}MsBalance` as const;
+
+  const enabled = (params[enabledKey] ?? 0) > 0;
+  const solo = (params[soloKey] ?? 0) > 0;
+  const mode = (params[modeKey] ?? "stereo") as MultibandMode;
+
+  return (
+    <div className="border border-[rgba(255,255,255,0.06)] rounded-lg p-2">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="flex items-center gap-1 flex-1 text-left"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+        >
+          {open ? (
+            <ChevronUp className="w-3.5 h-3.5 text-[rgba(255,255,255,0.3)]" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5 text-[rgba(255,255,255,0.3)]" />
+          )}
+          <span className="text-[rgba(255,255,255,0.7)] text-xs font-medium">
+            {label}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onParamChange(enabledKey, enabled ? 0 : 1)}
+          aria-pressed={enabled}
+          aria-label={`${label} band enable`}
+          className={`px-2 py-1 rounded text-[10px] transition-colors ${
+            enabled
+              ? "bg-[#0a84ff]/[0.15] text-[#0a84ff]"
+              : "bg-[rgba(255,255,255,0.04)] text-[rgba(255,255,255,0.5)]"
+          }`}
+        >
+          {enabled ? "ON" : "OFF"}
+        </button>
+        <button
+          type="button"
+          onClick={() => onParamChange(soloKey, solo ? 0 : 1)}
+          aria-pressed={solo}
+          aria-label={`${label} band solo`}
+          className={`px-2 py-1 rounded text-[10px] transition-colors ${
+            solo
+              ? "bg-yellow-500/[0.18] text-yellow-300"
+              : "bg-[rgba(255,255,255,0.04)] text-[rgba(255,255,255,0.5)]"
+          }`}
+        >
+          S
+        </button>
+      </div>
+      {open && (
+        <div className="space-y-2 mt-2 pl-1">
+          <ModePills
+            value={mode}
+            onChange={(v) => onParamChange(modeKey, v)}
+          />
+          <Slider
+            label="Threshold"
+            value={params[thresholdKey] ?? -18}
+            min={-60}
+            max={0}
+            step={0.1}
+            unit="dB"
+            onChange={(v) => onParamChange(thresholdKey, v)}
+          />
+          <Slider
+            label="Ratio"
+            value={params[ratioKey] ?? 2}
+            min={1}
+            max={20}
+            step={0.1}
+            unit=":1"
+            onChange={(v) => onParamChange(ratioKey, v)}
+          />
+          <Slider
+            label="Attack"
+            value={params[attackKey] ?? 20}
+            min={0.1}
+            max={100}
+            step={0.1}
+            unit="ms"
+            onChange={(v) => onParamChange(attackKey, v)}
+          />
+          <Slider
+            label="Release"
+            value={params[releaseKey] ?? 250}
+            min={10}
+            max={1000}
+            step={1}
+            unit="ms"
+            onChange={(v) => onParamChange(releaseKey, v)}
+          />
+          <Slider
+            label="Makeup"
+            value={params[makeupKey] ?? 0}
+            min={-12}
+            max={12}
+            step={0.1}
+            unit="dB"
+            onChange={(v) => onParamChange(makeupKey, v)}
+          />
+          {mode === "ms" && (
+            <Slider
+              label="M/S Balance"
+              value={params[msBalanceKey] ?? 0}
+              min={-1}
+              max={1}
+              step={0.01}
+              unit=""
+              onChange={(v) => onParamChange(msBalanceKey, v)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AdvancedMastering({
   params,
   onParamChange,
@@ -293,6 +493,75 @@ export function AdvancedMastering({
           unit="Hz"
           onChange={(v) => onParamChange("sidechainHpfHz", v)}
         />
+      </Section>
+
+      {/* Multiband */}
+      <Section title="Multiband" defaultOpen={false}>
+        <div className="flex gap-2 mb-3">
+          <ToggleButton
+            label="Multiband"
+            active={(params.multibandEnabled ?? 0) > 0}
+            onClick={() =>
+              onParamChange(
+                "multibandEnabled",
+                (params.multibandEnabled ?? 0) > 0 ? 0 : 1
+              )
+            }
+          />
+        </div>
+        <Slider
+          label="Low|Mid"
+          value={params.mbCrossLowMid ?? 200}
+          min={80}
+          max={400}
+          step={1}
+          unit="Hz"
+          onChange={(v) =>
+            onParamChange(
+              "mbCrossLowMid",
+              Math.min(v, (params.mbCrossMidHigh ?? 2000) - 50)
+            )
+          }
+        />
+        <Slider
+          label="Mid|High"
+          value={params.mbCrossMidHigh ?? 2000}
+          min={800}
+          max={4000}
+          step={1}
+          unit="Hz"
+          onChange={(v) =>
+            onParamChange(
+              "mbCrossMidHigh",
+              Math.max(v, (params.mbCrossLowMid ?? 200) + 50)
+            )
+          }
+        />
+        <div
+          className="space-y-2 mt-2"
+          style={{
+            opacity: (params.multibandEnabled ?? 0) > 0 ? 1 : 0.55,
+          }}
+        >
+          <BandRow
+            label="Low"
+            prefix="mbLow"
+            params={params}
+            onParamChange={onParamChange}
+          />
+          <BandRow
+            label="Mid"
+            prefix="mbMid"
+            params={params}
+            onParamChange={onParamChange}
+          />
+          <BandRow
+            label="High"
+            prefix="mbHigh"
+            params={params}
+            onParamChange={onParamChange}
+          />
+        </div>
       </Section>
 
       {/* Tone */}

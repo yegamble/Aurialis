@@ -5,7 +5,7 @@
  * applyIntensity() linearly interpolates between neutral defaults and genre preset.
  */
 
-import type { AudioParams, SaturationMode } from "@/types/mastering";
+import type { AudioParams, MultibandMode, SaturationMode } from "@/types/mastering";
 
 /** Neutral default parameters — flat EQ, gentle compression, unity gain */
 export const DEFAULT_PARAMS: AudioParams = {
@@ -31,6 +31,41 @@ export const DEFAULT_PARAMS: AudioParams = {
   targetLufs: -14,
   ceiling: -1,
   limiterRelease: 100,
+
+  // --- Multiband compressor (neutral/off defaults) ---
+  multibandEnabled: 0,
+  mbCrossLowMid: 200,
+  mbCrossMidHigh: 2000,
+
+  mbLowEnabled: 0,
+  mbLowSolo: 0,
+  mbLowThreshold: -18,
+  mbLowRatio: 2,
+  mbLowAttack: 20,
+  mbLowRelease: 250,
+  mbLowMakeup: 0,
+  mbLowMode: "stereo",
+  mbLowMsBalance: 0,
+
+  mbMidEnabled: 0,
+  mbMidSolo: 0,
+  mbMidThreshold: -18,
+  mbMidRatio: 2,
+  mbMidAttack: 20,
+  mbMidRelease: 250,
+  mbMidMakeup: 0,
+  mbMidMode: "stereo",
+  mbMidMsBalance: 0,
+
+  mbHighEnabled: 0,
+  mbHighSolo: 0,
+  mbHighThreshold: -18,
+  mbHighRatio: 2,
+  mbHighAttack: 20,
+  mbHighRelease: 250,
+  mbHighMakeup: 0,
+  mbHighMode: "stereo",
+  mbHighMsBalance: 0,
 };
 
 export type GenreName =
@@ -250,17 +285,17 @@ export function applyIntensity(genre: GenreName, intensity: number): AudioParams
   const preset = GENRE_PRESETS[genre];
   const result: AudioParams = { ...DEFAULT_PARAMS };
 
+  type ParamValue = number | SaturationMode | MultibandMode;
   for (const key of Object.keys(DEFAULT_PARAMS) as (keyof AudioParams)[]) {
     const defVal = DEFAULT_PARAMS[key];
     const targetVal = preset[key];
     if (typeof defVal === "number" && typeof targetVal === "number") {
       // Numeric interpolation
-      (result as unknown as Record<string, number | SaturationMode>)[key] =
+      (result as unknown as Record<string, ParamValue>)[key] =
         defVal + t * (targetVal - defVal);
     } else {
       // Non-numeric (enum/string): copy preset's value as-is
-      (result as unknown as Record<string, number | SaturationMode>)[key] =
-        targetVal;
+      (result as unknown as Record<string, ParamValue>)[key] = targetVal;
     }
   }
 

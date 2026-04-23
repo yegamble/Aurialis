@@ -5,7 +5,7 @@
  * applyIntensity() linearly interpolates between neutral defaults and genre preset.
  */
 
-import type { AudioParams } from "@/types/mastering";
+import type { AudioParams, SaturationMode } from "@/types/mastering";
 
 /** Neutral default parameters — flat EQ, gentle compression, unity gain */
 export const DEFAULT_PARAMS: AudioParams = {
@@ -16,12 +16,14 @@ export const DEFAULT_PARAMS: AudioParams = {
   release: 300,
   makeup: 0,
   sidechainHpfHz: 100,
+  autoRelease: 0,
   eq80: 0,
   eq250: 0,
   eq1k: 0,
   eq4k: 0,
   eq12k: 0,
   satDrive: 0,
+  satMode: "clean",
   stereoWidth: 100,
   bassMonoFreq: 200,
   midGain: 0,
@@ -78,6 +80,7 @@ export const GENRE_PRESETS: Record<GenreName, AudioParams> = {
     release: 150,
     makeup: 4,
     sidechainHpfHz: 120,
+    satMode: "tube",
     eq80: 3,
     eq250: -2,
     eq1k: 2,
@@ -97,6 +100,7 @@ export const GENRE_PRESETS: Record<GenreName, AudioParams> = {
     release: 100,
     makeup: 5,
     sidechainHpfHz: 80,
+    satMode: "tube",
     eq80: 4,
     eq250: 1,
     eq1k: -1,
@@ -116,6 +120,7 @@ export const GENRE_PRESETS: Record<GenreName, AudioParams> = {
     release: 80,
     makeup: 6,
     sidechainHpfHz: 80,
+    satMode: "transformer",
     eq80: 3,
     eq250: -2,
     eq1k: 1,
@@ -211,6 +216,7 @@ export const GENRE_PRESETS: Record<GenreName, AudioParams> = {
     release: 400,
     makeup: 2,
     sidechainHpfHz: 100,
+    satMode: "tape",
     eq80: 1,
     eq250: 1.5,
     eq1k: 0,
@@ -236,18 +242,26 @@ export const PLATFORM_PRESETS: Record<PlatformName, PlatformPreset> = {
 
 /**
  * Linearly interpolate between DEFAULT_PARAMS and a genre preset at given intensity (0-100).
- * 0 = neutral defaults, 100 = full genre preset values.
+ * Numeric fields interpolate. Non-numeric fields (e.g. `satMode` enum) are
+ * copied from the preset directly — intensity has no meaning for enums.
  */
 export function applyIntensity(genre: GenreName, intensity: number): AudioParams {
   const t = Math.max(0, Math.min(100, intensity)) / 100;
   const preset = GENRE_PRESETS[genre];
-  const result = { ...DEFAULT_PARAMS };
+  const result: AudioParams = { ...DEFAULT_PARAMS };
 
-  const numericKeys = Object.keys(DEFAULT_PARAMS) as (keyof AudioParams)[];
-  for (const key of numericKeys) {
-    const def = DEFAULT_PARAMS[key] as number;
-    const target = preset[key] as number;
-    (result[key] as number) = def + t * (target - def);
+  for (const key of Object.keys(DEFAULT_PARAMS) as (keyof AudioParams)[]) {
+    const defVal = DEFAULT_PARAMS[key];
+    const targetVal = preset[key];
+    if (typeof defVal === "number" && typeof targetVal === "number") {
+      // Numeric interpolation
+      (result as unknown as Record<string, number | SaturationMode>)[key] =
+        defVal + t * (targetVal - defVal);
+    } else {
+      // Non-numeric (enum/string): copy preset's value as-is
+      (result as unknown as Record<string, number | SaturationMode>)[key] =
+        targetVal;
+    }
   }
 
   return result;

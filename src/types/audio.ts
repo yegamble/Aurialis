@@ -23,6 +23,14 @@ export interface MeteringData {
   integratedLufs: number;
   truePeak: number;
   dynamicRange: number;
+  /** EBU R128 Loudness Range (LU). 0 while `lraReady` is false. */
+  lra: number;
+  /** True once the short-term buffer has 3 s of data. UI shows `---` while false. */
+  lraReady: boolean;
+  /** Stereo correlation in [-1, +1]. +1 = mono, 0 = uncorrelated, -1 = anti-phase. */
+  correlation: number;
+  /** Worst-case correlation in the last ~500 ms (for UI peak-hold colouring). */
+  correlationPeakMin: number;
 }
 
 export interface VisualizationData {

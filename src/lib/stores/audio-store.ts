@@ -28,7 +28,7 @@ export interface AudioState {
   setCurrentTime: (time: number) => void;
   setDuration: (duration: number) => void;
   setIsLoaded: (loaded: boolean) => void;
-  setParam: (key: keyof AudioParams, value: number) => void;
+  setParam: <K extends keyof AudioParams>(key: K, value: AudioParams[K]) => void;
   setParams: (params: Partial<AudioParams>) => void;
   setMetering: (data: Partial<MeteringData>) => void;
   reset: () => void;
@@ -42,6 +42,10 @@ const defaultMetering: MeteringData = {
   integratedLufs: -Infinity,
   truePeak: -Infinity,
   dynamicRange: 0,
+  lra: 0,
+  lraReady: false,
+  correlation: 1,
+  correlationPeakMin: 1,
 };
 
 export const useAudioStore = create<AudioState>((set) => ({

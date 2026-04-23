@@ -12,6 +12,7 @@ import { LimiterNode } from "./nodes/limiter";
 import { SaturationNode } from "./nodes/saturation";
 import { MeteringNode, type MeteringMessage } from "./nodes/metering";
 import type { AudioParams } from "@/lib/stores/audio-store";
+import type { SaturationMode } from "@/types/mastering";
 
 export class ProcessingChain {
   private readonly _ctx: AudioContext;
@@ -88,73 +89,84 @@ export class ProcessingChain {
     }
   }
 
-  /** Route a parameter change to the appropriate DSP node */
-  updateParam(key: keyof AudioParams, value: number): void {
+  /**
+   * Route a parameter change to the appropriate DSP node.
+   * `AudioParams` is mostly numeric; the `satMode` field is a string enum.
+   */
+  updateParam<K extends keyof AudioParams>(key: K, value: AudioParams[K]): void {
     if (!this._processingAvailable) return;
 
+    // Numeric cases — cast once since the case narrows the key but not the generic value type
+    const n = value as number;
     switch (key) {
       // EQ bands
       case "eq80":
-        this._eq?.setGain(0, value);
+        this._eq?.setGain(0, n);
         break;
       case "eq250":
-        this._eq?.setGain(1, value);
+        this._eq?.setGain(1, n);
         break;
       case "eq1k":
-        this._eq?.setGain(2, value);
+        this._eq?.setGain(2, n);
         break;
       case "eq4k":
-        this._eq?.setGain(3, value);
+        this._eq?.setGain(3, n);
         break;
       case "eq12k":
-        this._eq?.setGain(4, value);
+        this._eq?.setGain(4, n);
         break;
 
       // Compressor
       case "threshold":
-        this._compressor?.setThreshold(value);
+        this._compressor?.setThreshold(n);
         break;
       case "ratio":
-        this._compressor?.setRatio(value);
+        this._compressor?.setRatio(n);
         break;
       case "attack":
-        this._compressor?.setAttack(value);
+        this._compressor?.setAttack(n);
         break;
       case "release":
-        this._compressor?.setRelease(value);
+        this._compressor?.setRelease(n);
         break;
       case "makeup":
-        this._compressor?.setMakeup(value);
+        this._compressor?.setMakeup(n);
         break;
       case "sidechainHpfHz":
-        this._compressor?.setSidechainHpfHz(value);
+        this._compressor?.setSidechainHpfHz(n);
+        break;
+      case "autoRelease":
+        this._compressor?.setAutoRelease(n);
         break;
 
       // Saturation
       case "satDrive":
-        this._saturation?.setDrive(value);
+        this._saturation?.setDrive(n);
+        break;
+      case "satMode":
+        this._saturation?.setSatMode(value as SaturationMode);
         break;
 
       // Stereo width
       case "stereoWidth":
-        this._stereoWidth?.setWidth(value);
+        this._stereoWidth?.setWidth(n);
         break;
       case "bassMonoFreq":
-        this._stereoWidth?.setBassMonoFreq(value);
+        this._stereoWidth?.setBassMonoFreq(n);
         break;
       case "midGain":
-        this._stereoWidth?.setMidGain(value);
+        this._stereoWidth?.setMidGain(n);
         break;
       case "sideGain":
-        this._stereoWidth?.setSideGain(value);
+        this._stereoWidth?.setSideGain(n);
         break;
 
       // Limiter
       case "ceiling":
-        this._limiter?.setCeiling(value);
+        this._limiter?.setCeiling(n);
         break;
       case "limiterRelease":
-        this._limiter?.setRelease(value);
+        this._limiter?.setRelease(n);
         break;
     }
   }

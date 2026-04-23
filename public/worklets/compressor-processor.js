@@ -19,10 +19,13 @@ class CompressorProcessor extends AudioWorkletProcessor {
     this._knee = 6;        // dB
     this._makeup = 0;      // dB
     this._sidechainHpfHz = 100; // sidechain HPF cutoff in Hz
+    this._autoRelease = 0; // 0 = manual (P0), 1 = dual-stage parallel envelope
     this._enabled = true;
 
     // State
     this._envelope = 0;    // current envelope level (linear)
+    this._envSlow = 0;     // slow envelope for auto-release (IN SYNC WITH
+                           // src/lib/audio/dsp/auto-release.ts)
     this._gr = 0;          // current gain reduction (dB)
     this._frameCount = 0;  // for 30Hz throttle
 
@@ -46,6 +49,7 @@ class CompressorProcessor extends AudioWorkletProcessor {
         this._sidechainHpfHz = value;
         this._scCoeffs = this._computeScCoeffs(value);
       }
+      else if (param === 'autoRelease') this._autoRelease = value;
     };
   }
 
@@ -77,6 +81,11 @@ class CompressorProcessor extends AudioWorkletProcessor {
     const sr = sampleRate;
     const attackCoeff = Math.exp(-1 / (this._attack * sr));
     const releaseCoeff = Math.exp(-1 / (this._release * sr));
+    // Slow release coefficient for auto-release mode: 5× slower, capped at 2 s.
+    // IN SYNC WITH src/lib/audio/dsp/auto-release.ts computeSlowReleaseSeconds().
+    const slowReleaseSec = Math.min(this._release * 5, 2);
+    const slowReleaseCoeff = Math.exp(-1 / (slowReleaseSec * sr));
+    const autoRelease = this._autoRelease;
     const makeupLin = Math.pow(10, this._makeup / 20);
     const numChannels = Math.min(input.length, output.length);
     const blockSize = input[0].length;
@@ -102,15 +111,26 @@ class CompressorProcessor extends AudioWorkletProcessor {
       this._scHpfZ2 = b2 * mid - a2 * y;
       const level = Math.abs(y);
 
-      // Envelope follower (peak with attack/release)
+      // Envelope follower (peak with attack/release + optional auto-release)
+      let effectiveEnv;
       if (level > this._envelope) {
         this._envelope = attackCoeff * this._envelope + (1 - attackCoeff) * level;
+        if (autoRelease > 0) {
+          this._envSlow = attackCoeff * this._envSlow + (1 - attackCoeff) * level;
+        }
+        effectiveEnv = this._envelope;
       } else {
         this._envelope = releaseCoeff * this._envelope + (1 - releaseCoeff) * level;
+        if (autoRelease > 0) {
+          this._envSlow = slowReleaseCoeff * this._envSlow + (1 - slowReleaseCoeff) * level;
+          effectiveEnv = this._envSlow > this._envelope ? this._envSlow : this._envelope;
+        } else {
+          effectiveEnv = this._envelope;
+        }
       }
 
       // Convert to dB
-      const inputDb = this._envelope > 0 ? 20 * Math.log10(this._envelope) : -120;
+      const inputDb = effectiveEnv > 0 ? 20 * Math.log10(effectiveEnv) : -120;
 
       // Gain computer
       const gr = this._computeGainReduction(inputDb);

@@ -131,7 +131,10 @@ export default function MasterPage() {
     recomputeParams(genre, intensity, newToggles);
   };
 
-  const handleAdvancedParamChange = (key: keyof AudioParams, value: number) => {
+  const handleAdvancedParamChange = <K extends keyof AudioParams>(
+    key: K,
+    value: AudioParams[K]
+  ) => {
     setTonePreset(null);
     setParam(key, value);
   };
@@ -329,6 +332,26 @@ export default function MasterPage() {
                   ? "---"
                   : metering.truePeak.toFixed(1)}{" "}
                 dBTP
+              </p>
+              <p className="text-[rgba(255,255,255,0.35)] text-xs tabular-nums">
+                LRA:{" "}
+                {metering.lraReady
+                  ? `${metering.lra.toFixed(1)} LU`
+                  : "--- LU"}
+              </p>
+              <p
+                className={`text-xs tabular-nums ${
+                  metering.correlationPeakMin < 0
+                    ? "text-red-400"
+                    : metering.correlationPeakMin < 0.3
+                      ? "text-amber-400"
+                      : "text-green-400"
+                }`}
+              >
+                Corr:{" "}
+                {metering.correlation >= 0
+                  ? `+${metering.correlation.toFixed(2)}`
+                  : metering.correlation.toFixed(2)}
               </p>
             </div>
           </div>

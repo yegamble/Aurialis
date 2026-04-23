@@ -161,6 +161,23 @@ class MeteringProcessor extends AudioWorkletProcessor {
     this._tpUpR1 = createUpsamplerState();
     this._tpUpR2 = createUpsamplerState();
 
+    // Correlation (EWMA-smoothed, τ=100ms). IN SYNC WITH src/lib/audio/dsp/correlation.ts
+    this._corrCoeff = Math.exp(-1 / (0.1 * sr));
+    this._corrAvgLR = 0;
+    this._corrAvgLL = 0;
+    this._corrAvgRR = 0;
+    // Peak-hold buffer: one entry per 10 samples, 500 ms window
+    const peakHoldSamples = Math.round(0.5 * sr / 10) + 1;
+    this._corrPeakBuf = new Float32Array(peakHoldSamples).fill(1);
+    this._corrPeakPos = 0;
+    this._corrPeakCommitEvery = 10; // commit once per ~10 samples (every 100ms at 1000/10)
+    this._corrPeakCommitCount = 0;
+
+    // LRA — accumulates short-term LUFS values. Ready after 30 values (3 s).
+    this._lraShortTermBuf = []; // ring-like; we don't bound it to cover full-track LRA
+    this._lra = 0;
+    this._lraReady = false;
+
     this._frameCount = 0;
     this._postEvery = Math.max(1, Math.round(sr / (128 * 30)));
 
@@ -173,6 +190,14 @@ class MeteringProcessor extends AudioWorkletProcessor {
         this._gatedBlocks = [];
         this._integratedLufs = -Infinity;
         this._truePeak = -Infinity;
+        this._corrAvgLR = 0;
+        this._corrAvgLL = 0;
+        this._corrAvgRR = 0;
+        this._corrPeakBuf.fill(1);
+        this._corrPeakPos = 0;
+        this._lraShortTermBuf = [];
+        this._lra = 0;
+        this._lraReady = false;
       }
     };
   }
@@ -228,6 +253,24 @@ class MeteringProcessor extends AudioWorkletProcessor {
         this._truePeak = 20 * Math.log10(tp);
       }
 
+      // Stereo correlation (one-pole EWMA, τ=100ms)
+      const rSample = isMono ? left[i] : right[i];
+      const lSample = left[i];
+      const cc = this._corrCoeff;
+      this._corrAvgLR = cc * this._corrAvgLR + (1 - cc) * (lSample * rSample);
+      this._corrAvgLL = cc * this._corrAvgLL + (1 - cc) * (lSample * lSample);
+      this._corrAvgRR = cc * this._corrAvgRR + (1 - cc) * (rSample * rSample);
+
+      // Commit to peak-hold buffer every ~10 samples
+      this._corrPeakCommitCount++;
+      if (this._corrPeakCommitCount >= this._corrPeakCommitEvery) {
+        this._corrPeakCommitCount = 0;
+        const denom = Math.sqrt(this._corrAvgLL * this._corrAvgRR);
+        const corrNow = denom < 1e-10 ? (isMono ? 1 : 0) : Math.max(-1, Math.min(1, this._corrAvgLR / denom));
+        this._corrPeakBuf[this._corrPeakPos] = corrNow;
+        this._corrPeakPos = (this._corrPeakPos + 1) % this._corrPeakBuf.length;
+      }
+
       // 100ms hop boundary
       if (this._hopAccum >= this._hopSamples) {
         const hopMeanSq = this._hopSumSq / this._hopAccum;
@@ -262,12 +305,32 @@ class MeteringProcessor extends AudioWorkletProcessor {
           this._gatedBlocks.push(hopLufs);
           this._integratedLufs = this._computeIntegrated();
         }
+
+        // LRA: accumulate short-term LUFS value and recompute
+        if (isFinite(this._shortTermLufs)) {
+          this._lraShortTermBuf.push(this._shortTermLufs);
+          if (this._lraShortTermBuf.length >= 30) {
+            this._lra = this._computeLRA();
+            this._lraReady = true;
+          }
+        }
       }
     }
 
     this._frameCount++;
     if (this._frameCount >= this._postEvery) {
       this._frameCount = 0;
+      // Current smoothed correlation
+      const denom = Math.sqrt(this._corrAvgLL * this._corrAvgRR);
+      const correlation = denom < 1e-10
+        ? (isMono ? 1 : 0)
+        : Math.max(-1, Math.min(1, this._corrAvgLR / denom));
+      // Peak-min from hold buffer
+      let corrPeakMin = 1;
+      for (let j = 0; j < this._corrPeakBuf.length; j++) {
+        if (this._corrPeakBuf[j] < corrPeakMin) corrPeakMin = this._corrPeakBuf[j];
+      }
+
       this.port.postMessage({
         type: 'metering',
         lufs: this._momentaryLufs,
@@ -279,9 +342,37 @@ class MeteringProcessor extends AudioWorkletProcessor {
           : 0,
         leftLevel: Math.abs(input[0][blockLen - 1]),
         rightLevel: Math.abs((input[1] || input[0])[blockLen - 1]),
+        lra: this._lra,
+        lraReady: this._lraReady,
+        correlation,
+        correlationPeakMin: corrPeakMin,
       });
     }
     return true;
+  }
+
+  _computeLRA() {
+    // IN SYNC WITH src/lib/audio/dsp/lufs.ts computeLRA
+    const values = this._lraShortTermBuf;
+    if (values.length < 30) return 0;
+    const absGated = values.filter(v => isFinite(v) && v >= -70);
+    if (absGated.length === 0) return 0;
+    let pow = 0;
+    for (let i = 0; i < absGated.length; i++) pow += Math.pow(10, absGated[i] / 10);
+    const meanPow = pow / absGated.length;
+    const relGate = 10 * Math.log10(meanPow) - 20;
+    const gated = absGated.filter(v => v >= relGate);
+    if (gated.length === 0) return 0;
+    const sorted = gated.slice().sort((a, b) => a - b);
+    const percentile = (q) => {
+      if (sorted.length === 1) return sorted[0];
+      const idx = q * (sorted.length - 1);
+      const lo = Math.floor(idx);
+      const hi = Math.ceil(idx);
+      if (lo === hi) return sorted[lo];
+      return sorted[lo] * (1 - (idx - lo)) + sorted[hi] * (idx - lo);
+    };
+    return Math.max(0, percentile(0.95) - percentile(0.1));
   }
 
   _computeIntegrated() {

@@ -65,6 +65,11 @@ export class CompressorNode {
     this._node?.port.postMessage({ param: "sidechainHpfHz", value: hz });
   }
 
+  /** Enable (1) or disable (0) program-dependent auto-release. */
+  setAutoRelease(on: number): void {
+    this._node?.port.postMessage({ param: "autoRelease", value: on });
+  }
+
   setBypass(bypass: boolean): void {
     this._bypassed = bypass;
     this._node?.port.postMessage({ param: "enabled", value: !bypass });

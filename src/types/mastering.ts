@@ -3,6 +3,12 @@
 /** Saturation character mode. */
 export type SaturationMode = "clean" | "tube" | "tape" | "transformer";
 
+/**
+ * Per-band mode for the multiband compressor.
+ * `stereo` = L/R linked, `ms` = Mid/Side encoded with optional `msBalance` bias.
+ */
+export type MultibandMode = "stereo" | "ms";
+
 export interface AudioParams {
   inputGain: number;
   threshold: number;
@@ -41,6 +47,50 @@ export interface AudioParams {
   targetLufs: number;
   ceiling: number;
   limiterRelease: number;
+
+  /**
+   * Multiband compressor master enable (0/1). When 0, the multiband node is in
+   * bypass and its output is bit-equal to its input.
+   */
+  multibandEnabled: number;
+  /** Low|Mid crossover frequency (Hz). Default 200. Range 80–400. */
+  mbCrossLowMid: number;
+  /** Mid|High crossover frequency (Hz). Default 2000. Range 800–4000. */
+  mbCrossMidHigh: number;
+
+  // --- Low band ---
+  mbLowEnabled: number;
+  mbLowSolo: number;
+  mbLowThreshold: number;
+  mbLowRatio: number;
+  mbLowAttack: number;
+  mbLowRelease: number;
+  mbLowMakeup: number;
+  mbLowMode: MultibandMode;
+  /** -1..+1. In M/S mode, biases threshold: +1 softer on M, harder on S. */
+  mbLowMsBalance: number;
+
+  // --- Mid band ---
+  mbMidEnabled: number;
+  mbMidSolo: number;
+  mbMidThreshold: number;
+  mbMidRatio: number;
+  mbMidAttack: number;
+  mbMidRelease: number;
+  mbMidMakeup: number;
+  mbMidMode: MultibandMode;
+  mbMidMsBalance: number;
+
+  // --- High band ---
+  mbHighEnabled: number;
+  mbHighSolo: number;
+  mbHighThreshold: number;
+  mbHighRatio: number;
+  mbHighAttack: number;
+  mbHighRelease: number;
+  mbHighMakeup: number;
+  mbHighMode: MultibandMode;
+  mbHighMsBalance: number;
 }
 
 export type ToggleName =

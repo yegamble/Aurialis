@@ -32,10 +32,6 @@ export class SaturationNode {
     this._node?.port.postMessage({ param: "drive", value: pct });
   }
 
-  setMix(pct: number): void {
-    this._node?.port.postMessage({ param: "mix", value: pct });
-  }
-
   setBypass(bypass: boolean): void {
     this._node?.port.postMessage({ param: "enabled", value: !bypass });
   }

@@ -2,6 +2,8 @@
  * Limiter DSP — lookahead gain reduction and true peak utilities.
  */
 
+import { Oversampler4x, HALFBAND_4X_GROUP_DELAY_1X } from "./oversampling";
+
 /** Convert linear amplitude to dBFS. */
 export function linToDb(linear: number): number {
   if (linear <= 0) return -Infinity;
@@ -113,6 +115,81 @@ export function processLimiter(
     }
 
     output[i] = input[i] * currentGain;
+  }
+
+  return output;
+}
+
+/**
+ * Process a buffer through a true-peak (ITU-R BS.1770) lookahead limiter.
+ *
+ * Unlike `processLimiter`, the detector runs on a 4× oversampled version of
+ * the input so inter-sample peaks (ISPs) are caught before they clip a DAC.
+ * Lookahead is extended by `HALFBAND_4X_GROUP_DELAY_1X` samples to compensate
+ * the oversampler's group delay.
+ *
+ * @param input              Input samples (mono; use twice for stereo limiting separately or mix to mid)
+ * @param ceiling            Maximum allowed true peak in linear scale (e.g. 10^(-1/20) for −1 dBTP)
+ * @param baseLookaheadSamples  Sample-rate-scaled base lookahead (at 44.1k: 66)
+ * @param attackCoeff        Attack smoothing coefficient (0 = instant)
+ * @param releaseCoeff       Release smoothing coefficient (1 = no change)
+ */
+export function processTruePeakLimiter(
+  input: Float32Array,
+  ceiling: number,
+  baseLookaheadSamples = 66,
+  attackCoeff = 0.001,
+  releaseCoeff = 0.9999
+): Float32Array {
+  const lookaheadSize = baseLookaheadSamples + HALFBAND_4X_GROUP_DELAY_1X;
+  const audioDelay = new Float32Array(lookaheadSize);
+  const tpRing = new Float32Array(lookaheadSize);
+  let pos = 0;
+
+  const os = new Oversampler4x();
+  const output = new Float32Array(input.length);
+  let currentGain = 1.0;
+
+  // Extra tail so we can flush delayed samples at the end
+  const totalSamples = input.length + lookaheadSize;
+
+  let outIdx = 0;
+  for (let i = 0; i < totalSamples; i++) {
+    const x = i < input.length ? input[i] : 0;
+
+    // 4× oversample → true peak across 4 samples
+    const up = os.upsample(x);
+    let tp = Math.abs(up[0]);
+    for (let k = 1; k < 4; k++) {
+      const a = Math.abs(up[k]);
+      if (a > tp) tp = a;
+    }
+
+    // Store current audio in delay; read delayed value
+    const delayed = audioDelay[pos];
+    audioDelay[pos] = x;
+
+    // Store TP and scan window for max
+    tpRing[pos] = tp;
+    pos = (pos + 1) % lookaheadSize;
+
+    let windowPeak = 0;
+    for (let j = 0; j < lookaheadSize; j++) {
+      if (tpRing[j] > windowPeak) windowPeak = tpRing[j];
+    }
+
+    const targetGain = windowPeak <= ceiling ? 1.0 : ceiling / windowPeak;
+    if (targetGain < currentGain) {
+      currentGain = attackCoeff * currentGain + (1 - attackCoeff) * targetGain;
+    } else {
+      currentGain = releaseCoeff * currentGain + (1 - releaseCoeff) * targetGain;
+    }
+
+    // First `lookaheadSize` iterations produce zeros (pre-delay primer); skip.
+    if (i >= lookaheadSize && outIdx < output.length) {
+      output[outIdx] = delayed * currentGain;
+      outIdx++;
+    }
   }
 
   return output;

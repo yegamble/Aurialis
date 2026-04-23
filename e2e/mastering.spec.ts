@@ -65,6 +65,10 @@ async function readSliderValue(page: Page, label: string) {
 }
 
 function sliderTolerance(label: string) {
+  if (label === "Sidechain HPF") {
+    // Integer-step slider — tolerance can be essentially exact
+    return 0.01;
+  }
   if (
     label === "Release" ||
     label === "Drive" ||
@@ -380,6 +384,26 @@ test.describe("Advanced mode buttons", () => {
   test.beforeEach(async ({ page }) => {
     await uploadAndNavigate(page);
     await showAdvanced(page);
+  });
+
+  test("TS-001: Sidechain HPF slider is present in Advanced mode and updates value", async ({
+    page,
+  }) => {
+    // Ensure Dynamics section is expanded (it is by default, but be defensive)
+    await ensureSectionExpanded(page, "Dynamics");
+
+    const slider = page.getByRole("slider", {
+      name: "Sidechain HPF",
+      exact: true,
+    });
+    await expect(slider).toBeVisible();
+
+    // Default value is 100 Hz (from DEFAULT_PARAMS.sidechainHpfHz)
+    await expectSliderApprox(page, "Sidechain HPF", 100);
+
+    // Drag/set to 150 Hz via native input.value + change event
+    await slider.fill("150");
+    await expectSliderApprox(page, "Sidechain HPF", 150);
   });
 
   test("every collapsible section button opens and closes its panel", async ({

@@ -214,6 +214,15 @@ export function AdvancedMastering({
           unit="dB"
           onChange={(v) => onParamChange("makeup", v)}
         />
+        <Slider
+          label="Sidechain HPF"
+          value={params.sidechainHpfHz ?? 100}
+          min={20}
+          max={300}
+          step={1}
+          unit="Hz"
+          onChange={(v) => onParamChange("sidechainHpfHz", v)}
+        />
       </Section>
 
       {/* Tone */}

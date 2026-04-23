@@ -2,7 +2,7 @@
 
 Created: 2026-04-22
 Author: yegamble@gmail.com
-Status: PENDING
+Status: COMPLETE
 Approved: Yes
 Iterations: 0
 Worktree: No
@@ -167,12 +167,12 @@ Type: Feature
 - [x] Task 1: Oversampling DSP module (halfband FIR upsampler/downsampler)
 - [x] Task 2: AudioParams.sidechainHpfHz + per-genre preset values
 - [x] Task 3: Sidechain HPF in compressor worklet + node wrapper + routing
-- [ ] Task 4: Limiter true-peak detection + signal delay compensation
-- [ ] Task 5: Saturation worklet rewrite with polyphase oversampling
-- [ ] Task 6: Metering worklet true-peak fix
-- [ ] Task 7: Advanced mode UI slider + E2E scenario
+- [x] Task 4: Limiter true-peak detection + signal delay compensation
+- [x] Task 5: Saturation worklet rewrite with polyphase oversampling
+- [x] Task 6: Metering worklet true-peak fix
+- [x] Task 7: Advanced mode UI slider + E2E scenario
 
-**Total Tasks:** 7 | **Completed:** 3 | **Remaining:** 4
+**Total Tasks:** 7 | **Completed:** 7 | **Remaining:** 0
 
 ## Implementation Tasks
 

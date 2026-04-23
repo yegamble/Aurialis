@@ -10,6 +10,9 @@
  * worst-case (most-negative) value in the last 500 ms for UI peak-hold.
  */
 
+/** Threshold below which both-channel energy is treated as silence. */
+const SILENCE_ENERGY_THRESHOLD = 1e-10;
+
 export class RunningCorrelation {
   private avgLR = 0;
   private avgLL = 0;
@@ -17,6 +20,13 @@ export class RunningCorrelation {
   private coeff: number;
   private peakMinBuf: Float32Array;
   private peakMinPos = 0;
+  /**
+   * Last computed correlation from a non-silent window. Hardware correlation
+   * meters "hold" the last displayed value during silence rather than snapping
+   * to 0 — mirrors that behavior. Initialized to +1 so fresh (pre-signal) state
+   * shows a neutral mono reading instead of a misleading 0.
+   */
+  private lastValidCorr = 1;
 
   constructor(sampleRate: number, tauSeconds = 0.1, peakHoldSeconds = 0.5) {
     this.coeff = Math.exp(-1 / (tauSeconds * sampleRate));
@@ -34,12 +44,17 @@ export class RunningCorrelation {
     this.avgRR = c * this.avgRR + (1 - c) * (r * r);
   }
 
-  /** Compute the current smoothed correlation value, guarded against div-by-zero. */
+  /**
+   * Compute the current smoothed correlation value. During silence (both
+   * averaged channel energies below threshold) returns the last known valid
+   * correlation rather than snapping to 0 — matches hardware meter hold behavior.
+   */
   get correlation(): number {
     const denom = Math.sqrt(this.avgLL * this.avgRR);
-    if (denom < 1e-10) return 0;
-    const c = this.avgLR / denom;
-    return Math.max(-1, Math.min(1, c));
+    if (denom < SILENCE_ENERGY_THRESHOLD) return this.lastValidCorr;
+    const c = Math.max(-1, Math.min(1, this.avgLR / denom));
+    this.lastValidCorr = c;
+    return c;
   }
 
   /**
@@ -65,5 +80,6 @@ export class RunningCorrelation {
     this.avgRR = 0;
     this.peakMinBuf.fill(1);
     this.peakMinPos = 0;
+    this.lastValidCorr = 1;
   }
 }

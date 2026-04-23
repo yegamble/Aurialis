@@ -253,6 +253,21 @@ test.describe("Navigation and transport buttons", () => {
     await uploadAndNavigate(page);
   });
 
+  test("P1-TS-003: LRA and Corr readouts are visible on the transport bar", async ({
+    page,
+  }) => {
+    // Initial state: LRA/Corr labels visible with placeholders or values
+    const lraReadout = page.getByText(/^LRA:/);
+    const corrReadout = page.getByText(/^Corr:/);
+    await expect(lraReadout).toBeVisible();
+    await expect(corrReadout).toBeVisible();
+
+    // LRA should show `---` before playback (lraReady=false)
+    await expect(lraReadout).toContainText(/LRA:\s*(---|\d)/);
+    // Corr shows `+1.00` default (identical mono channels at rest)
+    await expect(corrReadout).toContainText(/Corr:\s*[+-][01]\.\d{2}/);
+  });
+
   test("mode buttons toggle panels and back button returns to upload", async ({
     page,
   }) => {
@@ -384,6 +399,56 @@ test.describe("Advanced mode buttons", () => {
   test.beforeEach(async ({ page }) => {
     await uploadAndNavigate(page);
     await showAdvanced(page);
+  });
+
+  test("P1-TS-001: Auto Release toggle appears and toggles state", async ({
+    page,
+  }) => {
+    await ensureSectionExpanded(page, "Dynamics");
+    const toggle = page.getByRole("button", { name: "Auto Release", exact: true });
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("P1-TS-002: SatMode pill selector has 4 modes with single-selection invariant", async ({
+    page,
+  }) => {
+    const satSection = page.getByRole("button", { name: "Saturation", exact: true });
+    if ((await satSection.getAttribute("aria-expanded")) === "false") {
+      await satSection.click();
+      await expect(satSection).toHaveAttribute("aria-expanded", "true");
+    }
+    const group = page.getByRole("radiogroup", { name: "Saturation mode" });
+    await expect(group).toBeVisible();
+
+    const labels = ["Clean", "Tube", "Tape", "Transformer"];
+    for (const label of labels) {
+      const pill = group.getByRole("radio", { name: label, exact: true });
+      await expect(pill).toBeVisible();
+    }
+
+    // Click Tube → only Tube is checked
+    await group.getByRole("radio", { name: "Tube", exact: true }).click();
+    for (const label of labels) {
+      const pill = group.getByRole("radio", { name: label, exact: true });
+      await expect(pill).toHaveAttribute(
+        "aria-checked",
+        label === "Tube" ? "true" : "false"
+      );
+    }
+
+    // Switch to Tape
+    await group.getByRole("radio", { name: "Tape", exact: true }).click();
+    await expect(
+      group.getByRole("radio", { name: "Tape", exact: true })
+    ).toHaveAttribute("aria-checked", "true");
+    await expect(
+      group.getByRole("radio", { name: "Tube", exact: true })
+    ).toHaveAttribute("aria-checked", "false");
   });
 
   test("TS-001: Sidechain HPF slider is present in Advanced mode and updates value", async ({

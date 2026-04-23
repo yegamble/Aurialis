@@ -112,6 +112,10 @@ export function useAudioEngine() {
         integratedLufs: m.integratedLufs,
         truePeak: m.truePeak,
         dynamicRange: m.dynamicRange,
+        lra: m.lra,
+        lraReady: m.lraReady,
+        correlation: m.correlation,
+        correlationPeakMin: m.correlationPeakMin,
       });
     };
 

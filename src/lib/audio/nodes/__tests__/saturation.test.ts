@@ -33,6 +33,16 @@ describe("SaturationNode", () => {
     });
   });
 
+  it("should post 'satMode' param on setSatMode()", async () => {
+    const sat = new SaturationNode(ctx);
+    await sat.init();
+    sat.setSatMode("tube");
+    expect(sat["_node"]!.port.postMessage).toHaveBeenCalledWith({
+      param: "satMode",
+      value: "tube",
+    });
+  });
+
   it("should disconnect on dispose()", async () => {
     const sat = new SaturationNode(ctx);
     await sat.init();

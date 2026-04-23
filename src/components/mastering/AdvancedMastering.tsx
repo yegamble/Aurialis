@@ -1,19 +1,79 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import type { AudioParams } from "@/types/mastering";
+import type { AudioParams, SaturationMode } from "@/types/mastering";
 import type { TonePresetName, OutputPresetName } from "@/lib/audio/ui-presets";
 
 interface AdvancedMasteringProps {
   params: AudioParams;
-  onParamChange: (key: keyof AudioParams, val: number) => void;
+  onParamChange: <K extends keyof AudioParams>(key: K, val: AudioParams[K]) => void;
   dynamics: { deharsh: boolean; glueComp: boolean };
   onDynamicsToggle: (key: "deharsh" | "glueComp") => void;
   tonePreset: TonePresetName | null;
   onTonePresetChange: (preset: TonePresetName) => void;
   outputPreset: OutputPresetName | null;
   onOutputPresetChange: (preset: OutputPresetName) => void;
+}
+
+/** Segmented radiogroup pill selector for SaturationMode. */
+function SatModePills({
+  value,
+  onChange,
+}: {
+  value: SaturationMode;
+  onChange: (v: SaturationMode) => void;
+}) {
+  const modes: readonly SaturationMode[] = [
+    "clean",
+    "tube",
+    "tape",
+    "transformer",
+  ];
+  const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const handleKey = (e: React.KeyboardEvent<HTMLButtonElement>, idx: number) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    const delta = e.key === "ArrowRight" ? 1 : -1;
+    const nextIdx = (idx + delta + modes.length) % modes.length;
+    const next = modes[nextIdx];
+    onChange(next);
+    buttonRefs.current[nextIdx]?.focus();
+  };
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Saturation mode"
+      className="flex gap-1 mb-3"
+    >
+      {modes.map((mode, idx) => (
+        <button
+          key={mode}
+          ref={(el) => {
+            buttonRefs.current[idx] = el;
+          }}
+          type="button"
+          role="radio"
+          aria-checked={value === mode}
+          tabIndex={value === mode ? 0 : -1}
+          onClick={() => onChange(mode)}
+          onKeyDown={(e) => handleKey(e, idx)}
+          className={`
+            flex-1 px-2 py-1.5 text-xs rounded-md border transition-colors
+            ${
+              value === mode
+                ? "bg-[rgba(255,255,255,0.12)] border-[rgba(255,255,255,0.25)] text-white"
+                : "bg-transparent border-[rgba(255,255,255,0.08)] text-[rgba(255,255,255,0.55)] hover:bg-[rgba(255,255,255,0.05)]"
+            }
+          `}
+        >
+          {mode.charAt(0).toUpperCase() + mode.slice(1)}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function Slider({
@@ -168,6 +228,16 @@ export function AdvancedMastering({
             active={dynamics.glueComp}
             onClick={() => onDynamicsToggle("glueComp")}
           />
+          <ToggleButton
+            label="Auto Release"
+            active={(params.autoRelease ?? 0) > 0}
+            onClick={() =>
+              onParamChange(
+                "autoRelease",
+                (params.autoRelease ?? 0) > 0 ? 0 : 1
+              )
+            }
+          />
         </div>
         <Slider
           label="Threshold"
@@ -263,6 +333,10 @@ export function AdvancedMastering({
 
       {/* Saturation */}
       <Section title="Saturation" defaultOpen={false}>
+        <SatModePills
+          value={params.satMode ?? "clean"}
+          onChange={(v) => onParamChange("satMode", v)}
+        />
         <Slider
           label="Drive"
           value={params.satDrive ?? 40}

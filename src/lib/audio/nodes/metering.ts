@@ -13,6 +13,10 @@ export interface MeteringMessage {
   dynamicRange: number;
   leftLevel: number;
   rightLevel: number;
+  lra: number;
+  lraReady: boolean;
+  correlation: number;
+  correlationPeakMin: number;
 }
 
 export class MeteringNode {

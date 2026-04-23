@@ -88,6 +88,10 @@ export class AudioEngine {
         integratedLufs: data.integratedLufs,
         truePeak: data.truePeak,
         dynamicRange: data.dynamicRange,
+        lra: data.lra,
+        lraReady: data.lraReady,
+        correlation: data.correlation,
+        correlationPeakMin: data.correlationPeakMin,
       };
       this.emit("metering", metering);
     };
@@ -100,7 +104,7 @@ export class AudioEngine {
   }
 
   /** Apply a parameter change to the processing chain */
-  updateParameter(key: keyof AudioParams, value: number): void {
+  updateParameter<K extends keyof AudioParams>(key: K, value: AudioParams[K]): void {
     this.chain?.updateParam(key, value);
   }
 

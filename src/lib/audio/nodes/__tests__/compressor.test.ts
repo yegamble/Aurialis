@@ -94,6 +94,16 @@ describe("CompressorNode", () => {
     });
   });
 
+  it("should post 'autoRelease' param message on setAutoRelease()", async () => {
+    const comp = new CompressorNode(ctx);
+    await comp.init();
+    comp.setAutoRelease(1);
+    expect(comp["_node"]!.port.postMessage).toHaveBeenCalledWith({
+      param: "autoRelease",
+      value: 1,
+    });
+  });
+
   it("should set GR callback via onGainReduction", async () => {
     const comp = new CompressorNode(ctx);
     await comp.init();

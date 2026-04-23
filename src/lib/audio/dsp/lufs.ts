@@ -11,6 +11,54 @@
 
 import { BiquadFilter, BiquadCoeffs, highShelfCoeffs, highPassCoeffs } from "./biquad";
 
+/** Result of `computeLRA`. `ready` is false until at least 30 short-term values have been provided. */
+export interface LRAResult {
+  lra: number;
+  ready: boolean;
+}
+
+/**
+ * Compute the EBU R128 Loudness Range (LRA) from a collection of short-term
+ * LUFS values. LRA is the range between the 10th and 95th percentiles after
+ * gating:
+ *   - Absolute gate: discard values below −70 LUFS
+ *   - Relative gate: discard values below (meanPower − 20 LU)
+ *
+ * Returns `{ lra: 0, ready: false }` if fewer than 30 values are supplied
+ * (insufficient 3-second accumulation per EBU R128 guidance).
+ */
+export function computeLRA(shortTermValues: readonly number[]): LRAResult {
+  if (shortTermValues.length < 30) return { lra: 0, ready: false };
+
+  // Absolute gate at -70 LUFS
+  const absGated = shortTermValues.filter((v) => Number.isFinite(v) && v >= -70);
+  if (absGated.length === 0) return { lra: 0, ready: true };
+
+  // Relative gate: mean power − 20 LU
+  const meanPower =
+    absGated.reduce((s, v) => s + Math.pow(10, v / 10), 0) / absGated.length;
+  const relativeGateLufs = 10 * Math.log10(meanPower) - 20;
+  const gated = absGated.filter((v) => v >= relativeGateLufs);
+  if (gated.length === 0) return { lra: 0, ready: true };
+
+  // P10 and P95 of sorted values
+  const sorted = [...gated].sort((a, b) => a - b);
+  const p10 = percentile(sorted, 0.1);
+  const p95 = percentile(sorted, 0.95);
+  return { lra: Math.max(0, p95 - p10), ready: true };
+}
+
+/** Linear-interpolation percentile on a pre-sorted array. */
+function percentile(sorted: readonly number[], q: number): number {
+  if (sorted.length === 1) return sorted[0];
+  const idx = q * (sorted.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  const frac = idx - lo;
+  return sorted[lo] * (1 - frac) + sorted[hi] * frac;
+}
+
 export interface KWeightingCoeffs {
   preFilter: BiquadCoeffs;
   rlbFilter: BiquadCoeffs;

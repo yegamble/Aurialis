@@ -208,3 +208,48 @@ describe("Sidechain HPF per-genre values", () => {
     expect(applyIntensity("podcast", 100).sidechainHpfHz).toBeCloseTo(120, 5);
   });
 });
+
+describe("SaturationMode per-genre values", () => {
+  it("DEFAULT_PARAMS.satMode === 'clean'", () => {
+    expect(DEFAULT_PARAMS.satMode).toBe("clean");
+  });
+
+  it("DEFAULT_PARAMS.autoRelease === 0", () => {
+    expect(DEFAULT_PARAMS.autoRelease).toBe(0);
+  });
+
+  it("genre satMode mapping matches spec", () => {
+    const expected: Record<string, string> = {
+      pop: "clean",
+      rock: "tube",
+      hiphop: "tube",
+      electronic: "transformer",
+      jazz: "clean",
+      classical: "clean",
+      rnb: "clean",
+      lofi: "tape",
+      podcast: "clean",
+    };
+    for (const [genre, mode] of Object.entries(expected)) {
+      expect(
+        GENRE_PRESETS[genre as keyof typeof GENRE_PRESETS].satMode,
+        `${genre}.satMode`
+      ).toBe(mode);
+    }
+  });
+
+  it("applyIntensity copies preset satMode regardless of intensity (no interpolation)", () => {
+    expect(applyIntensity("rock", 0).satMode).toBe("tube");
+    expect(applyIntensity("rock", 50).satMode).toBe("tube");
+    expect(applyIntensity("rock", 100).satMode).toBe("tube");
+    expect(applyIntensity("lofi", 50).satMode).toBe("tape");
+    expect(applyIntensity("electronic", 50).satMode).toBe("transformer");
+    expect(applyIntensity("pop", 50).satMode).toBe("clean");
+  });
+
+  it("applyIntensity still interpolates numeric fields after enum handling", () => {
+    // rock.threshold = -18, default = -18 → no diff. Let's test a field that differs.
+    // hiphop.threshold = -16, default = -18. At intensity 50: (-18 + 0.5 * (-16 - -18)) = -17
+    expect(applyIntensity("hiphop", 50).threshold).toBeCloseTo(-17, 5);
+  });
+});

@@ -69,7 +69,9 @@ export function applyParamOffsets(
     const delta = rawDelta as number | undefined;
     if (typeof delta !== "number") continue;
     const currentValue = result[key] as number;
-    result[key] = clampParam(key, currentValue + delta * direction);
+    const next = clampParam(key, currentValue + delta * direction);
+    // AudioParams is mixed numeric/string; this helper only touches numeric fields.
+    (result as unknown as Record<string, number>)[key] = next;
   }
 
   return result;

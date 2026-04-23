@@ -1,9 +1,86 @@
 /**
  * MeteringProcessor — AudioWorklet
- * ITU-R BS.1770-4 LUFS measurement with K-weighting + true peak.
- * Matches src/lib/audio/dsp/lufs.ts logic.
+ * ITU-R BS.1770-4 LUFS measurement with K-weighting + true-peak (4× oversampled).
+ * Matches src/lib/audio/dsp/lufs.ts logic; true-peak matches src/lib/audio/dsp/true-peak.ts.
  * Posts metering data at ~30Hz via port.postMessage.
+ *
+ * Worklet-local halfband FIR coefficients IN SYNC WITH
+ * src/lib/audio/dsp/oversampling.ts HALFBAND_TAPS — verified by halfband-parity.test.ts.
  */
+const HALFBAND_TAPS = new Float32Array([
+  -0.00003236808784602273,
+  0,
+  0.00021460425686417527,
+  0,
+  -0.0006900036008054104,
+  0,
+  0.0016906510319408042,
+  0,
+  -0.0035394678469438633,
+  0,
+  0.006670847582056133,
+  0,
+  -0.011685384108269973,
+  0,
+  0.01951168258705124,
+  0,
+  -0.03190621204482748,
+  0,
+  0.05323959921792349,
+  0,
+  -0.0995345836294369,
+  0,
+  0.3160629362213828,
+  0.49999539684182204,
+  0.3160629362213828,
+  0,
+  -0.0995345836294369,
+  0,
+  0.05323959921792349,
+  0,
+  -0.03190621204482748,
+  0,
+  0.01951168258705124,
+  0,
+  -0.011685384108269973,
+  0,
+  0.006670847582056133,
+  0,
+  -0.0035394678469438633,
+  0,
+  0.0016906510319408042,
+  0,
+  -0.0006900036008054104,
+  0,
+  0.00021460425686417527,
+  0,
+  -0.00003236808784602273,
+]);
+
+const H_EVEN = new Float32Array(24);
+for (let i = 0; i < 24; i++) H_EVEN[i] = HALFBAND_TAPS[2 * i];
+const H_EVEN_LEN = 24;
+const ODD_PHASE_DELAY = 11;
+
+function createUpsamplerState() {
+  return { ring: new Float32Array(H_EVEN_LEN), pos: 0 };
+}
+
+/** Single 2× halfband upsample step. Returns [even, odd] at fast rate. */
+function up2xStep(state, x) {
+  const ring = state.ring;
+  const pos = state.pos;
+  ring[pos] = x;
+  let sum = 0;
+  for (let k = 0; k < H_EVEN_LEN; k++) {
+    const idx = (pos - k + H_EVEN_LEN) % H_EVEN_LEN;
+    sum += H_EVEN[k] * ring[idx];
+  }
+  const even = sum * 2;
+  const odd = ring[(pos - ODD_PHASE_DELAY + H_EVEN_LEN) % H_EVEN_LEN];
+  state.pos = (pos + 1) % H_EVEN_LEN;
+  return [even, odd];
+}
 
 /** Biquad filter — Direct Form II Transposed */
 class BiquadFilter {
@@ -22,7 +99,6 @@ class BiquadFilter {
 
 /** K-weighting coefficients for a given sample rate */
 function makeKWeighting(fs) {
-  // Pre-filter: high shelf +4dB at fc=1500Hz, S=1
   const fc1 = 1500, dB = 4.0, S = 1.0;
   const A = Math.pow(10, dB / 40);
   const w1 = 2 * Math.PI * fc1 / fs;
@@ -39,7 +115,6 @@ function makeKWeighting(fs) {
     a2: (Ap1 - Am1 * c1 - sqrtA2) / a0p,
   };
 
-  // RLB: 2nd-order Butterworth HPF at fc=38.135Hz, Q=0.7071
   const fc2 = 38.135, Q = 0.7071;
   const w2 = 2 * Math.PI * fc2 / fs;
   const s2 = Math.sin(w2), c2 = Math.cos(w2);
@@ -60,37 +135,35 @@ class MeteringProcessor extends AudioWorkletProcessor {
     super();
     const sr = sampleRate;
     const kw = makeKWeighting(sr);
-    // Two K-weighting filter chains (left, right)
     this._preL = new BiquadFilter(kw.pre.b0, kw.pre.b1, kw.pre.b2, kw.pre.a1, kw.pre.a2);
     this._rlbL = new BiquadFilter(kw.rlb.b0, kw.rlb.b1, kw.rlb.b2, kw.rlb.a1, kw.rlb.a2);
     this._preR = new BiquadFilter(kw.pre.b0, kw.pre.b1, kw.pre.b2, kw.pre.a1, kw.pre.a2);
     this._rlbR = new BiquadFilter(kw.rlb.b0, kw.rlb.b1, kw.rlb.b2, kw.rlb.a1, kw.rlb.a2);
 
-    // Momentary block (400ms)
     this._blockSize = Math.round(0.4 * sr);
     this._blockBuf = new Float64Array(this._blockSize);
     this._blockPos = 0;
 
-    // Short-term buffer (3s) — ring buffer of momentary values
-    this._stBufSize = Math.round(3 / 0.1); // 30 values (100ms hop)
+    this._stBufSize = Math.round(3 / 0.1);
     this._stBuf = new Float64Array(this._stBufSize).fill(-Infinity);
     this._stPos = 0;
 
-    // Integrated measurement
-    this._gatedBlocks = []; // LUFS values of all passing blocks
+    this._gatedBlocks = [];
     this._sampleCount = 0;
-    this._hopSamples = Math.round(0.1 * sr); // 100ms hop
+    this._hopSamples = Math.round(0.1 * sr);
     this._hopAccum = 0;
     this._hopSumSq = 0;
 
-    // True peak tracking
+    // True peak tracking — 4× oversampled ISP detection per channel
     this._truePeak = -Infinity;
+    this._tpUpL1 = createUpsamplerState();
+    this._tpUpL2 = createUpsamplerState();
+    this._tpUpR1 = createUpsamplerState();
+    this._tpUpR2 = createUpsamplerState();
 
-    // Post rate: every N frames
     this._frameCount = 0;
-    this._postEvery = Math.max(1, Math.round(sr / (128 * 30))); // ~30Hz
+    this._postEvery = Math.max(1, Math.round(sr / (128 * 30)));
 
-    // Current metering state
     this._momentaryLufs = -Infinity;
     this._shortTermLufs = -Infinity;
     this._integratedLufs = -Infinity;
@@ -104,12 +177,26 @@ class MeteringProcessor extends AudioWorkletProcessor {
     };
   }
 
+  /** Compute max |oversampled|·|·|·|·| for one input sample on one channel. */
+  _channelTruePeak(x, up1, up2) {
+    const pair1 = up2xStep(up1, x);
+    const pairA = up2xStep(up2, pair1[0]);
+    const pairB = up2xStep(up2, pair1[1]);
+    let tp = Math.abs(pairA[0]);
+    let a = Math.abs(pairA[1]);
+    if (a > tp) tp = a;
+    a = Math.abs(pairB[0]);
+    if (a > tp) tp = a;
+    a = Math.abs(pairB[1]);
+    if (a > tp) tp = a;
+    return tp;
+  }
+
   process(inputs, outputs) {
     const input = inputs[0];
     const output = outputs[0];
     if (!input || !input[0]) return true;
 
-    // Pass through (metering is side-chain, not in-line)
     const numChannels = Math.min(input.length, output ? output.length : 0);
     if (output) {
       for (let c = 0; c < numChannels; c++) {
@@ -118,23 +205,27 @@ class MeteringProcessor extends AudioWorkletProcessor {
     }
 
     const left = input[0];
+    // Mono guard — if only one channel, duplicate to right
     const right = input.length > 1 ? input[1] : input[0];
+    const isMono = input.length === 1;
     const blockLen = left.length;
 
     for (let i = 0; i < blockLen; i++) {
-      // Apply K-weighting
+      // K-weighting for LUFS
       const lk = this._rlbL.processSample(this._preL.processSample(left[i]));
       const rk = this._rlbR.processSample(this._preR.processSample(right[i]));
-
-      // Per-sample mean square (BS.1770: sum_i G_i * z_i, G=1 for L and R)
       const ms = lk * lk + rk * rk;
       this._hopAccum++;
       this._hopSumSq += ms;
 
-      // True peak (simple peak detection on K-weighted signal)
-      const absPeak = Math.max(Math.abs(left[i]), Math.abs(right[i]));
-      if (absPeak > Math.pow(10, this._truePeak / 20)) {
-        this._truePeak = 20 * Math.log10(absPeak);
+      // True-peak: 4× oversample per channel, take max across 4 oversampled + both channels
+      const tpL = this._channelTruePeak(left[i], this._tpUpL1, this._tpUpL2);
+      const tpR = isMono
+        ? tpL
+        : this._channelTruePeak(right[i], this._tpUpR1, this._tpUpR2);
+      const tp = tpL > tpR ? tpL : tpR;
+      if (tp > Math.pow(10, this._truePeak / 20)) {
+        this._truePeak = 20 * Math.log10(tp);
       }
 
       // 100ms hop boundary
@@ -143,7 +234,6 @@ class MeteringProcessor extends AudioWorkletProcessor {
         this._hopSumSq = 0;
         this._hopAccum = 0;
 
-        // Momentary (400ms window = 4 hops of 100ms with 75% overlap using ring buffer)
         this._blockBuf[this._blockPos % 4] = hopMeanSq;
         this._blockPos++;
         if (this._blockPos >= 4) {
@@ -153,12 +243,10 @@ class MeteringProcessor extends AudioWorkletProcessor {
           this._momentaryLufs = momMs > 0 ? -0.691 + 10 * Math.log10(momMs) : -Infinity;
         }
 
-        // Store in short-term ring buffer
         const hopLufs = hopMeanSq > 0 ? -0.691 + 10 * Math.log10(hopMeanSq) : -Infinity;
         this._stBuf[this._stPos % this._stBufSize] = hopLufs;
         this._stPos++;
 
-        // Short-term (3s = 30 hops)
         if (this._stPos >= this._stBufSize) {
           let sumSt = 0, cnt = 0;
           for (let j = 0; j < this._stBufSize; j++) {
@@ -170,16 +258,13 @@ class MeteringProcessor extends AudioWorkletProcessor {
           this._shortTermLufs = cnt > 0 ? 10 * Math.log10(sumSt / cnt) : -Infinity;
         }
 
-        // Integrated gating: add block if above absolute gate (-70 LUFS)
         if (isFinite(hopLufs) && hopLufs > -70) {
           this._gatedBlocks.push(hopLufs);
-          // Recompute integrated with relative gate
           this._integratedLufs = this._computeIntegrated();
         }
       }
     }
 
-    // Post metering data at ~30Hz
     this._frameCount++;
     if (this._frameCount >= this._postEvery) {
       this._frameCount = 0;
@@ -202,7 +287,6 @@ class MeteringProcessor extends AudioWorkletProcessor {
   _computeIntegrated() {
     const blocks = this._gatedBlocks;
     if (blocks.length === 0) return -Infinity;
-    // Relative gate: mean power - 10 LU
     const meanPow = blocks.reduce((s, l) => s + Math.pow(10, l / 10), 0) / blocks.length;
     const gateDb = 10 * Math.log10(meanPow) - 10;
     const gated = blocks.filter(l => l >= gateDb);

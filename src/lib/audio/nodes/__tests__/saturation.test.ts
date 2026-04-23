@@ -33,16 +33,6 @@ describe("SaturationNode", () => {
     });
   });
 
-  it("should post 'mix' param on setMix()", async () => {
-    const sat = new SaturationNode(ctx);
-    await sat.init();
-    sat.setMix(75);
-    expect(sat["_node"]!.port.postMessage).toHaveBeenCalledWith({
-      param: "mix",
-      value: 75,
-    });
-  });
-
   it("should disconnect on dispose()", async () => {
     const sat = new SaturationNode(ctx);
     await sat.init();

@@ -166,6 +166,9 @@ class MeteringProcessor extends AudioWorkletProcessor {
     this._corrAvgLR = 0;
     this._corrAvgLL = 0;
     this._corrAvgRR = 0;
+    // Hold last valid correlation during silence (matches hardware meter behavior).
+    // Initialized to +1 so pre-signal state reads as neutral mono.
+    this._corrLastValid = 1;
     // Peak-hold buffer: one entry per 10 samples, 500 ms window
     const peakHoldSamples = Math.round(0.5 * sr / 10) + 1;
     this._corrPeakBuf = new Float32Array(peakHoldSamples).fill(1);
@@ -195,6 +198,7 @@ class MeteringProcessor extends AudioWorkletProcessor {
         this._corrAvgRR = 0;
         this._corrPeakBuf.fill(1);
         this._corrPeakPos = 0;
+        this._corrLastValid = 1;
         this._lraShortTermBuf = [];
         this._lra = 0;
         this._lraReady = false;
@@ -266,7 +270,14 @@ class MeteringProcessor extends AudioWorkletProcessor {
       if (this._corrPeakCommitCount >= this._corrPeakCommitEvery) {
         this._corrPeakCommitCount = 0;
         const denom = Math.sqrt(this._corrAvgLL * this._corrAvgRR);
-        const corrNow = denom < 1e-10 ? (isMono ? 1 : 0) : Math.max(-1, Math.min(1, this._corrAvgLR / denom));
+        let corrNow;
+        if (denom < 1e-10) {
+          // Silence → hold last known value (also catches fresh pre-signal state)
+          corrNow = this._corrLastValid;
+        } else {
+          corrNow = Math.max(-1, Math.min(1, this._corrAvgLR / denom));
+          this._corrLastValid = corrNow;
+        }
         this._corrPeakBuf[this._corrPeakPos] = corrNow;
         this._corrPeakPos = (this._corrPeakPos + 1) % this._corrPeakBuf.length;
       }
@@ -320,11 +331,16 @@ class MeteringProcessor extends AudioWorkletProcessor {
     this._frameCount++;
     if (this._frameCount >= this._postEvery) {
       this._frameCount = 0;
-      // Current smoothed correlation
+      // Current smoothed correlation (with silence-hold — IN SYNC WITH
+      // src/lib/audio/dsp/correlation.ts)
       const denom = Math.sqrt(this._corrAvgLL * this._corrAvgRR);
-      const correlation = denom < 1e-10
-        ? (isMono ? 1 : 0)
-        : Math.max(-1, Math.min(1, this._corrAvgLR / denom));
+      let correlation;
+      if (denom < 1e-10) {
+        correlation = this._corrLastValid;
+      } else {
+        correlation = Math.max(-1, Math.min(1, this._corrAvgLR / denom));
+        this._corrLastValid = correlation;
+      }
       // Peak-min from hold buffer
       let corrPeakMin = 1;
       for (let j = 0; j < this._corrPeakBuf.length; j++) {

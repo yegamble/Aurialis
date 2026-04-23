@@ -38,13 +38,33 @@ describe("RunningCorrelation", () => {
     expect(rc.correlation).toBeGreaterThanOrEqual(-1.0);
   });
 
-  it("silence: correlation guarded at 0 (no NaN)", () => {
+  it("fresh silence (no signal ever): correlation returns neutral +1 (no NaN)", () => {
     const rc = new RunningCorrelation(SR);
     const l = new Float32Array(1024);
     const r = new Float32Array(1024);
     runSamples(rc, l, r);
-    expect(rc.correlation).toBe(0);
+    // lastValidCorr initialized to 1 (neutral mono assumption); preserved during silence
+    expect(rc.correlation).toBe(1);
     expect(Number.isFinite(rc.correlation)).toBe(true);
+  });
+
+  it("post-signal silence: holds last known correlation (hardware-meter behavior)", () => {
+    // After anti-phase signal then silence, correlation holds the anti-phase value
+    const rc = new RunningCorrelation(SR);
+    const N = SR; // 1 second of anti-phase
+    const l = sine(1000, N, 0.5);
+    const r = new Float32Array(N);
+    for (let i = 0; i < N; i++) r[i] = -l[i];
+    runSamples(rc, l, r);
+    const afterSignal = rc.correlation;
+    expect(afterSignal).toBeLessThan(-0.9);
+
+    // Now feed 2 seconds of silence (longer than the 100 ms τ so averages decay)
+    const silence = new Float32Array(SR * 2);
+    runSamples(rc, silence, silence);
+
+    // Correlation should hold at the anti-phase value, not snap to 0 or +1
+    expect(rc.correlation).toBeLessThan(-0.9);
   });
 
   it("uncorrelated random noise: correlation converges near 0", () => {
@@ -96,12 +116,16 @@ describe("RunningCorrelation", () => {
     expect(rc.correlation).toBeGreaterThan(0.5);
   });
 
-  it("reset() zeros state", () => {
+  it("reset() zeros energy state and restores neutral +1 default", () => {
     const rc = new RunningCorrelation(SR);
+    // Drive correlation negative
     const l = sine(1000, 1024, 0.5);
-    runSamples(rc, l, l);
-    expect(rc.correlation).toBeGreaterThan(0.9);
+    const r = new Float32Array(l.length);
+    for (let i = 0; i < l.length; i++) r[i] = -l[i];
+    runSamples(rc, l, r);
+    expect(rc.correlation).toBeLessThan(-0.9);
     rc.reset();
-    expect(rc.correlation).toBe(0);
+    // After reset, state is back to pre-signal neutral (+1) — silence holds this
+    expect(rc.correlation).toBe(1);
   });
 });

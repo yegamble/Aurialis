@@ -23,6 +23,7 @@ import { useAudioStore } from "@/lib/stores/audio-store";
 import { useUIStore } from "@/lib/stores/ui-store";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { useVisualization } from "@/hooks/useVisualization";
+import { useIsLgViewport } from "@/hooks/use-is-lg-viewport";
 import { applyIntensity, PLATFORM_PRESETS, type GenreName } from "@/lib/audio/presets";
 import { analyzeAudio } from "@/lib/audio/analysis";
 import { computeAutoMasterParams } from "@/lib/audio/auto-master";
@@ -70,6 +71,7 @@ export default function MasterPage() {
   const router = useRouter();
   const file = useAudioStore((s) => s.file);
   const { mode, setMode } = useUIStore();
+  const isLgViewport = useIsLgViewport();
 
   // Real audio engine
   const {
@@ -269,48 +271,50 @@ export default function MasterPage() {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <aside className="w-80 border-r border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(255,255,255,0.02)] p-4 shrink-0 hidden lg:block">
-          <AnimatePresence mode="wait">
-            {mode === "simple" ? (
-              <motion.div
-                key="simple"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.2 }}
-              >
-                <SimpleMastering
-                  intensity={intensity}
-                  onIntensityChange={handleIntensityChange}
-                  genre={genre}
-                  onGenreChange={handleGenreChange}
-                  toggles={toggles}
-                  onToggle={handleToggle}
-                  onAutoMaster={handleAutoMaster}
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="advanced"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.2 }}
-              >
-                <AdvancedMastering
-                  params={{ ...params }}
-                  onParamChange={handleAdvancedParamChange}
-                  dynamics={{ deharsh: toggles.deharsh, glueComp: toggles.glueComp }}
-                  onDynamicsToggle={handleToggle}
-                  tonePreset={tonePreset}
-                  onTonePresetChange={handleTonePresetChange}
-                  outputPreset={outputPreset}
-                  onOutputPresetChange={handleOutputPresetChange}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </aside>
+        {isLgViewport && (
+          <aside className="w-80 border-r border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(255,255,255,0.02)] p-4 shrink-0">
+            <AnimatePresence mode="wait">
+              {mode === "simple" ? (
+                <motion.div
+                  key="simple"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <SimpleMastering
+                    intensity={intensity}
+                    onIntensityChange={handleIntensityChange}
+                    genre={genre}
+                    onGenreChange={handleGenreChange}
+                    toggles={toggles}
+                    onToggle={handleToggle}
+                    onAutoMaster={handleAutoMaster}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="advanced"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <AdvancedMastering
+                    params={{ ...params }}
+                    onParamChange={handleAdvancedParamChange}
+                    dynamics={{ deharsh: toggles.deharsh, glueComp: toggles.glueComp }}
+                    onDynamicsToggle={handleToggle}
+                    tonePreset={tonePreset}
+                    onTonePresetChange={handleTonePresetChange}
+                    outputPreset={outputPreset}
+                    onOutputPresetChange={handleOutputPresetChange}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </aside>
+        )}
 
         <main className="flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
           <div className="flex items-center justify-between">
@@ -433,7 +437,7 @@ export default function MasterPage() {
           <SpectrumDisplay data={spectrumData} />
           <ExportPanel onExport={handleExport} isExporting={isExporting} />
 
-          <div className="lg:hidden">
+          {!isLgViewport && (
             <details className="group">
               <summary className="cursor-pointer text-[#0a84ff] text-sm py-2 list-none flex items-center gap-1">
                 <span>
@@ -465,7 +469,7 @@ export default function MasterPage() {
                 )}
               </div>
             </details>
-          </div>
+          )}
         </main>
 
         <aside className="w-64 border-l border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(255,255,255,0.02)] p-4 shrink-0 hidden xl:block space-y-4">

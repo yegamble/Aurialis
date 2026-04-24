@@ -89,12 +89,15 @@ test.describe("Multiband UI (P2)", () => {
   test("TS-002: Enable a band and verify its state persists", async ({ page }) => {
     await ensureSectionExpanded(page, "Multiband");
 
+    // Preset-agnostic toggle test — pop preset starts mbLowEnabled=1, so we
+    // flip-and-restore rather than asserting hardcoded on/off states.
     const lowEnable = page.getByRole("button", { name: "Low band enable" });
+    const initial = (await lowEnable.getAttribute("aria-pressed")) ?? "false";
+    const flipped = initial === "true" ? "false" : "true";
     await lowEnable.click();
-    await expect(lowEnable).toHaveAttribute("aria-pressed", "true");
-    // Click again to disable
+    await expect(lowEnable).toHaveAttribute("aria-pressed", flipped);
     await lowEnable.click();
-    await expect(lowEnable).toHaveAttribute("aria-pressed", "false");
+    await expect(lowEnable).toHaveAttribute("aria-pressed", initial);
   });
 
   test("TS-003: Expanding a band reveals Stereo|M/S pill and switching to M/S shows balance slider", async ({

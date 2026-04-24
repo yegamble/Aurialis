@@ -5,7 +5,13 @@
  * applyIntensity() linearly interpolates between neutral defaults and genre preset.
  */
 
-import type { AudioParams, MultibandMode, SaturationMode } from "@/types/mastering";
+import type {
+  AudioParams,
+  EqBandMode,
+  EqBandType,
+  MultibandMode,
+  SaturationMode,
+} from "@/types/mastering";
 
 /** Neutral default parameters — flat EQ, gentle compression, unity gain */
 export const DEFAULT_PARAMS: AudioParams = {
@@ -22,6 +28,45 @@ export const DEFAULT_PARAMS: AudioParams = {
   eq1k: 0,
   eq4k: 0,
   eq12k: 0,
+
+  // --- Parametric EQ (P3) — defaults reproduce pre-P3 5-band topology exactly ---
+  parametricEqEnabled: 1,
+
+  eqBand1Enabled: 1,
+  eqBand1Freq: 80,
+  eqBand1Q: 0.7071067811865476, // 1/√2 (Butterworth shelf slope)
+  eqBand1Type: "lowShelf",
+  eqBand1Mode: "stereo",
+  eqBand1MsBalance: 0,
+
+  eqBand2Enabled: 1,
+  eqBand2Freq: 250,
+  eqBand2Q: 1.0,
+  eqBand2Type: "bell",
+  eqBand2Mode: "stereo",
+  eqBand2MsBalance: 0,
+
+  eqBand3Enabled: 1,
+  eqBand3Freq: 1000,
+  eqBand3Q: 1.0,
+  eqBand3Type: "bell",
+  eqBand3Mode: "stereo",
+  eqBand3MsBalance: 0,
+
+  eqBand4Enabled: 1,
+  eqBand4Freq: 4000,
+  eqBand4Q: 1.0,
+  eqBand4Type: "bell",
+  eqBand4Mode: "stereo",
+  eqBand4MsBalance: 0,
+
+  eqBand5Enabled: 1,
+  eqBand5Freq: 12000,
+  eqBand5Q: 0.7071067811865476,
+  eqBand5Type: "highShelf",
+  eqBand5Mode: "stereo",
+  eqBand5MsBalance: 0,
+
   satDrive: 0,
   satMode: "clean",
   stereoWidth: 100,
@@ -285,7 +330,7 @@ export function applyIntensity(genre: GenreName, intensity: number): AudioParams
   const preset = GENRE_PRESETS[genre];
   const result: AudioParams = { ...DEFAULT_PARAMS };
 
-  type ParamValue = number | SaturationMode | MultibandMode;
+  type ParamValue = number | SaturationMode | MultibandMode | EqBandType | EqBandMode;
   for (const key of Object.keys(DEFAULT_PARAMS) as (keyof AudioParams)[]) {
     const defVal = DEFAULT_PARAMS[key];
     const targetVal = preset[key];

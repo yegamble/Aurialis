@@ -1,7 +1,8 @@
 /**
  * Offline renderer — processes audio through the mastering chain using
- * OfflineAudioContext for EQ, then applies compressor, saturation,
- * stereo width, and limiter inline via pure DSP functions.
+ * OfflineAudioContext for input gain + resampling, then applies the
+ * parametric EQ, compressor, saturation, stereo width, and limiter inline
+ * via pure DSP functions (so offline output matches real-time output).
  */
 
 import type { AudioParams } from "@/lib/stores/audio-store";
@@ -15,6 +16,10 @@ import {
   MultibandCompressorDSP,
   type BandParams,
 } from "./dsp/multiband";
+import {
+  ParametricEqDSP,
+  bandsFromAudioParams,
+} from "./dsp/parametric-eq";
 
 /**
  * Render source audio through the full mastering chain offline.
@@ -46,49 +51,16 @@ export async function renderOffline(
   const inputGain = offlineCtx.createGain();
   inputGain.gain.value = Math.pow(10, params.inputGain / 20);
 
-  // 5-band EQ using BiquadFilterNodes (same topology as nodes/eq.ts)
-  const eq80 = offlineCtx.createBiquadFilter();
-  eq80.type = "lowshelf";
-  eq80.frequency.value = 80;
-  eq80.gain.value = params.eq80;
-
-  const eq250 = offlineCtx.createBiquadFilter();
-  eq250.type = "peaking";
-  eq250.frequency.value = 250;
-  eq250.Q.value = 1.0;
-  eq250.gain.value = params.eq250;
-
-  const eq1k = offlineCtx.createBiquadFilter();
-  eq1k.type = "peaking";
-  eq1k.frequency.value = 1000;
-  eq1k.Q.value = 1.0;
-  eq1k.gain.value = params.eq1k;
-
-  const eq4k = offlineCtx.createBiquadFilter();
-  eq4k.type = "peaking";
-  eq4k.frequency.value = 4000;
-  eq4k.Q.value = 1.0;
-  eq4k.gain.value = params.eq4k;
-
-  const eq12k = offlineCtx.createBiquadFilter();
-  eq12k.type = "highshelf";
-  eq12k.frequency.value = 12000;
-  eq12k.gain.value = params.eq12k;
-
-  // Connect chain: source → inputGain → EQ bands → destination
-  // (No output gain node — makeup is part of the compressor stage below)
+  // Connect chain: source → inputGain → destination.
+  // EQ is applied inline below so the offline path matches the real-time
+  // AudioWorklet-based ParametricEqDSP bit-for-bit.
   source.connect(inputGain);
-  inputGain.connect(eq80);
-  eq80.connect(eq250);
-  eq250.connect(eq1k);
-  eq1k.connect(eq4k);
-  eq4k.connect(eq12k);
-  eq12k.connect(offlineCtx.destination);
+  inputGain.connect(offlineCtx.destination);
 
   source.start(0);
   const rendered = await offlineCtx.startRendering();
 
-  // --- Inline DSP: Compressor → Saturation → Stereo Width → Limiter ---
+  // --- Inline DSP: Parametric EQ → Compressor → Saturation → Stereo Width → Limiter ---
   // Matches the real-time chain order in chain.ts
 
   const channels: Float32Array[] = [];
@@ -96,6 +68,11 @@ export async function renderOffline(
     channels.push(rendered.getChannelData(c));
   }
   const sr = rendered.sampleRate;
+
+  // 0. Parametric EQ (skipped when parametricEqEnabled === 0 for bit-exact bypass)
+  if (params.parametricEqEnabled > 0) {
+    applyParametricEq(channels, params, sr);
+  }
 
   // 1. Compressor (mirrors compressor-processor.js algorithm)
   applyCompressor(channels, params, sr);
@@ -137,6 +114,30 @@ export async function renderOffline(
   }
 
   return rendered;
+}
+
+/**
+ * Apply the 5-band parametric EQ inline using the pure-TS ParametricEqDSP
+ * reference (same module the worklet mirrors). Stereo buffers are processed
+ * in place. Mono buffers go through processMono.
+ */
+function applyParametricEq(
+  channels: Float32Array[],
+  params: AudioParams,
+  sampleRate: number,
+): void {
+  const dsp = new ParametricEqDSP(sampleRate);
+  const bands = bandsFromAudioParams(params);
+  if (channels.length >= 2) {
+    dsp.processStereo(
+      channels[0],
+      channels[1],
+      bands,
+      { left: channels[0], right: channels[1] },
+    );
+  } else if (channels.length === 1) {
+    dsp.processMono(channels[0], bands, channels[0]);
+  }
 }
 
 /**

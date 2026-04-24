@@ -1,66 +1,115 @@
 /**
- * EQNode — 5-band parametric EQ using native BiquadFilterNode
- * Bands: low shelf 80Hz, peaking 250Hz, 1kHz, 4kHz, high shelf 12kHz
+ * EQNode — AudioWorkletNode wrapper for
+ * `public/worklets/parametric-eq-processor.js`.
+ *
+ * 5-band parametric EQ with per-band sweepable frequency / Q / gain /
+ * filter type, plus per-band Stereo | M/S mode with msBalance gain weighting.
+ * Defaults reproduce the pre-P3 5-band topology exactly (80 Hz low-shelf,
+ * 250/1k/4k Hz bells, 12 kHz high-shelf). Master bypass via
+ * `parametricEqEnabled = 0` yields bit-exact passthrough.
  */
 
-const EQ_BANDS = [
-  { type: "lowshelf" as BiquadFilterType, frequency: 80 },
-  { type: "peaking" as BiquadFilterType, frequency: 250 },
-  { type: "peaking" as BiquadFilterType, frequency: 1000 },
-  { type: "peaking" as BiquadFilterType, frequency: 4000 },
-  { type: "highshelf" as BiquadFilterType, frequency: 12000 },
-] as const;
+import type { EqBandMode, EqBandType } from "@/types/mastering";
+
+export type EqBandIndex = 0 | 1 | 2 | 3 | 4;
 
 export class EQNode {
-  readonly bands: BiquadFilterNode[];
-  private readonly _input: GainNode;
+  private readonly _ctx: AudioContext;
+  private _node: AudioWorkletNode | null = null;
   private readonly _output: GainNode;
-  private _bypassed = false;
 
   constructor(ctx: AudioContext) {
-    this._input = ctx.createGain();
+    this._ctx = ctx;
     this._output = ctx.createGain();
+  }
 
-    this.bands = EQ_BANDS.map(({ type, frequency }) => {
-      const band = ctx.createBiquadFilter();
-      band.type = type;
-      band.frequency.value = frequency;
-      band.gain.value = 0;
-      band.Q.value = 1;
-      return band;
-    });
-
-    // Chain: _input -> band[0] -> ... -> band[4] -> _output
-    this._input.connect(this.bands[0]);
-    for (let i = 0; i < this.bands.length - 1; i++) {
-      this.bands[i].connect(this.bands[i + 1]);
-    }
-    this.bands[this.bands.length - 1].connect(this._output);
+  async init(): Promise<void> {
+    await this._ctx.audioWorklet.addModule(
+      "/worklets/parametric-eq-processor.js",
+    );
+    this._node = new AudioWorkletNode(this._ctx, "parametric-eq-processor");
+    this._node.connect(this._output);
   }
 
   get input(): AudioNode {
-    return this._input;
+    if (!this._node) throw new Error("EQNode: call init() first");
+    return this._node;
   }
 
   get output(): AudioNode {
     return this._output;
   }
 
-  /** Set gain for band at index (clamped to ±12 dB) */
-  setGain(bandIndex: number, dB: number): void {
-    const clamped = Math.max(-12, Math.min(12, dB));
-    this.bands[bandIndex].gain.value = clamped;
+  /** Master EQ bypass: 0 = bit-exact passthrough, 1 = process. */
+  setEnabled(on: number): void {
+    this._node?.port.postMessage({ param: "parametricEqEnabled", value: on });
   }
 
+  /**
+   * Backward-compatible gain setter that drives band N gain by index.
+   * Band index is 0-based (0..4) matching Band 1..5 labels in the UI.
+   * Routed through the legacy eq80/eq250/eq1k/eq4k/eq12k port params so that
+   * existing `ui-presets.ts` offsets (warm/bright/deharsh/Add Air/etc.) work
+   * unchanged.
+   */
+  setGain(bandIndex: EqBandIndex | number, dB: number): void {
+    const legacyKeys = ["eq80", "eq250", "eq1k", "eq4k", "eq12k"] as const;
+    const key = legacyKeys[bandIndex];
+    if (!key) return;
+    const clamped = Math.max(-12, Math.min(12, dB));
+    this._node?.port.postMessage({ param: key, value: clamped });
+  }
+
+  setBandEnabled(bandIndex: EqBandIndex | number, on: number): void {
+    this._node?.port.postMessage({
+      param: `eqBand${bandIndex + 1}Enabled`,
+      value: on,
+    });
+  }
+
+  setBandFreq(bandIndex: EqBandIndex | number, hz: number): void {
+    this._node?.port.postMessage({
+      param: `eqBand${bandIndex + 1}Freq`,
+      value: hz,
+    });
+  }
+
+  setBandQ(bandIndex: EqBandIndex | number, q: number): void {
+    this._node?.port.postMessage({
+      param: `eqBand${bandIndex + 1}Q`,
+      value: q,
+    });
+  }
+
+  setBandType(bandIndex: EqBandIndex | number, type: EqBandType): void {
+    this._node?.port.postMessage({
+      param: `eqBand${bandIndex + 1}Type`,
+      value: type,
+    });
+  }
+
+  setBandMode(bandIndex: EqBandIndex | number, mode: EqBandMode): void {
+    this._node?.port.postMessage({
+      param: `eqBand${bandIndex + 1}Mode`,
+      value: mode,
+    });
+  }
+
+  setBandMsBalance(bandIndex: EqBandIndex | number, value: number): void {
+    const clamped = Math.max(-1, Math.min(1, value));
+    this._node?.port.postMessage({
+      param: `eqBand${bandIndex + 1}MsBalance`,
+      value: clamped,
+    });
+  }
+
+  /** Legacy alias for callers that think in terms of a boolean EQ bypass. */
   setBypass(bypass: boolean): void {
-    this._bypassed = bypass;
+    this.setEnabled(bypass ? 0 : 1);
   }
 
   dispose(): void {
-    this._input.disconnect();
-    for (const band of this.bands) {
-      band.disconnect();
-    }
+    this._node?.disconnect();
     this._output.disconnect();
   }
 }

@@ -17,7 +17,7 @@ import { LimiterNode } from "./nodes/limiter";
 import { SaturationNode } from "./nodes/saturation";
 import { MeteringNode, type MeteringMessage } from "./nodes/metering";
 import type { AudioParams } from "@/lib/stores/audio-store";
-import type { MultibandMode, SaturationMode } from "@/types/mastering";
+import type { EqBandMode, EqBandType, MultibandMode, SaturationMode } from "@/types/mastering";
 
 export class ProcessingChain {
   private readonly _ctx: AudioContext;
@@ -64,6 +64,7 @@ export class ProcessingChain {
       this._limiter = new LimiterNode(this._ctx);
       this._saturation = new SaturationNode(this._ctx);
       this._metering = new MeteringNode(this._ctx);
+      this._eq = new EQNode(this._ctx);
 
       await Promise.all([
         this._compressor.init(),
@@ -71,6 +72,7 @@ export class ProcessingChain {
         this._limiter.init(),
         this._saturation.init(),
         this._metering.init(),
+        this._eq.init(),
       ]);
 
       // Wire metering callback
@@ -81,7 +83,6 @@ export class ProcessingChain {
         if (this.onMultibandGR) this.onMultibandGR(gr);
       };
 
-      this._eq = new EQNode(this._ctx);
       this._stereoWidth = new StereoWidthNode(this._ctx);
 
       // Chain: inputGain → EQ → Compressor → MultibandCompressor → Saturation → StereoWidth → Limiter → Metering → outputGain
@@ -127,6 +128,111 @@ export class ProcessingChain {
         break;
       case "eq12k":
         this._eq?.setGain(4, n);
+        break;
+
+      // Parametric EQ master bypass
+      case "parametricEqEnabled":
+        this._eq?.setEnabled(n);
+        break;
+
+      // Parametric EQ Band 1
+      case "eqBand1Enabled":
+        this._eq?.setBandEnabled(0, n);
+        break;
+      case "eqBand1Freq":
+        this._eq?.setBandFreq(0, n);
+        break;
+      case "eqBand1Q":
+        this._eq?.setBandQ(0, n);
+        break;
+      case "eqBand1Type":
+        this._eq?.setBandType(0, value as EqBandType);
+        break;
+      case "eqBand1Mode":
+        this._eq?.setBandMode(0, value as EqBandMode);
+        break;
+      case "eqBand1MsBalance":
+        this._eq?.setBandMsBalance(0, n);
+        break;
+
+      // Parametric EQ Band 2
+      case "eqBand2Enabled":
+        this._eq?.setBandEnabled(1, n);
+        break;
+      case "eqBand2Freq":
+        this._eq?.setBandFreq(1, n);
+        break;
+      case "eqBand2Q":
+        this._eq?.setBandQ(1, n);
+        break;
+      case "eqBand2Type":
+        this._eq?.setBandType(1, value as EqBandType);
+        break;
+      case "eqBand2Mode":
+        this._eq?.setBandMode(1, value as EqBandMode);
+        break;
+      case "eqBand2MsBalance":
+        this._eq?.setBandMsBalance(1, n);
+        break;
+
+      // Parametric EQ Band 3
+      case "eqBand3Enabled":
+        this._eq?.setBandEnabled(2, n);
+        break;
+      case "eqBand3Freq":
+        this._eq?.setBandFreq(2, n);
+        break;
+      case "eqBand3Q":
+        this._eq?.setBandQ(2, n);
+        break;
+      case "eqBand3Type":
+        this._eq?.setBandType(2, value as EqBandType);
+        break;
+      case "eqBand3Mode":
+        this._eq?.setBandMode(2, value as EqBandMode);
+        break;
+      case "eqBand3MsBalance":
+        this._eq?.setBandMsBalance(2, n);
+        break;
+
+      // Parametric EQ Band 4
+      case "eqBand4Enabled":
+        this._eq?.setBandEnabled(3, n);
+        break;
+      case "eqBand4Freq":
+        this._eq?.setBandFreq(3, n);
+        break;
+      case "eqBand4Q":
+        this._eq?.setBandQ(3, n);
+        break;
+      case "eqBand4Type":
+        this._eq?.setBandType(3, value as EqBandType);
+        break;
+      case "eqBand4Mode":
+        this._eq?.setBandMode(3, value as EqBandMode);
+        break;
+      case "eqBand4MsBalance":
+        this._eq?.setBandMsBalance(3, n);
+        break;
+
+      // Parametric EQ Band 5
+      case "eqBand5Enabled":
+        this._eq?.setBandEnabled(4, n);
+        break;
+      case "eqBand5Freq":
+        this._eq?.setBandFreq(4, n);
+        break;
+      case "eqBand5Q":
+        this._eq?.setBandQ(4, n);
+        break;
+      case "eqBand5Type":
+        this._eq?.setBandType(4, value as EqBandType);
+        break;
+      case "eqBand5Mode":
+        this._eq?.setBandMode(4, value as EqBandMode);
+        break;
+      case "eqBand5MsBalance":
+        this._eq?.setBandMsBalance(4, n);
         break;
 
       // Compressor

@@ -45,6 +45,30 @@ async function ensureSectionExpanded(page: Page, sectionTitle: string) {
   }
 }
 
+const EQ_FREQ_LABEL_TO_BAND: Record<string, 1 | 2 | 3 | 4 | 5> = {
+  "80 Hz": 1,
+  "250 Hz": 2,
+  "1 kHz": 3,
+  "4 kHz": 4,
+  "12 kHz": 5,
+};
+
+/** Returns the advanced-panel locator (the Parametric EQ lives only here). */
+function advancedPanel(page: Page) {
+  return page.locator('[data-testid="advanced-panel"], [data-panel="advanced"]').first();
+}
+
+async function ensureBandOpen(page: Page, bandNum: 1 | 2 | 3 | 4 | 5) {
+  // The UI mounts AdvancedMastering for both simple and advanced modes so
+  // their state stays in sync; scope to the visible panel to avoid strict-
+  // mode ambiguity.
+  const toggle = page.getByTestId(`eq-band-${bandNum}-toggle`).first();
+  if ((await toggle.getAttribute("aria-expanded")) === "false") {
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  }
+}
+
 async function readSliderValue(page: Page, label: string) {
   if (label === "Drive") {
     await ensureSectionExpanded(page, "Saturation");
@@ -57,6 +81,17 @@ async function readSliderValue(page: Page, label: string) {
     label === "Side Gain"
   ) {
     await ensureSectionExpanded(page, "Stereo");
+  }
+
+  // Parametric EQ (P3) — legacy "80 Hz"/"250 Hz"/... labels map to
+  // `eq-band-{N}-gain` sliders inside the new band strips.
+  const bandNum = EQ_FREQ_LABEL_TO_BAND[label];
+  if (bandNum !== undefined) {
+    await ensureSectionExpanded(page, "Parametric EQ");
+    await ensureBandOpen(page, bandNum);
+    return Number(
+      await page.getByTestId(`eq-band-${bandNum}-gain`).first().inputValue(),
+    );
   }
 
   return Number(
@@ -221,7 +256,9 @@ const SECTION_EXPECTATIONS = [
   { title: "Input", childRole: "slider", childName: "Input Gain", startsOpen: true },
   { title: "Dynamics", childRole: "slider", childName: "Threshold", startsOpen: true },
   { title: "Tone", childRole: "button", childName: "Add Air", startsOpen: true },
-  { title: "Parametric EQ", childRole: "slider", childName: "80 Hz", startsOpen: true },
+  // Parametric EQ section expands to 5 band strips; Band 1 opens by default
+  // exposing its Frequency slider as the first slider-typed child.
+  { title: "Parametric EQ", childRole: "slider", childName: "Frequency", startsOpen: true },
   { title: "Saturation", childRole: "slider", childName: "Drive", startsOpen: false },
   { title: "Stereo", childRole: "slider", childName: "Width", startsOpen: false },
   { title: "Output", childRole: "slider", childName: "Target LUFS", startsOpen: true },
@@ -604,6 +641,87 @@ test.describe("Advanced mode buttons", () => {
         }
       }
     }
+  });
+});
+
+test.describe("Parametric EQ (P3)", () => {
+  test.beforeEach(async ({ page }) => {
+    await uploadAndNavigate(page);
+    await showAdvanced(page);
+    await ensureSectionExpanded(page, "Parametric EQ");
+  });
+
+  test("TS-001: Band 2 frequency sweep updates the UI value", async ({
+    page,
+  }) => {
+    await ensureBandOpen(page, 2);
+    const freq = page.getByTestId("eq-band-2-freq").first();
+    await expect(freq).toBeVisible();
+    // Default: 250 Hz
+    expect(Number(await freq.inputValue())).toBeCloseTo(250, 0);
+    // Sweep to 2 kHz
+    await freq.fill("2000");
+    expect(Number(await freq.inputValue())).toBeCloseTo(2000, 0);
+  });
+
+  test("TS-002: Band 3 type switches to High-Pass via pill", async ({ page }) => {
+    await ensureBandOpen(page, 3);
+    const bellPill = page.getByTestId("eq-band-3-type-bell").first();
+    const hpPill = page.getByTestId("eq-band-3-type-highPass").first();
+    await expect(bellPill).toHaveAttribute("aria-checked", "true");
+    await hpPill.click();
+    await expect(hpPill).toHaveAttribute("aria-checked", "true");
+    await expect(bellPill).toHaveAttribute("aria-checked", "false");
+  });
+
+  test("TS-003: Band 4 M/S mode reveals MS Balance slider", async ({ page }) => {
+    await ensureBandOpen(page, 4);
+    // By default the mode is stereo → balance slider is absent.
+    await expect(page.getByTestId("eq-band-4-msbalance")).toHaveCount(0);
+
+    await page.getByTestId("eq-band-4-mode-ms").first().click();
+    const balance = page.getByTestId("eq-band-4-msbalance").first();
+    await expect(balance).toBeVisible();
+    await balance.fill("1");
+    expect(Number(await balance.inputValue())).toBeCloseTo(1, 2);
+
+    // Switch back to stereo → balance slider hidden again.
+    await page.getByTestId("eq-band-4-mode-stereo").first().click();
+    await expect(page.getByTestId("eq-band-4-msbalance")).toHaveCount(0);
+  });
+
+  test("TS-004: per-band enable toggle flips ON/OFF", async ({ page }) => {
+    const toggle = page.getByTestId("eq-band-1-enable").first();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("TS-005: section-level Bypass toggle flips EQ master enable", async ({
+    page,
+  }) => {
+    const bypass = page.getByTestId("eq-master-bypass").first();
+    // Default: parametricEqEnabled=1 → aria-pressed="false" (label "Bypass").
+    await expect(bypass).toHaveAttribute("aria-pressed", "false");
+    await bypass.click();
+    await expect(bypass).toHaveAttribute("aria-pressed", "true");
+    await expect(bypass).toHaveText(/Bypassed/);
+    await bypass.click();
+    await expect(bypass).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("Gain slider on Band 1 maps to legacy eq80 input value", async ({
+    page,
+  }) => {
+    const gain = page.getByTestId("eq-band-1-gain").first();
+    await expect(gain).toBeVisible();
+    await gain.fill("3");
+    expect(Number(await gain.inputValue())).toBeCloseTo(3, 2);
+    // The "80 Hz" legacy label (used by GENRE_EXPECTATIONS) resolves to the
+    // same slider via readSliderValue.
+    expect(await readSliderValue(page, "80 Hz")).toBeCloseTo(3, 2);
   });
 });
 

@@ -20,10 +20,10 @@ describe("ProcessingChain", () => {
     expect(chain.output).toBeDefined();
   });
 
-  it("should load all 5 worklets during init (incl. multiband-compressor)", async () => {
+  it("should load all 6 worklets during init (incl. multiband-compressor + parametric-eq)", async () => {
     chain = new ProcessingChain(ctx);
     await chain.init();
-    expect(ctx.audioWorklet.addModule).toHaveBeenCalledTimes(5);
+    expect(ctx.audioWorklet.addModule).toHaveBeenCalledTimes(6);
     const calls = (ctx.audioWorklet.addModule as ReturnType<typeof vi.fn>).mock.calls;
     const paths = calls.map((c: unknown[]) => c[0] as string);
     expect(paths.some((p) => p.includes("compressor-processor"))).toBe(true);
@@ -31,6 +31,27 @@ describe("ProcessingChain", () => {
     expect(paths.some((p) => p.includes("limiter"))).toBe(true);
     expect(paths.some((p) => p.includes("saturation"))).toBe(true);
     expect(paths.some((p) => p.includes("metering"))).toBe(true);
+    expect(paths.some((p) => p.includes("parametric-eq-processor"))).toBe(true);
+  });
+
+  it("should route all parametric EQ params without throwing", async () => {
+    chain = new ProcessingChain(ctx);
+    await chain.init();
+    expect(() => chain.updateParam("parametricEqEnabled", 1)).not.toThrow();
+    for (let b = 1; b <= 5; b++) {
+      expect(() => chain.updateParam(`eqBand${b}Enabled` as never, 1)).not.toThrow();
+      expect(() => chain.updateParam(`eqBand${b}Freq` as never, 1000)).not.toThrow();
+      expect(() => chain.updateParam(`eqBand${b}Q` as never, 1.5)).not.toThrow();
+      expect(() =>
+        chain.updateParam(`eqBand${b}Type` as never, "bell" as never),
+      ).not.toThrow();
+      expect(() =>
+        chain.updateParam(`eqBand${b}Mode` as never, "ms" as never),
+      ).not.toThrow();
+      expect(() =>
+        chain.updateParam(`eqBand${b}MsBalance` as never, 0.5),
+      ).not.toThrow();
+    }
   });
 
   it("should route all multiband params without throwing", async () => {

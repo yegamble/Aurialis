@@ -8,6 +8,7 @@ import type {
   SaturationMode,
 } from "@/types/mastering";
 import type { TonePresetName, OutputPresetName } from "@/lib/audio/ui-presets";
+import { EqBandStrip } from "./EqBandStrip";
 
 interface AdvancedMasteringProps {
   params: AudioParams;
@@ -578,26 +579,40 @@ export function AdvancedMastering({
         </div>
       </Section>
 
-      {/* EQ */}
+      {/* Parametric EQ — 5 sweepable bands (P3) */}
       <Section title="Parametric EQ">
-        {([
-          { key: "eq80", label: "80 Hz" },
-          { key: "eq250", label: "250 Hz" },
-          { key: "eq1k", label: "1 kHz" },
-          { key: "eq4k", label: "4 kHz" },
-          { key: "eq12k", label: "12 kHz" },
-        ] as const).map((band) => (
-          <Slider
-            key={band.key}
-            label={band.label}
-            value={params[band.key] ?? 0}
-            min={-12}
-            max={12}
-            step={0.1}
-            unit="dB"
-            onChange={(v) => onParamChange(band.key, v)}
-          />
-        ))}
+        <div className="flex justify-end mb-2">
+          <button
+            type="button"
+            onClick={() =>
+              onParamChange(
+                "parametricEqEnabled",
+                (params.parametricEqEnabled ?? 1) > 0 ? 0 : 1,
+              )
+            }
+            aria-pressed={(params.parametricEqEnabled ?? 1) === 0}
+            aria-label="EQ bypass"
+            data-testid="eq-master-bypass"
+            className={`px-3 py-1 rounded text-[10px] transition-colors ${
+              (params.parametricEqEnabled ?? 1) === 0
+                ? "bg-yellow-500/[0.18] text-yellow-300"
+                : "bg-[rgba(255,255,255,0.04)] text-[rgba(255,255,255,0.5)]"
+            }`}
+          >
+            {(params.parametricEqEnabled ?? 1) === 0 ? "Bypassed" : "Bypass"}
+          </button>
+        </div>
+        <div className="space-y-2">
+          {([0, 1, 2, 3, 4] as const).map((idx) => (
+            <EqBandStrip
+              key={idx}
+              bandIndex={idx}
+              defaultOpen={idx === 0}
+              params={params}
+              onParamChange={onParamChange}
+            />
+          ))}
+        </div>
       </Section>
 
       {/* Saturation */}

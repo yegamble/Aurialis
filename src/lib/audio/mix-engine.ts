@@ -119,6 +119,15 @@ export class MixEngine {
     this.applyMasterParams(DEFAULT_PARAMS);
   }
 
+  /**
+   * Adds a stem to the mix graph.
+   *
+   * NOTE (P3): the per-stem 5-band EQ built below still uses native
+   * BiquadFilterNode (80/250/1k/4k/12k fixed). The mastering bus was
+   * upgraded to a parametric EQ (see `docs/plans/2026-04-23-parametric-eq.md`);
+   * unifying the per-stem EQ with the new ParametricEqDSP is intentionally
+   * deferred to a future plan.
+   */
   addStem(stem: StemTrack): void {
     if (!this._ctx || !this._summingBus || !stem.audioBuffer) return;
 
@@ -368,6 +377,41 @@ export class MixEngine {
     this._masterChain?.updateParam("eq1k", params.eq1k);
     this._masterChain?.updateParam("eq4k", params.eq4k);
     this._masterChain?.updateParam("eq12k", params.eq12k);
+    // Parametric EQ (P3) — master bypass + 5 bands × 6 fields each.
+    // NOTE: addStem() has its own per-stem 5-band BiquadFilter EQ chain; that
+    // one is intentionally NOT upgraded in this plan
+    // (see docs/plans/2026-04-23-parametric-eq.md — out of scope).
+    this._masterChain?.updateParam("parametricEqEnabled", params.parametricEqEnabled);
+    this._masterChain?.updateParam("eqBand1Enabled", params.eqBand1Enabled);
+    this._masterChain?.updateParam("eqBand1Freq", params.eqBand1Freq);
+    this._masterChain?.updateParam("eqBand1Q", params.eqBand1Q);
+    this._masterChain?.updateParam("eqBand1Type", params.eqBand1Type);
+    this._masterChain?.updateParam("eqBand1Mode", params.eqBand1Mode);
+    this._masterChain?.updateParam("eqBand1MsBalance", params.eqBand1MsBalance);
+    this._masterChain?.updateParam("eqBand2Enabled", params.eqBand2Enabled);
+    this._masterChain?.updateParam("eqBand2Freq", params.eqBand2Freq);
+    this._masterChain?.updateParam("eqBand2Q", params.eqBand2Q);
+    this._masterChain?.updateParam("eqBand2Type", params.eqBand2Type);
+    this._masterChain?.updateParam("eqBand2Mode", params.eqBand2Mode);
+    this._masterChain?.updateParam("eqBand2MsBalance", params.eqBand2MsBalance);
+    this._masterChain?.updateParam("eqBand3Enabled", params.eqBand3Enabled);
+    this._masterChain?.updateParam("eqBand3Freq", params.eqBand3Freq);
+    this._masterChain?.updateParam("eqBand3Q", params.eqBand3Q);
+    this._masterChain?.updateParam("eqBand3Type", params.eqBand3Type);
+    this._masterChain?.updateParam("eqBand3Mode", params.eqBand3Mode);
+    this._masterChain?.updateParam("eqBand3MsBalance", params.eqBand3MsBalance);
+    this._masterChain?.updateParam("eqBand4Enabled", params.eqBand4Enabled);
+    this._masterChain?.updateParam("eqBand4Freq", params.eqBand4Freq);
+    this._masterChain?.updateParam("eqBand4Q", params.eqBand4Q);
+    this._masterChain?.updateParam("eqBand4Type", params.eqBand4Type);
+    this._masterChain?.updateParam("eqBand4Mode", params.eqBand4Mode);
+    this._masterChain?.updateParam("eqBand4MsBalance", params.eqBand4MsBalance);
+    this._masterChain?.updateParam("eqBand5Enabled", params.eqBand5Enabled);
+    this._masterChain?.updateParam("eqBand5Freq", params.eqBand5Freq);
+    this._masterChain?.updateParam("eqBand5Q", params.eqBand5Q);
+    this._masterChain?.updateParam("eqBand5Type", params.eqBand5Type);
+    this._masterChain?.updateParam("eqBand5Mode", params.eqBand5Mode);
+    this._masterChain?.updateParam("eqBand5MsBalance", params.eqBand5MsBalance);
     this._masterChain?.updateParam("satDrive", params.satDrive);
     this._masterChain?.updateParam("stereoWidth", params.stereoWidth);
     this._masterChain?.updateParam("bassMonoFreq", params.bassMonoFreq);

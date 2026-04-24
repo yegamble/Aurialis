@@ -116,6 +116,7 @@ export function useAudioEngine() {
         lraReady: m.lraReady,
         correlation: m.correlation,
         correlationPeakMin: m.correlationPeakMin,
+        multibandGR: m.multibandGR,
       });
     };
 

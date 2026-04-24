@@ -21,6 +21,11 @@ export class AudioEngine {
   private _startOffset = 0;
   private _duration = 0;
   private _disposed = false;
+  private _latestMbGr: { low: number; mid: number; high: number } = {
+    low: 0,
+    mid: 0,
+    high: 0,
+  };
 
   private listeners = new Map<AudioEngineEventType, Set<EventCallback>>();
   private rafId: number | null = null;
@@ -47,6 +52,16 @@ export class AudioEngine {
 
   get analyserNode(): AnalyserNode | null {
     return this.analyser;
+  }
+
+  /** Left-channel analyser at the end of the chain (goniometer data). */
+  get leftAnalyserNode(): AnalyserNode | null {
+    return this.chain?.leftAnalyser ?? null;
+  }
+
+  /** Right-channel analyser at the end of the chain (goniometer data). */
+  get rightAnalyserNode(): AnalyserNode | null {
+    return this.chain?.rightAnalyser ?? null;
   }
 
   getCurrentTime(): number {
@@ -79,6 +94,9 @@ export class AudioEngine {
       this.context = null;
       return;
     }
+    this.chain.onMultibandGR = (gr) => {
+      this._latestMbGr = { low: gr.low, mid: gr.mid, high: gr.high };
+    };
     this.chain.onMetering = (data) => {
       const metering: MeteringData = {
         leftLevel: data.leftLevel,
@@ -92,6 +110,7 @@ export class AudioEngine {
         lraReady: data.lraReady,
         correlation: data.correlation,
         correlationPeakMin: data.correlationPeakMin,
+        multibandGR: { ...this._latestMbGr },
       };
       this.emit("metering", metering);
     };

@@ -35,35 +35,51 @@ function deterministicNoise(n: number, seed = 1): Float32Array {
   return out;
 }
 
-describe("P2 preset regression — multiband bypassed across all genres", () => {
-  const genres: GenreName[] = [
-    "pop",
-    "rock",
-    "hiphop",
-    "electronic",
-    "jazz",
-    "classical",
-    "rnb",
-    "podcast",
-    "lofi",
-  ];
+// Phase 4a (2026-04-23, plan docs/plans/2026-04-23-dsp-p4-triage.md):
+// Genre multiband defaults are now curated per genre. This regression describes
+// the Phase 4a contract; see `presets-multiband-genre.test.ts` for the
+// authoritative per-genre inventory.
+const MB_ENGAGING_GENRES: GenreName[] = [
+  "pop",
+  "rock",
+  "hiphop",
+  "electronic",
+  "rnb",
+  "podcast",
+];
 
-  it.each(genres)(
-    "genre '%s' at 100%% intensity has multibandEnabled=0 (byte-equivalent to pre-P2)",
+const MB_PRESERVING_GENRES: GenreName[] = ["jazz", "classical", "lofi"];
+
+describe("Phase 4a preset regression — multiband engagement per genre", () => {
+  it.each(MB_PRESERVING_GENRES)(
+    "genre '%s' at 100%% intensity preserves dynamics (multibandEnabled=0)",
     (genre) => {
       const p = applyIntensity(genre, 100);
       expect(p.multibandEnabled).toBe(0);
-      // All three bands disabled
       expect(p.mbLowEnabled).toBe(0);
       expect(p.mbMidEnabled).toBe(0);
       expect(p.mbHighEnabled).toBe(0);
-      // Default crossovers inherited
       expect(p.mbCrossLowMid).toBe(200);
       expect(p.mbCrossMidHigh).toBe(2000);
     }
   );
 
-  it.each(genres)(
+  it.each(MB_ENGAGING_GENRES)(
+    "genre '%s' at 100%% intensity engages multiband (multibandEnabled=1)",
+    (genre) => {
+      const p = applyIntensity(genre, 100);
+      expect(p.multibandEnabled).toBe(1);
+      // At least one band is enabled for every engaging genre
+      const anyBand =
+        p.mbLowEnabled + p.mbMidEnabled + p.mbHighEnabled;
+      expect(anyBand).toBeGreaterThan(0);
+      // Crossovers remain at Phase 4a defaults (preset crossover schemes are P5a)
+      expect(p.mbCrossLowMid).toBe(200);
+      expect(p.mbCrossMidHigh).toBe(2000);
+    }
+  );
+
+  it.each(MB_PRESERVING_GENRES)(
     "genre '%s' multiband pass is bit-exact passthrough (all disabled + master off)",
     (genre) => {
       const p = applyIntensity(genre, 100);
@@ -92,10 +108,17 @@ describe("P2 preset regression — multiband bypassed across all genres", () => 
     }
   );
 
-  it.each(genres)(
-    "genre '%s' genre preset (direct) has multibandEnabled=0",
+  it.each(MB_PRESERVING_GENRES)(
+    "genre '%s' preset (direct) keeps multibandEnabled=0",
     (genre) => {
       expect(GENRE_PRESETS[genre].multibandEnabled).toBe(0);
+    }
+  );
+
+  it.each(MB_ENGAGING_GENRES)(
+    "genre '%s' preset (direct) sets multibandEnabled=1",
+    (genre) => {
+      expect(GENRE_PRESETS[genre].multibandEnabled).toBe(1);
     }
   );
 });

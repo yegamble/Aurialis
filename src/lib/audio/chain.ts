@@ -32,6 +32,14 @@ export class ProcessingChain {
   private _metering: MeteringNode | null = null;
   private _processingAvailable = false;
 
+  // Phase 4a Task 6: L/R AnalyserNodes tapped off the end of the chain for
+  // the goniometer visual. NOT routed through metering-processor.js — the
+  // goniometer reads time-domain data on the main thread, keeping the
+  // BS.1770-4 metering worklet untouched.
+  private _goniometerSplitter: ChannelSplitterNode | null = null;
+  private _leftAnalyser: AnalyserNode | null = null;
+  private _rightAnalyser: AnalyserNode | null = null;
+
   onMetering: ((data: MeteringMessage) => void) | null = null;
   onMultibandGR: ((gr: MultibandGainReduction) => void) | null = null;
 
@@ -51,6 +59,16 @@ export class ProcessingChain {
   get output(): AudioNode {
     if (!this._outputGain) throw new Error("ProcessingChain: call init() first");
     return this._outputGain;
+  }
+
+  /** Left-channel analyser for the goniometer visual (null until init()). */
+  get leftAnalyser(): AnalyserNode | null {
+    return this._leftAnalyser;
+  }
+
+  /** Right-channel analyser for the goniometer visual (null until init()). */
+  get rightAnalyser(): AnalyserNode | null {
+    return this._rightAnalyser;
   }
 
   async init(): Promise<void> {
@@ -94,6 +112,40 @@ export class ProcessingChain {
       this._stereoWidth.output.connect(this._limiter.input);
       this._limiter.output.connect(this._metering.input);
       this._metering.output.connect(this._outputGain);
+
+      // Goniometer analyser taps — post-metering, pre-outputGain. Channel
+      // splitter sends L→leftAnalyser, R→rightAnalyser. Tests on happy-dom
+      // may not have createChannelSplitter / createAnalyser; guard defensively.
+      // Nested try/catch: a goniometer-init failure must NOT cascade to the
+      // outer catch (which would fall back to full chain bypass). Goniometer
+      // failure degrades to 'no goniometer', not 'no DSP'.
+      try {
+        const ctx = this._ctx as AudioContext & {
+          createChannelSplitter?: AudioContext["createChannelSplitter"];
+          createAnalyser?: AudioContext["createAnalyser"];
+        };
+        if (
+          typeof ctx.createChannelSplitter === "function" &&
+          typeof ctx.createAnalyser === "function"
+        ) {
+          this._goniometerSplitter = ctx.createChannelSplitter(2);
+          this._leftAnalyser = ctx.createAnalyser();
+          this._rightAnalyser = ctx.createAnalyser();
+          this._leftAnalyser.fftSize = 2048;
+          this._rightAnalyser.fftSize = 2048;
+          this._leftAnalyser.smoothingTimeConstant = 0;
+          this._rightAnalyser.smoothingTimeConstant = 0;
+          this._metering.output.connect(this._goniometerSplitter);
+          this._goniometerSplitter.connect(this._leftAnalyser, 0);
+          this._goniometerSplitter.connect(this._rightAnalyser, 1);
+        }
+      } catch {
+        // Goniometer init failed — leave analysers null. The main DSP chain
+        // is already wired and must stay available.
+        this._goniometerSplitter = null;
+        this._leftAnalyser = null;
+        this._rightAnalyser = null;
+      }
 
       this._processingAvailable = true;
     } catch {
@@ -233,6 +285,22 @@ export class ProcessingChain {
         break;
       case "eqBand5MsBalance":
         this._eq?.setBandMsBalance(4, n);
+        break;
+
+      // Per-stage master enables (Phase 4a Task 4) — forward to each node's
+      // existing setBypass() method. Global A/B (engine.setBypass) is a
+      // separate path; per-stage state persists across global toggles.
+      case "compressorEnabled":
+        this._compressor?.setBypass(n === 0);
+        break;
+      case "saturationEnabled":
+        this._saturation?.setBypass(n === 0);
+        break;
+      case "stereoWidthEnabled":
+        this._stereoWidth?.setBypass(n === 0);
+        break;
+      case "limiterEnabled":
+        this._limiter?.setBypass(n === 0);
         break;
 
       // Compressor
@@ -397,6 +465,9 @@ export class ProcessingChain {
     this._stereoWidth?.dispose();
     this._limiter?.dispose();
     this._metering?.dispose();
+    this._goniometerSplitter?.disconnect();
+    this._leftAnalyser?.disconnect();
+    this._rightAnalyser?.disconnect();
     this._outputGain?.disconnect();
   }
 }

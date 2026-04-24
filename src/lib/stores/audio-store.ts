@@ -46,6 +46,7 @@ const defaultMetering: MeteringData = {
   lraReady: false,
   correlation: 1,
   correlationPeakMin: 1,
+  multibandGR: { low: 0, mid: 0, high: 0 },
 };
 
 export const useAudioStore = create<AudioState>((set) => ({

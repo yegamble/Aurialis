@@ -197,30 +197,76 @@ function Section({
   title,
   children,
   defaultOpen = true,
+  rightSlot,
 }: {
   title: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  /** Content rendered on the right of the header (e.g., a BypassPill). */
+  rightSlot?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="border-b border-[rgba(255,255,255,0.06)] pb-4">
-      <button
-        className="flex items-center justify-between w-full py-2 text-left"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-      >
-        <span className="text-[rgba(255,255,255,0.6)] text-xs uppercase tracking-wider">
-          {title}
-        </span>
-        {open ? (
-          <ChevronUp className="w-3.5 h-3.5 text-[rgba(255,255,255,0.3)]" />
-        ) : (
-          <ChevronDown className="w-3.5 h-3.5 text-[rgba(255,255,255,0.3)]" />
-        )}
-      </button>
+      <div className="flex items-center gap-2 py-2">
+        <button
+          className="flex items-center justify-between flex-1 text-left"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+        >
+          <span className="text-[rgba(255,255,255,0.6)] text-xs uppercase tracking-wider">
+            {title}
+          </span>
+          {open ? (
+            <ChevronUp className="w-3.5 h-3.5 text-[rgba(255,255,255,0.3)]" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5 text-[rgba(255,255,255,0.3)]" />
+          )}
+        </button>
+        {rightSlot}
+      </div>
       {open && <div className="space-y-3 mt-1">{children}</div>}
     </div>
+  );
+}
+
+/**
+ * Per-stage A/B bypass pill. Supplements the global ABToggle in the
+ * transport bar — each stage can be bypassed independently. State is held
+ * in the corresponding `AudioParams` `*Enabled` field.
+ */
+function BypassPill({
+  active,
+  onToggle,
+  testId,
+  stageLabel,
+}: {
+  /** True when the stage is bypassed (enabled=0). */
+  active: boolean;
+  onToggle: () => void;
+  testId: string;
+  stageLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      aria-pressed={active}
+      aria-label={
+        active ? `${stageLabel} bypassed — click to restore` : `Bypass ${stageLabel}`
+      }
+      data-testid={testId}
+      className={`px-3 py-1 rounded text-[10px] transition-colors ${
+        active
+          ? "bg-yellow-500/[0.18] text-yellow-300"
+          : "bg-[rgba(255,255,255,0.04)] text-[rgba(255,255,255,0.5)]"
+      }`}
+    >
+      {active ? "Bypassed" : "Bypass"}
+    </button>
   );
 }
 
@@ -416,30 +462,23 @@ export function AdvancedMastering({
         />
       </Section>
 
-      {/* Dynamics */}
-      <Section title="Dynamics">
-        <div className="flex gap-2 mb-3">
-          <ToggleButton
-            label="De-Harsh"
-            active={dynamics.deharsh}
-            onClick={() => onDynamicsToggle("deharsh")}
-          />
-          <ToggleButton
-            label="Glue Comp"
-            active={dynamics.glueComp}
-            onClick={() => onDynamicsToggle("glueComp")}
-          />
-          <ToggleButton
-            label="Auto Release"
-            active={(params.autoRelease ?? 0) > 0}
-            onClick={() =>
+      {/* Compressor (split from former "Dynamics" in Phase 4a Task 5) */}
+      <Section
+        title="Compressor"
+        rightSlot={
+          <BypassPill
+            testId="bypass-pill-compressor"
+            stageLabel="Compressor"
+            active={(params.compressorEnabled ?? 1) === 0}
+            onToggle={() =>
               onParamChange(
-                "autoRelease",
-                (params.autoRelease ?? 0) > 0 ? 0 : 1
+                "compressorEnabled",
+                (params.compressorEnabled ?? 1) > 0 ? 0 : 1
               )
             }
           />
-        </div>
+        }
+      >
         <Slider
           label="Threshold"
           value={params.threshold ?? -18}
@@ -496,20 +535,50 @@ export function AdvancedMastering({
         />
       </Section>
 
-      {/* Multiband */}
-      <Section title="Multiband" defaultOpen={false}>
-        <div className="flex gap-2 mb-3">
+      {/* Dynamics Toggles (split from former "Dynamics") */}
+      <Section title="Dynamics Toggles">
+        <div className="flex gap-2">
           <ToggleButton
-            label="Multiband"
-            active={(params.multibandEnabled ?? 0) > 0}
+            label="De-Harsh"
+            active={dynamics.deharsh}
+            onClick={() => onDynamicsToggle("deharsh")}
+          />
+          <ToggleButton
+            label="Glue Comp"
+            active={dynamics.glueComp}
+            onClick={() => onDynamicsToggle("glueComp")}
+          />
+          <ToggleButton
+            label="Auto Release"
+            active={(params.autoRelease ?? 0) > 0}
             onClick={() =>
+              onParamChange(
+                "autoRelease",
+                (params.autoRelease ?? 0) > 0 ? 0 : 1
+              )
+            }
+          />
+        </div>
+      </Section>
+
+      {/* Multiband */}
+      <Section
+        title="Multiband"
+        defaultOpen={false}
+        rightSlot={
+          <BypassPill
+            testId="bypass-pill-multiband"
+            stageLabel="Multiband"
+            active={(params.multibandEnabled ?? 0) === 0}
+            onToggle={() =>
               onParamChange(
                 "multibandEnabled",
                 (params.multibandEnabled ?? 0) > 0 ? 0 : 1
               )
             }
           />
-        </div>
+        }
+      >
         <Slider
           label="Low|Mid"
           value={params.mbCrossLowMid ?? 200}
@@ -579,29 +648,23 @@ export function AdvancedMastering({
         </div>
       </Section>
 
-      {/* Parametric EQ — 5 sweepable bands (P3) */}
-      <Section title="Parametric EQ">
-        <div className="flex justify-end mb-2">
-          <button
-            type="button"
-            onClick={() =>
+      {/* Parametric EQ — 5 sweepable bands (P3); bypass pill moved to header in Phase 4a Task 5 */}
+      <Section
+        title="Parametric EQ"
+        rightSlot={
+          <BypassPill
+            testId="bypass-pill-eq"
+            stageLabel="EQ"
+            active={(params.parametricEqEnabled ?? 1) === 0}
+            onToggle={() =>
               onParamChange(
                 "parametricEqEnabled",
                 (params.parametricEqEnabled ?? 1) > 0 ? 0 : 1,
               )
             }
-            aria-pressed={(params.parametricEqEnabled ?? 1) === 0}
-            aria-label="EQ bypass"
-            data-testid="eq-master-bypass"
-            className={`px-3 py-1 rounded text-[10px] transition-colors ${
-              (params.parametricEqEnabled ?? 1) === 0
-                ? "bg-yellow-500/[0.18] text-yellow-300"
-                : "bg-[rgba(255,255,255,0.04)] text-[rgba(255,255,255,0.5)]"
-            }`}
-          >
-            {(params.parametricEqEnabled ?? 1) === 0 ? "Bypassed" : "Bypass"}
-          </button>
-        </div>
+          />
+        }
+      >
         <div className="space-y-2">
           {([0, 1, 2, 3, 4] as const).map((idx) => (
             <EqBandStrip
@@ -616,7 +679,23 @@ export function AdvancedMastering({
       </Section>
 
       {/* Saturation */}
-      <Section title="Saturation" defaultOpen={false}>
+      <Section
+        title="Saturation"
+        defaultOpen={false}
+        rightSlot={
+          <BypassPill
+            testId="bypass-pill-saturation"
+            stageLabel="Saturation"
+            active={(params.saturationEnabled ?? 1) === 0}
+            onToggle={() =>
+              onParamChange(
+                "saturationEnabled",
+                (params.saturationEnabled ?? 1) > 0 ? 0 : 1
+              )
+            }
+          />
+        }
+      >
         <SatModePills
           value={params.satMode ?? "clean"}
           onChange={(v) => onParamChange("satMode", v)}
@@ -633,7 +712,23 @@ export function AdvancedMastering({
       </Section>
 
       {/* Stereo */}
-      <Section title="Stereo" defaultOpen={false}>
+      <Section
+        title="Stereo"
+        defaultOpen={false}
+        rightSlot={
+          <BypassPill
+            testId="bypass-pill-stereo-width"
+            stageLabel="Stereo Width"
+            active={(params.stereoWidthEnabled ?? 1) === 0}
+            onToggle={() =>
+              onParamChange(
+                "stereoWidthEnabled",
+                (params.stereoWidthEnabled ?? 1) > 0 ? 0 : 1
+              )
+            }
+          />
+        }
+      >
         <Slider
           label="Width"
           value={params.stereoWidth ?? 100}
@@ -672,8 +767,45 @@ export function AdvancedMastering({
         />
       </Section>
 
-      {/* Output / Limiter */}
-      <Section title="Output">
+      {/* Limiter (split from former "Output" in Phase 4a Task 5) */}
+      <Section
+        title="Limiter"
+        rightSlot={
+          <BypassPill
+            testId="bypass-pill-limiter"
+            stageLabel="Limiter"
+            active={(params.limiterEnabled ?? 1) === 0}
+            onToggle={() =>
+              onParamChange(
+                "limiterEnabled",
+                (params.limiterEnabled ?? 1) > 0 ? 0 : 1
+              )
+            }
+          />
+        }
+      >
+        <Slider
+          label="Ceiling"
+          value={params.ceiling ?? -1}
+          min={-6}
+          max={0}
+          step={0.1}
+          unit="dBTP"
+          onChange={(v) => onParamChange("ceiling", v)}
+        />
+        <Slider
+          label="Limiter Release"
+          value={params.limiterRelease ?? 100}
+          min={10}
+          max={500}
+          step={1}
+          unit="ms"
+          onChange={(v) => onParamChange("limiterRelease", v)}
+        />
+      </Section>
+
+      {/* Output Target (split from former "Output"; platform pills + Target LUFS) */}
+      <Section title="Output Target">
         <div className="flex gap-2 mb-3 flex-wrap">
           {(["Spotify", "Apple Music", "YouTube", "SoundCloud", "CD"] as const).map(
             (p) => (
@@ -702,24 +834,6 @@ export function AdvancedMastering({
           step={0.1}
           unit="LUFS"
           onChange={(v) => onParamChange("targetLufs", v)}
-        />
-        <Slider
-          label="Ceiling"
-          value={params.ceiling ?? -1}
-          min={-6}
-          max={0}
-          step={0.1}
-          unit="dBTP"
-          onChange={(v) => onParamChange("ceiling", v)}
-        />
-        <Slider
-          label="Limiter Release"
-          value={params.limiterRelease ?? 100}
-          min={10}
-          max={500}
-          step={1}
-          unit="ms"
-          onChange={(v) => onParamChange("limiterRelease", v)}
         />
       </Section>
     </div>

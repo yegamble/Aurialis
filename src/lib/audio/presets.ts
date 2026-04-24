@@ -16,6 +16,11 @@ import type {
 /** Neutral default parameters — flat EQ, gentle compression, unity gain */
 export const DEFAULT_PARAMS: AudioParams = {
   inputGain: 0,
+  // Phase 4a (2026-04-23): per-stage master enables default to ON
+  compressorEnabled: 1,
+  saturationEnabled: 1,
+  stereoWidthEnabled: 1,
+  limiterEnabled: 1,
   threshold: -18,
   ratio: 2,
   attack: 30,
@@ -150,6 +155,14 @@ export const GENRE_PRESETS: Record<GenreName, AudioParams> = {
     stereoWidth: 110,
     targetLufs: -14,
     ceiling: -1,
+    // Phase 4a (2026-04-23): gentle low-band glue for modern pop
+    multibandEnabled: 1,
+    mbLowEnabled: 1,
+    mbLowThreshold: -20,
+    mbLowRatio: 2.5,
+    mbLowAttack: 15,
+    mbLowRelease: 200,
+    mbLowMakeup: 1.0,
   },
 
   rock: {
@@ -170,6 +183,20 @@ export const GENRE_PRESETS: Record<GenreName, AudioParams> = {
     stereoWidth: 105,
     targetLufs: -12,
     ceiling: -0.5,
+    // Phase 4a: low-band body + mid-band clarity against guitar mass
+    multibandEnabled: 1,
+    mbLowEnabled: 1,
+    mbLowThreshold: -18,
+    mbLowRatio: 3.0,
+    mbLowAttack: 10,
+    mbLowRelease: 150,
+    mbLowMakeup: 1.0,
+    mbMidEnabled: 1,
+    mbMidThreshold: -16,
+    mbMidRatio: 2.5,
+    mbMidAttack: 15,
+    mbMidRelease: 180,
+    mbMidMakeup: 0.5,
   },
 
   hiphop: {
@@ -190,6 +217,14 @@ export const GENRE_PRESETS: Record<GenreName, AudioParams> = {
     stereoWidth: 115,
     targetLufs: -13,
     ceiling: -0.5,
+    // Phase 4a: aggressive low-band glue (kick/808) without squashing the high end
+    multibandEnabled: 1,
+    mbLowEnabled: 1,
+    mbLowThreshold: -22,
+    mbLowRatio: 3.0,
+    mbLowAttack: 10,
+    mbLowRelease: 150,
+    mbLowMakeup: 1.5,
   },
 
   electronic: {
@@ -210,6 +245,14 @@ export const GENRE_PRESETS: Record<GenreName, AudioParams> = {
     stereoWidth: 130,
     targetLufs: -11,
     ceiling: -0.3,
+    // Phase 4a: high-band control against ride/shaker masking
+    multibandEnabled: 1,
+    mbHighEnabled: 1,
+    mbHighThreshold: -14,
+    mbHighRatio: 3.5,
+    mbHighAttack: 5,
+    mbHighRelease: 100,
+    mbHighMakeup: 0.5,
   },
 
   jazz: {
@@ -267,6 +310,14 @@ export const GENRE_PRESETS: Record<GenreName, AudioParams> = {
     stereoWidth: 110,
     targetLufs: -14,
     ceiling: -1,
+    // Phase 4a: subtle low-band glue without pumping
+    multibandEnabled: 1,
+    mbLowEnabled: 1,
+    mbLowThreshold: -20,
+    mbLowRatio: 2.5,
+    mbLowAttack: 20,
+    mbLowRelease: 220,
+    mbLowMakeup: 1.0,
   },
 
   podcast: {
@@ -286,6 +337,14 @@ export const GENRE_PRESETS: Record<GenreName, AudioParams> = {
     stereoWidth: 100,
     targetLufs: -16,
     ceiling: -1,
+    // Phase 4a: mid-band leveling for vocal consistency
+    multibandEnabled: 1,
+    mbMidEnabled: 1,
+    mbMidThreshold: -20,
+    mbMidRatio: 3.0,
+    mbMidAttack: 15,
+    mbMidRelease: 180,
+    mbMidMakeup: 2.0,
   },
 
   lofi: {
@@ -324,6 +383,11 @@ export const PLATFORM_PRESETS: Record<PlatformName, PlatformPreset> = {
  * Linearly interpolate between DEFAULT_PARAMS and a genre preset at given intensity (0-100).
  * Numeric fields interpolate. Non-numeric fields (e.g. `satMode` enum) are
  * copied from the preset directly — intensity has no meaning for enums.
+ *
+ * Phase 4a (Task 2): Binary `*Enabled` fields are snapped to the preset's value
+ * for t > 0 and to DEFAULT_PARAMS otherwise — they are never interpolated.
+ * This keeps master-enable and per-band enable flags strictly {0, 1} across
+ * all intensities and prevents partial-engagement surprises for future presets.
  */
 export function applyIntensity(genre: GenreName, intensity: number): AudioParams {
   const t = Math.max(0, Math.min(100, intensity)) / 100;
@@ -335,9 +399,15 @@ export function applyIntensity(genre: GenreName, intensity: number): AudioParams
     const defVal = DEFAULT_PARAMS[key];
     const targetVal = preset[key];
     if (typeof defVal === "number" && typeof targetVal === "number") {
-      // Numeric interpolation
-      (result as unknown as Record<string, ParamValue>)[key] =
-        defVal + t * (targetVal - defVal);
+      if (typeof key === "string" && key.endsWith("Enabled")) {
+        // Binary enable fields: snap rather than interpolate.
+        (result as unknown as Record<string, ParamValue>)[key] =
+          t > 0 ? targetVal : defVal;
+      } else {
+        // Numeric interpolation
+        (result as unknown as Record<string, ParamValue>)[key] =
+          defVal + t * (targetVal - defVal);
+      }
     } else {
       // Non-numeric (enum/string): copy preset's value as-is
       (result as unknown as Record<string, ParamValue>)[key] = targetVal;

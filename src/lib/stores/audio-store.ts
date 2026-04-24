@@ -84,3 +84,10 @@ export const useAudioStore = create<AudioState>((set) => ({
       metering: { ...defaultMetering },
     }),
 }));
+
+if (
+  typeof window !== "undefined" &&
+  process.env.NODE_ENV !== "production"
+) {
+  (window as unknown as { __aurialisAudioStore?: typeof useAudioStore }).__aurialisAudioStore = useAudioStore;
+}

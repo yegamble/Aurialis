@@ -23,23 +23,19 @@ function renderPanel(paramsOverride: Partial<AudioParams> = {}) {
 describe("AdvancedMastering — Multiband section", () => {
   it("renders a Multiband section header", () => {
     renderPanel();
+    // Header + BypassPill both contain 'multiband' now — assert at least one.
     expect(
-      screen.getByRole("button", { name: /multiband/i })
-    ).toBeInTheDocument();
+      screen.getAllByRole("button", { name: /multiband/i }).length
+    ).toBeGreaterThan(0);
   });
 
-  it("master toggle reflects multibandEnabled state and calls onParamChange", () => {
+  it("bypass pill (Phase 4a) reflects multibandEnabled state and calls onParamChange", () => {
     const { onParamChange } = renderPanel();
-    // Expand section (closed by default) — click on the header with "Multiband" text
-    const sectionHeader = screen.getAllByRole("button", { name: /multiband/i })[0];
-    fireEvent.click(sectionHeader);
-    // Find the ToggleButton labeled "Multiband" inside the section
-    const toggle = screen
-      .getAllByRole("button")
-      .find((b) => b.textContent?.trim() === "Multiband" && b.getAttribute("aria-pressed") !== null);
-    expect(toggle).toBeDefined();
-    expect(toggle!.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(toggle!);
+    // Multiband Section header hosts a BypassPill (data-testid=bypass-pill-multiband).
+    // multibandEnabled=0 (default) → pill shows 'Bypassed', aria-pressed=true.
+    const pill = screen.getByTestId("bypass-pill-multiband");
+    expect(pill.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(pill);
     expect(onParamChange).toHaveBeenCalledWith("multibandEnabled", 1);
   });
 

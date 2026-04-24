@@ -14,6 +14,7 @@ import {
 import { WaveformDisplay } from "@/components/visualization/WaveformDisplay";
 import { SpectrumDisplay } from "@/components/visualization/SpectrumDisplay";
 import { LevelMeter } from "@/components/visualization/LevelMeter";
+import { Goniometer } from "@/components/visualization/Goniometer";
 import { SimpleMastering } from "@/components/mastering/SimpleMastering";
 import { AdvancedMastering } from "@/components/mastering/AdvancedMastering";
 import { ABToggle } from "@/components/mastering/ABToggle";
@@ -51,6 +52,18 @@ function formatTime(s: number): string {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+function formatMbGr(db: number): string {
+  if (!Number.isFinite(db) || db === 0) return "0.0";
+  return db.toFixed(1);
+}
+
+function mbGrColorClass(db: number): string {
+  const g = -db;
+  if (g >= 6) return "text-red-400";
+  if (g >= 3) return "text-amber-400";
+  return "";
 }
 
 export default function MasterPage() {
@@ -353,6 +366,32 @@ export default function MasterPage() {
                   ? `+${metering.correlation.toFixed(2)}`
                   : metering.correlation.toFixed(2)}
               </p>
+              <p
+                className="text-[rgba(255,255,255,0.5)] text-xs tabular-nums"
+                data-testid="mb-gr-readout"
+              >
+                {params.multibandEnabled > 0 ? (
+                  <>
+                    MB L/M/H:{" "}
+                    <span className={mbGrColorClass(metering.multibandGR.low)}>
+                      {formatMbGr(metering.multibandGR.low)}
+                    </span>
+                    {" / "}
+                    <span className={mbGrColorClass(metering.multibandGR.mid)}>
+                      {formatMbGr(metering.multibandGR.mid)}
+                    </span>
+                    {" / "}
+                    <span
+                      className={mbGrColorClass(metering.multibandGR.high)}
+                    >
+                      {formatMbGr(metering.multibandGR.high)}
+                    </span>{" "}
+                    dB
+                  </>
+                ) : (
+                  "MB: ---"
+                )}
+              </p>
             </div>
           </div>
 
@@ -429,7 +468,7 @@ export default function MasterPage() {
           </div>
         </main>
 
-        <aside className="w-64 border-l border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(255,255,255,0.02)] p-4 shrink-0 hidden xl:block">
+        <aside className="w-64 border-l border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(255,255,255,0.02)] p-4 shrink-0 hidden xl:block space-y-4">
           <LevelMeter
             leftLevel={peakLevels.left}
             rightLevel={peakLevels.right}
@@ -437,6 +476,10 @@ export default function MasterPage() {
             truePeak={metering.truePeak === -Infinity ? 0 : metering.truePeak}
             dynamicRange={metering.dynamicRange}
             target={params.targetLufs}
+          />
+          <Goniometer
+            left={engine.leftAnalyserNode}
+            right={engine.rightAnalyserNode}
           />
         </aside>
       </div>

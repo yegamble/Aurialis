@@ -31,6 +31,17 @@ export interface MeteringData {
   correlation: number;
   /** Worst-case correlation in the last ~500 ms (for UI peak-hold colouring). */
   correlationPeakMin: number;
+  /**
+   * Per-band multiband compressor gain reduction (dB, ≤ 0). 0 when the band is
+   * disabled or the multiband stage is bypassed. Updated alongside the other
+   * metering fields at the MeteringNode's native rate (~10-20 Hz) — the engine
+   * latches the latest value from MultibandCompressorNode.onGainReduction.
+   */
+  multibandGR: {
+    low: number;
+    mid: number;
+    high: number;
+  };
 }
 
 export interface VisualizationData {

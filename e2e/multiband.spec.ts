@@ -41,7 +41,7 @@ test.describe("Multiband UI (P2)", () => {
     await showAdvanced(page);
   });
 
-  test("TS-001: Multiband section is visible and master toggle works", async ({
+  test("TS-001: Multiband section is visible and BypassPill toggles it (Phase 4a)", async ({
     page,
   }) => {
     const sectionButton = page.getByRole("button", {
@@ -49,23 +49,20 @@ test.describe("Multiband UI (P2)", () => {
       exact: true,
     });
     await expect(sectionButton).toBeVisible();
-    await ensureSectionExpanded(page, "Multiband");
 
-    // The master toggle is a ToggleButton also labeled "Multiband", with
-    // aria-pressed. Filter to the one that has aria-pressed set.
-    const masterToggle = page
-      .getByRole("button", { name: "Multiband", exact: true })
-      .filter({ has: page.locator("[aria-pressed]") });
-
-    // Fallback: find by aria-pressed directly
-    const toggle = page.locator('button[aria-pressed]', {
-      hasText: "Multiband",
-    });
-    await expect(toggle).toHaveAttribute("aria-pressed", "false");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-pressed", "true");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    // Phase 4a Task 5: master toggle is now a BypassPill in the Section header
+    // (data-testid=bypass-pill-multiband). aria-pressed=true means BYPASSED.
+    // Default genre (pop) at intensity=50 engages MB → pill starts active=false
+    // (not bypassed). Click once to bypass, again to restore.
+    const pill = page.getByTestId("bypass-pill-multiband");
+    await expect(pill).toBeVisible();
+    const initial = await pill.getAttribute("aria-pressed");
+    await pill.click();
+    const afterFirst = await pill.getAttribute("aria-pressed");
+    expect(afterFirst).not.toBe(initial);
+    await pill.click();
+    const afterSecond = await pill.getAttribute("aria-pressed");
+    expect(afterSecond).toBe(initial);
   });
 
   test("TS-001b: All three band rows are visible when section is expanded", async ({
@@ -78,12 +75,14 @@ test.describe("Multiband UI (P2)", () => {
       await expect(bandHeader).toBeVisible();
     }
 
-    // Three ON/OFF buttons (one per band), each aria-pressed=false by default
+    // Band ON/OFF buttons exist — note that Phase 4a genre presets may start
+    // some bands enabled (e.g. pop.mbLowEnabled=1), so we only assert presence
+    // here, not default state.
     for (const label of ["Low", "Mid", "High"]) {
       const enableBtn = page.getByRole("button", {
         name: `${label} band enable`,
       });
-      await expect(enableBtn).toHaveAttribute("aria-pressed", "false");
+      await expect(enableBtn).toBeVisible();
     }
   });
 
@@ -157,21 +156,14 @@ test.describe("Multiband UI (P2)", () => {
     expect(afterValue).toBeLessThanOrEqual(400);
   });
 
-  test("TS-005: Defaults keep multiband off (no regression risk)", async ({
+  test("TS-005: BypassPill reflects genre MB engagement (Phase 4a: pop engages MB)", async ({
     page,
   }) => {
-    await ensureSectionExpanded(page, "Multiband");
-
-    const masterToggle = page.locator('button[aria-pressed]', {
-      hasText: "Multiband",
-    });
-    await expect(masterToggle).toHaveAttribute("aria-pressed", "false");
-
-    for (const label of ["Low", "Mid", "High"]) {
-      const enableBtn = page.getByRole("button", {
-        name: `${label} band enable`,
-      });
-      await expect(enableBtn).toHaveAttribute("aria-pressed", "false");
-    }
+    // Default: genre=pop, intensity=50. Post-Phase-4a, pop engages multiband
+    // (mbLowEnabled=1), so the Multiband BypassPill starts inactive (NOT
+    // bypassed). This replaces the pre-Phase-4a assertion that defaults kept
+    // multiband off.
+    const pill = page.getByTestId("bypass-pill-multiband");
+    await expect(pill).toHaveAttribute("aria-pressed", "false");
   });
 });

@@ -35,14 +35,12 @@ describe("Multiband AudioParams defaults", () => {
     }
   );
 
-  it("every genre preset inherits multiband defaults (all disabled)", () => {
+  // Phase 4a (2026-04-23): genre presets now set multiband fields per the
+  // per-genre inventory. See `presets-multiband-genre.test.ts` for the
+  // authoritative mapping. Legacy invariants that still hold for all genres:
+  it("every genre preset keeps MB Mode='stereo' and MsBalance=0 (Phase 4a leaves M/S for P5b)", () => {
     for (const [genre, params] of Object.entries(GENRE_PRESETS)) {
-      expect(params.multibandEnabled, `${genre}.multibandEnabled`).toBe(0);
       for (const prefix of BAND_PREFIXES) {
-        expect(
-          params[`${prefix}Enabled` as const],
-          `${genre}.${prefix}Enabled`
-        ).toBe(0);
         expect(
           params[`${prefix}Mode` as const],
           `${genre}.${prefix}Mode`
@@ -57,9 +55,9 @@ describe("Multiband AudioParams defaults", () => {
     }
   });
 
-  it("applyIntensity preserves multiband defaults at any intensity", () => {
+  it("jazz preserves multiband defaults at any intensity (MB preserves dynamics)", () => {
     for (const intensity of [0, 25, 50, 75, 100]) {
-      const result = applyIntensity("pop", intensity);
+      const result = applyIntensity("jazz", intensity);
       expect(result.multibandEnabled).toBe(0);
       for (const prefix of BAND_PREFIXES) {
         expect(result[`${prefix}Enabled` as const]).toBe(0);

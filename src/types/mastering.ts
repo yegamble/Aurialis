@@ -32,6 +32,22 @@ export type EqBandMode = "stereo" | "ms";
 
 export interface AudioParams {
   inputGain: number;
+  /**
+   * Per-stage master-enable flags (Phase 4a Task 4). 1 = stage active, 0 =
+   * stage in true bypass (bit-exact passthrough). These supplement — not
+   * replace — the global A/B toggle (`engine.setBypass`), which continues to
+   * rewire the entire chain boundary. Per-stage state persists across global
+   * A/B toggles because the two bypass paths are independent.
+   *
+   * Note: no persistence layer currently serializes `AudioParams` (verified
+   * 2026-04-23 via grep). If one is ever added, missing `*Enabled` fields
+   * must be defaulted to 1 at load time.
+   */
+  compressorEnabled: number;
+  saturationEnabled: number;
+  stereoWidthEnabled: number;
+  limiterEnabled: number;
+
   threshold: number;
   ratio: number;
   attack: number;

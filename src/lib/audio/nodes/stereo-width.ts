@@ -1,10 +1,17 @@
 /**
- * StereoWidthNode — Mid/Side stereo width using native Web Audio nodes
- * Uses ChannelSplitter -> M/S gain matrix -> ChannelMerger
- * Width 0%=mono, 100%=unchanged, 200%=double-wide
+ * StereoWidthNode — Mid/Side stereo width using native Web Audio nodes.
+ * Uses ChannelSplitter -> M/S gain matrix -> ChannelMerger. Width 0%=mono,
+ * 100%=unchanged, 200%=double-wide.
+ *
+ * Phase 4a (Task 4): real bypass rewires the native graph — on bypass we
+ * disconnect `_input → _splitter` and connect `_input → _output` directly,
+ * giving bit-exact passthrough (the click-avoidance ramp on `_output.gain`
+ * means the first ~5 ms after a toggle is not bit-exact; parity tests skip
+ * this window).
  */
 
 export class StereoWidthNode {
+  private readonly _ctx: AudioContext;
   private readonly _input: GainNode;
   private readonly _output: GainNode;
   private readonly _splitter: ChannelSplitterNode;
@@ -23,6 +30,7 @@ export class StereoWidthNode {
   private _bypassed = false;
 
   constructor(ctx: AudioContext) {
+    this._ctx = ctx;
     this._input = ctx.createGain();
     this._output = ctx.createGain();
     this._splitter = ctx.createChannelSplitter(2);
@@ -105,8 +113,64 @@ export class StereoWidthNode {
     this._sideGainR.gain.value = -0.5 * scale;
   }
 
+  /**
+   * Route `_input` directly to `_output` (bypass) or through the M/S graph
+   * (active). Ramps `_output.gain` for ~5 ms to avoid clicks on toggle.
+   * Calls are idempotent — toggling to the current state is a no-op.
+   *
+   * NOTE (Phase 4a): on bypass we only disconnect `_input → _splitter`. The
+   * splitter → M/S gain matrix → merger → _output subtree intentionally
+   * stays graph-resident. With no input it produces silence, so audio
+   * correctness is preserved; leaving the merger wired to _output avoids a
+   * second rewire point when restoring, which keeps the click-avoidance
+   * ramp simple. Do not "fix" this by disconnecting the merger on bypass —
+   * it would double the graph edits per toggle and risk audible clicks.
+   */
   setBypass(bypass: boolean): void {
+    if (this._bypassed === bypass) return;
     this._bypassed = bypass;
+    const now = this._ctx.currentTime;
+    const rampSec = 0.005;
+    const g = this._output.gain;
+
+    // Ramp down first to hide the disconnect/reconnect transient.
+    // Scheduled-value APIs are guarded for test environments where the
+    // AudioParam mock lacks them; on a real AudioContext they always exist.
+    if (typeof g.cancelScheduledValues === "function") {
+      g.cancelScheduledValues(now);
+    }
+    if (typeof g.setTargetAtTime === "function") {
+      g.setTargetAtTime(0, now, rampSec / 3);
+    }
+
+    if (bypass) {
+      try {
+        this._input.disconnect(this._splitter);
+      } catch {
+        // Already disconnected
+      }
+      try {
+        this._input.connect(this._output);
+      } catch {
+        // Already connected
+      }
+    } else {
+      try {
+        this._input.disconnect(this._output);
+      } catch {
+        // Already disconnected
+      }
+      try {
+        this._input.connect(this._splitter);
+      } catch {
+        // Already connected
+      }
+    }
+
+    // Ramp back up
+    if (typeof g.setTargetAtTime === "function") {
+      g.setTargetAtTime(1, now + rampSec, rampSec / 3);
+    }
   }
 
   dispose(): void {

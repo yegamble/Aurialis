@@ -69,13 +69,34 @@ export async function renderOffline(
   }
   const sr = rendered.sampleRate;
 
+  applyProcessingPipeline(channels, params, sr);
+
+  return rendered;
+}
+
+/**
+ * Run the full DSP chain inline on the given channels, in the same order as
+ * the real-time chain (`src/lib/audio/chain.ts`). Every stage respects its
+ * `*Enabled` master flag — when 0, the stage is skipped (bit-exact
+ * passthrough for that stage's slice of the pipeline).
+ *
+ * Extracted from `renderOffline` for direct unit testing of the 14-combo
+ * bypass parity matrix (Phase 4a Task 4) without needing OfflineAudioContext.
+ */
+export function applyProcessingPipeline(
+  channels: Float32Array[],
+  params: AudioParams,
+  sr: number,
+): void {
   // 0. Parametric EQ (skipped when parametricEqEnabled === 0 for bit-exact bypass)
   if (params.parametricEqEnabled > 0) {
     applyParametricEq(channels, params, sr);
   }
 
   // 1. Compressor (mirrors compressor-processor.js algorithm)
-  applyCompressor(channels, params, sr);
+  if (params.compressorEnabled > 0) {
+    applyCompressor(channels, params, sr);
+  }
 
   // 1b. Multiband compressor (skipped when multibandEnabled === 0 for
   // bit-equivalent output vs. pre-P2 renders)
@@ -84,7 +105,7 @@ export async function renderOffline(
   }
 
   // 2. Saturation
-  if (params.satDrive > 0) {
+  if (params.saturationEnabled > 0 && params.satDrive > 0) {
     const driveFactor = drivePctToFactor(params.satDrive);
     for (let c = 0; c < channels.length; c++) {
       const processed = applySaturation(channels[c], driveFactor);
@@ -93,7 +114,7 @@ export async function renderOffline(
   }
 
   // 3. Stereo Width (M/S processing, only for stereo)
-  if (channels.length >= 2) {
+  if (params.stereoWidthEnabled > 0 && channels.length >= 2) {
     const needsWidth = params.stereoWidth !== 100 || params.midGain !== 0 || params.sideGain !== 0;
     if (needsWidth) {
       applyStereoWidth(channels[0], channels[1], params);
@@ -101,19 +122,18 @@ export async function renderOffline(
   }
 
   // 4. Limiter
-  const ceilingLin = dbToLin(params.ceiling);
-  // Convert limiterRelease from ms to appropriate coefficients
-  const limiterReleaseSamples = Math.round((params.limiterRelease / 1000) * sr);
-  const releaseCoeff = limiterReleaseSamples > 0
-    ? Math.exp(-1 / limiterReleaseSamples)
-    : 0.9999;
-  const lookaheadSamples = Math.round(0.0015 * sr); // ~1.5ms lookahead
-  for (let c = 0; c < channels.length; c++) {
-    const limited = processLimiter(channels[c], ceilingLin, lookaheadSamples, 0.001, releaseCoeff);
-    channels[c].set(limited);
+  if (params.limiterEnabled > 0) {
+    const ceilingLin = dbToLin(params.ceiling);
+    const limiterReleaseSamples = Math.round((params.limiterRelease / 1000) * sr);
+    const releaseCoeff = limiterReleaseSamples > 0
+      ? Math.exp(-1 / limiterReleaseSamples)
+      : 0.9999;
+    const lookaheadSamples = Math.round(0.0015 * sr); // ~1.5ms lookahead
+    for (let c = 0; c < channels.length; c++) {
+      const limited = processLimiter(channels[c], ceilingLin, lookaheadSamples, 0.001, releaseCoeff);
+      channels[c].set(limited);
+    }
   }
-
-  return rendered;
 }
 
 /**

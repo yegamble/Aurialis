@@ -31,22 +31,13 @@ async function uploadStems(page: Page, files: string[]) {
 
 // TS-001: Multi-File Stem Upload
 test.describe("TS-001: Multi-File Stem Upload", () => {
-  test("navigate to /mix from home page", async ({ page }) => {
+  test("navigate to /mix from home page via multi-file upload", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
-    const mixLink = page.getByRole("link", { name: /mix stems/i });
-    await expect(mixLink).toBeVisible();
 
-    // Dev server Fast Refresh can interrupt client navigation — retry once
-    await mixLink.click();
-    try {
-      await page.waitForURL("**/mix", { timeout: 5000 });
-    } catch {
-      // Fast Refresh may have reloaded to "/" — retry
-      await page.waitForLoadState("networkidle");
-      await page.getByRole("link", { name: /mix stems/i }).click();
-      await page.waitForURL("**/mix", { timeout: 10000 });
-    }
+    // Unified UploadScreen routes multi-file uploads to /mix.
+    await page.locator('input[type="file"]').setInputFiles(STEM_FILES);
+    await page.waitForURL("**/mix", { timeout: 30000 });
     await expect(page).toHaveURL(/\/mix/);
   });
 

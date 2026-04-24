@@ -8,6 +8,7 @@ const config = [
       ".next/**",
       "public/worklets/**",
       "coverage/**",
+      ".worktrees/**",
     ],
   },
 ];

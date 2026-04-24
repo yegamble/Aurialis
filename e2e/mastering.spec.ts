@@ -254,14 +254,18 @@ const EXPORT_FORMAT_EXPECTATIONS = [
 
 const SECTION_EXPECTATIONS = [
   { title: "Input", childRole: "slider", childName: "Input Gain", startsOpen: true },
-  { title: "Dynamics", childRole: "slider", childName: "Threshold", startsOpen: true },
+  // Phase 4a split the former "Dynamics" Section into "Compressor" (sliders) +
+  // "Dynamics Toggles" (toggle buttons). Threshold lives in Compressor.
+  { title: "Compressor", childRole: "slider", childName: "Threshold", startsOpen: true },
   { title: "Tone", childRole: "button", childName: "Add Air", startsOpen: true },
   // Parametric EQ section expands to 5 band strips; Band 1 opens by default
   // exposing its Frequency slider as the first slider-typed child.
   { title: "Parametric EQ", childRole: "slider", childName: "Frequency", startsOpen: true },
   { title: "Saturation", childRole: "slider", childName: "Drive", startsOpen: false },
   { title: "Stereo", childRole: "slider", childName: "Width", startsOpen: false },
-  { title: "Output", childRole: "slider", childName: "Target LUFS", startsOpen: true },
+  // Phase 4a split the former "Output" Section into "Limiter" + "Output Target".
+  // Target LUFS lives in Output Target.
+  { title: "Output Target", childRole: "slider", childName: "Target LUFS", startsOpen: true },
 ] as const;
 
 test.describe("Upload flow", () => {
@@ -271,7 +275,7 @@ test.describe("Upload flow", () => {
     const chooserPromise = page.waitForEvent("filechooser");
     await page.getByRole("button", { name: /upload audio file/i }).click();
     const chooser = await chooserPromise;
-    expect(chooser.isMultiple()).toBe(false);
+    expect(chooser.isMultiple()).toBe(true);
 
     await expect(page.getByText("Aurialis")).toBeVisible();
   });
@@ -441,7 +445,7 @@ test.describe("Advanced mode buttons", () => {
   test("P1-TS-001: Auto Release toggle appears and toggles state", async ({
     page,
   }) => {
-    await ensureSectionExpanded(page, "Dynamics");
+    await ensureSectionExpanded(page, "Dynamics Toggles");
     const toggle = page.getByRole("button", { name: "Auto Release", exact: true });
     await expect(toggle).toBeVisible();
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
@@ -491,8 +495,8 @@ test.describe("Advanced mode buttons", () => {
   test("TS-001: Sidechain HPF slider is present in Advanced mode and updates value", async ({
     page,
   }) => {
-    // Ensure Dynamics section is expanded (it is by default, but be defensive)
-    await ensureSectionExpanded(page, "Dynamics");
+    // Sidechain HPF is inside the Compressor section (Phase 4a split).
+    await ensureSectionExpanded(page, "Compressor");
 
     const slider = page.getByRole("slider", {
       name: "Sidechain HPF",
@@ -500,8 +504,9 @@ test.describe("Advanced mode buttons", () => {
     });
     await expect(slider).toBeVisible();
 
-    // Default value is 100 Hz (from DEFAULT_PARAMS.sidechainHpfHz)
-    await expectSliderApprox(page, "Sidechain HPF", 100);
+    // Master page applies applyIntensity("pop", 50) on mount, which interpolates
+    // sidechainHpfHz to 110 (DEFAULT_PARAMS is 100 but pop@100 is 120 → midpoint 110).
+    await expectSliderApprox(page, "Sidechain HPF", 110);
 
     // Drag/set to 150 Hz via native input.value + change event
     await slider.fill("150");
@@ -702,7 +707,9 @@ test.describe("Parametric EQ (P3)", () => {
   test("TS-005: section-level Bypass toggle flips EQ master enable", async ({
     page,
   }) => {
-    const bypass = page.getByTestId("eq-master-bypass").first();
+    // Phase 4a renamed the section-level bypass from `eq-master-bypass` to
+    // `bypass-pill-eq` (unified BypassPill pattern across all stages).
+    const bypass = page.getByTestId("bypass-pill-eq").first();
     // Default: parametricEqEnabled=1 → aria-pressed="false" (label "Bypass").
     await expect(bypass).toHaveAttribute("aria-pressed", "false");
     await bypass.click();

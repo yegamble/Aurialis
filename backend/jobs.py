@@ -35,10 +35,17 @@ class Job:
     input_path: Optional[str] = None
     output_dir: Optional[str] = None
     created_at: float = field(default_factory=time.time)
+    # Job type discriminator: "separation" (default) or "deep_analysis".
+    job_type: str = "separation"
+    # Progressive results for deep_analysis jobs. Populated phase-by-phase:
+    # {"sections": [...]} after section detection (~10 s),
+    # {"sections": [...], "stems": [...]} after stem analysis,
+    # {"sections": [...], "stems": [...], "script": {...}} after script generation.
+    partial_result: dict = field(default_factory=dict)
 
 
 def _load_jobs() -> dict[str, Job]:
-    """Load jobs from disk."""
+    """Load jobs from disk. Tolerates jobs serialized before job_type/partial_result existed."""
     if not JOBS_FILE.exists():
         return {}
     try:
@@ -46,6 +53,9 @@ def _load_jobs() -> dict[str, Job]:
         jobs = {}
         for jid, jdata in data.items():
             stems = [StemInfo(**s) for s in jdata.pop("stems", [])]
+            # Defaults for fields added after initial deploy
+            jdata.setdefault("job_type", "separation")
+            jdata.setdefault("partial_result", {})
             jobs[jid] = Job(**jdata, stems=stems)
         return jobs
     except (json.JSONDecodeError, TypeError):

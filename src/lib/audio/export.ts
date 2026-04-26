@@ -5,6 +5,7 @@
 import type { AudioParams } from "@/lib/stores/audio-store";
 import { renderOffline } from "./renderer";
 import { encodeWav, type BitDepth, type DitherType } from "./wav-encoder";
+import type { MasteringScript } from "@/types/deep-mastering";
 
 export interface ExportOptions {
   /** Target sample rate in Hz (e.g. 44100, 48000, 96000) */
@@ -15,6 +16,12 @@ export interface ExportOptions {
   dither?: DitherType;
   /** Suggested filename for the download (without extension) */
   filename?: string;
+  /**
+   * Active deep mastering script. When provided, the renderer applies its
+   * envelope-driven moves per 128-sample block so the WAV matches real-time
+   * playback bit-for-bit at section boundaries.
+   */
+  script?: MasteringScript | null;
 }
 
 /**
@@ -31,7 +38,12 @@ export async function exportWav(
   options: ExportOptions
 ): Promise<void> {
   // 1. Render offline
-  const rendered = await renderOffline(sourceBuffer, params, options.sampleRate);
+  const rendered = await renderOffline(
+    sourceBuffer,
+    params,
+    options.sampleRate,
+    options.script ?? null,
+  );
 
   // 2. Encode to WAV
   const wavData = encodeWav(rendered, options.bitDepth, options.dither);

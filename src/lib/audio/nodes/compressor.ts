@@ -75,6 +75,21 @@ export class CompressorNode {
     this._node?.port.postMessage({ param: "enabled", value: !bypass });
   }
 
+  /**
+   * Install a deep-mode envelope on a compressor parameter (threshold,
+   * makeup, ratio). Pass an empty array to clear and revert to the last
+   * static value. Sample-accurate via per-block evaluation + one-pole
+   * smoother in the worklet (per Spike S2).
+   *
+   * Currently scheduled params: 'threshold' | 'makeup' | 'ratio'.
+   */
+  setEnvelope(
+    param: "threshold" | "makeup" | "ratio",
+    points: ReadonlyArray<readonly [number, number]>
+  ): void {
+    this._node?.port.postMessage({ param, envelope: points });
+  }
+
   dispose(): void {
     this._node?.disconnect();
     this._output.disconnect();

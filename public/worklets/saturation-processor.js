@@ -11,6 +11,112 @@
  * Worklet-local coefficients IN SYNC WITH src/lib/audio/dsp/oversampling.ts
  * HALFBAND_TAPS — verified by halfband-parity.test.ts.
  */
+
+// @@INLINE_BEGIN: envelope-scheduler
+ 
+/**
+ * EnvelopeScheduler — sample-rate-independent envelope storage + lookup
+ * for AudioWorklet processors.
+ *
+ * Per Spike S2 (2026-04-25): per-block evaluation, no per-sample fallback.
+ * Each worklet reads getValueAt(param, blockStartTime, fallback) once per
+ * 128-sample block, then a one-pole IIR smoother is applied per sample to
+ * mitigate zipper noise on parameter ramps.
+ *
+ * SOURCE OF TRUTH for both:
+ *   - public/worklets/*-processor.js (inlined at build/dev via
+ *     scripts/inline-worklet-helpers.mjs)
+ *   - src/lib/audio/deep/envelope-scheduler-node.ts (Node test re-export)
+ *
+ * Pure ES5-compatible JS — no imports, no destructuring of unknowns,
+ * no class fields. Runs in AudioWorkletGlobalScope and Node.
+ */
+
+class EnvelopeScheduler {
+  constructor() {
+    /** Map<paramName, Array<[time, value]>> */
+    this._envelopes = Object.create(null);
+    /** Map<paramName, smootherState{ value, coeff }> */
+    this._smoothers = Object.create(null);
+  }
+
+  /** Install an envelope for `param`. Returns true on success, false if rejected. */
+  setEnvelope(param, points) {
+    if (!Array.isArray(points) || points.length < 2) return false;
+    // Defensive copy + validate monotonic time
+    const copy = new Array(points.length);
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      if (!Array.isArray(p) || p.length !== 2) return false;
+      copy[i] = [Number(p[0]), Number(p[1])];
+      if (i > 0 && copy[i][0] <= copy[i - 1][0]) return false;
+    }
+    this._envelopes[param] = copy;
+    return true;
+  }
+
+  /** Remove the envelope for `param`. */
+  clearEnvelope(param) {
+    delete this._envelopes[param];
+    delete this._smoothers[param];
+  }
+
+  /** True if `param` has an active envelope. */
+  hasEnvelope(param) {
+    return Object.prototype.hasOwnProperty.call(this._envelopes, param);
+  }
+
+  /**
+   * Look up the envelope value at `time`. Returns `fallback` if no envelope
+   * is set. Linear interpolation between adjacent points; clamps to first /
+   * last value outside the envelope range.
+   */
+  getValueAt(param, time, fallback) {
+    const env = this._envelopes[param];
+    if (!env) return fallback;
+    if (time <= env[0][0]) return env[0][1];
+    const last = env[env.length - 1];
+    if (time >= last[0]) return last[1];
+    // Linear scan — envelopes are bounded (≤100 pts/sec, single Move) so
+    // a binary search would be premature. Most worklets see <50 points total.
+    for (let i = 1; i < env.length; i++) {
+      if (time < env[i][0]) {
+        const a = env[i - 1];
+        const b = env[i];
+        const t = (time - a[0]) / (b[0] - a[0]);
+        return a[1] + t * (b[1] - a[1]);
+      }
+    }
+    return last[1];
+  }
+
+  /** One-pole smoother coefficient for time-constant tau (seconds) at sr. */
+  smootherCoefficient(tauSec, sampleRate) {
+    if (tauSec <= 0) return 1;
+    return 1 - Math.exp(-1 / (tauSec * sampleRate));
+  }
+
+  /**
+   * Smooth an envelope target into the param's smoother state and return the
+   * smoothed value. First call seeds the smoother to `target` (no transient).
+   */
+  smoothStep(param, target, coeff) {
+    let st = this._smoothers[param];
+    if (!st) {
+      st = { value: target };
+      this._smoothers[param] = st;
+      return target;
+    }
+    st.value = coeff * target + (1 - coeff) * st.value;
+    return st.value;
+  }
+}
+
+// Make available in both AudioWorkletGlobalScope (where there's no module
+// system) and in Node (where the test wrapper assigns globalThis).
+// In AudioWorkletGlobalScope `globalThis` is the global object.
+globalThis.EnvelopeScheduler = EnvelopeScheduler;
+// @@INLINE_END: envelope-scheduler
 const HALFBAND_TAPS = new Float32Array([
   -0.00003236808784602273,
   0,
@@ -210,18 +316,53 @@ class SaturationProcessor extends AudioWorkletProcessor {
     this._xfmrMidCoeffs = peakingCoeffsInline(XFMR_MID_FREQ_HZ, XFMR_MID_GAIN_DB, XFMR_MID_Q, sampleRate);
     this._tubeDcCoeffs = highPassCoeffsInline(TUBE_DC_HPF_HZ, Math.SQRT1_2, sampleRate);
 
+    // Deep-mode envelope scheduler — see src/worklets/envelope-scheduler.js.
+    // ~5 ms one-pole smoother per S2 to mitigate zipper noise on ramps.
+    this._scheduler = (typeof EnvelopeScheduler !== 'undefined')
+      ? new EnvelopeScheduler()
+      : null;
+    this._smootherCoeff = this._scheduler
+      ? this._scheduler.smootherCoefficient(0.005, sampleRate)
+      : 1;
+
     this.port.onmessage = (e) => {
-      const { param, value } = e.data;
+      const { param, value, envelope } = e.data;
+      if (envelope !== undefined) {
+        if (this._scheduler) {
+          if (Array.isArray(envelope) && envelope.length === 0) {
+            this._scheduler.clearEnvelope(param);
+          } else {
+            this._scheduler.setEnvelope(param, envelope);
+          }
+        }
+        return;
+      }
+      if (this._scheduler) this._scheduler.clearEnvelope(param);
       if (param === 'drive') this._drive = value;
       else if (param === 'satMode') this._satMode = value;
       else if (param === 'enabled') this._enabled = value;
     };
   }
 
+  /**
+   * Read envelope-scheduled params at block start, smoothed per-block.
+   * `currentTime` is dereferenced lazily so Node test sandboxes keep passing.
+   */
+  _applyEnvelopes() {
+    if (!this._scheduler) return;
+    if (this._scheduler.hasEnvelope('drive')) {
+      const target = this._scheduler.getValueAt('drive', currentTime, this._drive);
+      this._drive = this._scheduler.smoothStep('drive', target, this._smootherCoeff);
+    }
+  }
+
   process(inputs, outputs) {
     const input = inputs[0];
     const output = outputs[0];
     if (!input || !input[0]) return true;
+
+    // Per Spike S2: read envelope values once per block; smoother does the rest.
+    this._applyEnvelopes();
 
     const numChannels = Math.min(input.length, output.length);
     const blockSize = input[0].length;

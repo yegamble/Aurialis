@@ -17,6 +17,7 @@ import { LevelMeter } from "@/components/visualization/LevelMeter";
 import { Goniometer } from "@/components/visualization/Goniometer";
 import { SimpleMastering } from "@/components/mastering/SimpleMastering";
 import { AdvancedMastering } from "@/components/mastering/AdvancedMastering";
+import { DeepMastering } from "@/components/mastering/DeepMastering";
 import { ABToggle } from "@/components/mastering/ABToggle";
 import { ExportPanel } from "@/components/export/ExportPanel";
 import { useAudioStore } from "@/lib/stores/audio-store";
@@ -251,7 +252,7 @@ export default function MasterPage() {
           </div>
         </div>
         <div className="flex bg-[rgba(255,255,255,0.06)] rounded-lg p-0.5">
-          {(["simple", "advanced"] as const).map((m) => (
+          {(["simple", "advanced", "deep"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -292,7 +293,7 @@ export default function MasterPage() {
                     onAutoMaster={handleAutoMaster}
                   />
                 </motion.div>
-              ) : (
+              ) : mode === "advanced" ? (
                 <motion.div
                   key="advanced"
                   initial={{ opacity: 0, x: -10 }}
@@ -310,6 +311,16 @@ export default function MasterPage() {
                     outputPreset={outputPreset}
                     onOutputPresetChange={handleOutputPresetChange}
                   />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="deep"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <DeepMastering audioFile={file} />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -441,7 +452,7 @@ export default function MasterPage() {
             <details className="group">
               <summary className="cursor-pointer text-[#0a84ff] text-sm py-2 list-none flex items-center gap-1">
                 <span>
-                  Show {mode === "simple" ? "Simple" : "Advanced"} Controls
+                  Show {mode === "simple" ? "Simple" : mode === "advanced" ? "Advanced" : "Deep"} Controls
                 </span>
               </summary>
               <div className="pt-2">
@@ -455,7 +466,7 @@ export default function MasterPage() {
                     onToggle={handleToggle}
                     onAutoMaster={handleAutoMaster}
                   />
-                ) : (
+                ) : mode === "advanced" ? (
                   <AdvancedMastering
                     params={{ ...params }}
                     onParamChange={handleAdvancedParamChange}
@@ -466,6 +477,8 @@ export default function MasterPage() {
                     outputPreset={outputPreset}
                     onOutputPresetChange={handleOutputPresetChange}
                   />
+                ) : (
+                  <DeepMastering audioFile={file} />
                 )}
               </div>
             </details>

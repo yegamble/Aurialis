@@ -49,4 +49,40 @@ describe("SaturationNode", () => {
     sat.dispose();
     expect(sat["_node"]!.disconnect).toHaveBeenCalled();
   });
+
+  describe("setEnvelope (T7a — deep-mode envelopes)", () => {
+    it("posts an envelope message on the drive param", async () => {
+      const sat = new SaturationNode(ctx);
+      await sat.init();
+      const env: Array<readonly [number, number]> = [
+        [0, 0],
+        [4, 30],
+      ];
+      sat.setEnvelope("drive", env);
+      expect(sat["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "drive",
+        envelope: env,
+      });
+    });
+
+    it("clears the envelope when given an empty array", async () => {
+      const sat = new SaturationNode(ctx);
+      await sat.init();
+      sat.setEnvelope("drive", []);
+      expect(sat["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "drive",
+        envelope: [],
+      });
+    });
+
+    it("preserves the existing static-value contract (regression)", async () => {
+      const sat = new SaturationNode(ctx);
+      await sat.init();
+      sat.setDrive(40);
+      expect(sat["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "drive",
+        value: 40,
+      });
+    });
+  });
 });

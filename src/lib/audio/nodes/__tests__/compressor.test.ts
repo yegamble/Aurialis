@@ -124,4 +124,56 @@ describe("CompressorNode", () => {
     comp.dispose();
     expect(comp["_node"]!.disconnect).toHaveBeenCalled();
   });
+
+  describe("setEnvelope (T6 — deep-mode envelopes)", () => {
+    it("posts an envelope message on the threshold param", async () => {
+      const comp = new CompressorNode(ctx);
+      await comp.init();
+      const env: Array<readonly [number, number]> = [
+        [0, -24],
+        [10, -18],
+      ];
+      comp.setEnvelope("threshold", env);
+      expect(comp["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "threshold",
+        envelope: env,
+      });
+    });
+
+    it("posts an envelope message on the makeup param", async () => {
+      const comp = new CompressorNode(ctx);
+      await comp.init();
+      comp.setEnvelope("makeup", [
+        [0, 0],
+        [5, 2],
+      ]);
+      expect(comp["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "makeup",
+        envelope: [
+          [0, 0],
+          [5, 2],
+        ],
+      });
+    });
+
+    it("clears the envelope when given an empty array", async () => {
+      const comp = new CompressorNode(ctx);
+      await comp.init();
+      comp.setEnvelope("threshold", []);
+      expect(comp["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "threshold",
+        envelope: [],
+      });
+    });
+
+    it("preserves the existing static-value contract (regression)", async () => {
+      const comp = new CompressorNode(ctx);
+      await comp.init();
+      comp.setThreshold(-12);
+      expect(comp["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "threshold",
+        value: -12,
+      });
+    });
+  });
 });

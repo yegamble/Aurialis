@@ -138,6 +138,20 @@ export class MultibandCompressorNode {
     });
   }
 
+  /**
+   * Install a deep-mode envelope on a per-band parameter (threshold or makeup).
+   * Pass an empty array to clear and revert to the last static value.
+   * Per-block evaluation + one-pole smoother in the worklet (Spike S2).
+   */
+  setBandEnvelope(
+    band: BandName,
+    param: "threshold" | "makeup",
+    points: ReadonlyArray<readonly [number, number]>
+  ): void {
+    const wireParam = `mb${capitalize(band)}${param === "threshold" ? "Threshold" : "Makeup"}`;
+    this._node?.port.postMessage({ param: wireParam, envelope: points });
+  }
+
   dispose(): void {
     this._node?.disconnect();
     this._output.disconnect();

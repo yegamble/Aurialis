@@ -3,6 +3,8 @@ import { loadAudioFile } from "./loader";
 import { ProcessingChain } from "./chain";
 import { AudioBypass } from "./bypass";
 import type { AudioParams } from "@/lib/stores/audio-store";
+import type { MasteringScript, Move } from "@/types/deep-mastering";
+import { applyMove, applyScript, clearScript } from "./deep/script-engine";
 
 type EventCallback = (data?: unknown) => void;
 
@@ -26,6 +28,13 @@ export class AudioEngine {
     mid: 0,
     high: 0,
   };
+
+  /**
+   * Active deep mastering script. When set + `_scriptActive`, every play /
+   * seek emits envelopes into the chain; pause / stop clears them.
+   */
+  private _script: MasteringScript | null = null;
+  private _scriptActive = true;
 
   private listeners = new Map<AudioEngineEventType, Set<EventCallback>>();
   private rafId: number | null = null;
@@ -207,6 +216,7 @@ export class AudioEngine {
     this.sourceNode.start(0, this._startOffset);
     this._isPlaying = true;
 
+    this._emitScriptOnPlay();
     this.startRaf();
     this.emit("statechange", { isPlaying: true });
   }
@@ -218,6 +228,7 @@ export class AudioEngine {
     this.destroySource();
     this._isPlaying = false;
 
+    this._clearScriptEnvelopes();
     this.stopRaf();
     this.emit("statechange", { isPlaying: false });
   }
@@ -229,6 +240,7 @@ export class AudioEngine {
     this._isPlaying = false;
     this._startOffset = 0;
 
+    this._clearScriptEnvelopes();
     this.stopRaf();
     this.emit("statechange", { isPlaying: false });
     this.emit("timeupdate", 0);
@@ -368,5 +380,65 @@ export class AudioEngine {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
+  }
+
+  // -------- Deep-mode script wiring (T8) --------
+
+  /**
+   * Install an active mastering script (or null to detach). When playing,
+   * envelopes are re-emitted immediately. When paused, envelopes will be
+   * emitted on the next play.
+   */
+  setScript(script: MasteringScript | null): void {
+    // Clear envelopes for the previous script's params before swapping —
+    // otherwise stale envelopes outlive the script swap on params that the
+    // new script doesn't touch.
+    if (this._script && this.chain) {
+      clearScript(this.chain, this._script);
+    }
+    this._script = script;
+    this._emitScriptOnPlay();
+  }
+
+  /**
+   * A/B toggle: when false, all envelopes are cleared so worklets revert to
+   * static values. When toggled back true during playback, envelopes are
+   * re-emitted so the swap is gapless.
+   */
+  setScriptActive(active: boolean): void {
+    if (this._scriptActive === active) return;
+    this._scriptActive = active;
+    if (this._isPlaying) {
+      if (active) this._emitScriptOnPlay();
+      else this._clearScriptEnvelopes();
+    }
+  }
+
+  /** Re-emit a single move's envelope (for live edits via T15 / T17). */
+  applyMoveEdit(move: Move): boolean {
+    if (!this.chain || !this._isPlaying || !this._scriptActive) return false;
+    if (!this.context) return false;
+    return applyMove(
+      this.chain,
+      move,
+      this.context.currentTime,
+      this.getCurrentTime()
+    );
+  }
+
+  private _emitScriptOnPlay(): void {
+    if (!this._isPlaying || !this._scriptActive) return;
+    if (!this._script || !this.chain || !this.context) return;
+    applyScript(
+      this.chain,
+      this._script,
+      this.context.currentTime,
+      this._startOffset
+    );
+  }
+
+  private _clearScriptEnvelopes(): void {
+    if (!this._script || !this.chain) return;
+    clearScript(this.chain, this._script);
   }
 }

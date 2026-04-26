@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type MasteringMode = "simple" | "advanced";
+export type MasteringMode = "simple" | "advanced" | "deep";
 
 export interface UIState {
   mode: MasteringMode;

@@ -41,7 +41,7 @@ describe("exportWav", () => {
     const src = mockBuffer();
     await exportWav(src, DEFAULT_PARAMS, { sampleRate: 44100, bitDepth: 16 });
 
-    expect(renderSpy).toHaveBeenCalledWith(src, DEFAULT_PARAMS, 44100);
+    expect(renderSpy).toHaveBeenCalledWith(src, DEFAULT_PARAMS, 44100, null);
   });
 
   it("calls encodeWav with the rendered buffer and bitDepth", async () => {

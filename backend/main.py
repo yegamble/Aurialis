@@ -14,6 +14,15 @@ from fastapi.responses import FileResponse
 
 from jobs import get_job, cleanup_expired
 from separation import start_separation, VALID_MODELS
+from deep_analysis import start_deep_analysis
+
+VALID_PROFILES = (
+    "modern_pop_polish",
+    "hip_hop_low_end",
+    "indie_warmth",
+    "metal_wall",
+    "pop_punk_air",
+)
 
 app = FastAPI(
     title="Smart Split API",
@@ -112,12 +121,57 @@ async def job_status(job_id: str):
         "status": job.status,
         "progress": job.progress,
         "model": job.model,
+        "job_type": job.job_type,
+        "partial_result": job.partial_result,
         "stems": [
             {"name": s.name, "ready": s.ready}
             for s in job.stems
         ],
         "error": job.error,
     }
+
+
+@app.post("/analyze/deep")
+async def analyze_deep(
+    file: UploadFile = File(...),
+    profile: str = Form("modern_pop_polish"),
+):
+    """Upload an audio file and start a deep-analysis job (T2: section detection only)."""
+    if profile not in VALID_PROFILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid profile: {profile}. Must be one of {VALID_PROFILES}",
+        )
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    ext = os.path.splitext(file.filename)[1].lower()
+    suffix = ext if ext in ALLOWED_EXTENSIONS else ".wav"
+
+    with tempfile.NamedTemporaryFile(
+        dir=TEMP_DIR, suffix=suffix, delete=False
+    ) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        input_path = tmp.name
+
+    job = start_deep_analysis(input_path, profile)
+    return {"job_id": job.id, "status": job.status}
+
+
+@app.get("/jobs/{job_id}/result")
+async def job_result(job_id: str):
+    """Return the deep-analysis result. T2 returns sections only."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.job_type != "deep_analysis":
+        raise HTTPException(status_code=400, detail="Job is not a deep_analysis job")
+    if job.status != "done":
+        raise HTTPException(status_code=400, detail="Job not complete")
+    return job.partial_result
 
 
 @app.get("/jobs/{job_id}/stems/{stem_name}")

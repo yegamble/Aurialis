@@ -236,6 +236,136 @@ describe("renderOffline", () => {
     });
   });
 
+  describe("deep mastering script (T9a)", () => {
+    function makeScriptTargeting(param: string, env: Array<[number, number]>) {
+      return {
+        version: 1 as const,
+        trackId: "test",
+        sampleRate: 44100,
+        duration: 1,
+        profile: "modern_pop_polish" as const,
+        sections: [],
+        moves: [
+          {
+            id: "m1",
+            param: param as
+              | "master.compressor.threshold"
+              | "master.compressor.ratio"
+              | "master.saturation.drive",
+            startSec: 0,
+            endSec: 1,
+            envelope: env,
+            reason: "",
+            original: env[0]![1],
+            edited: false,
+            muted: false,
+          },
+        ],
+      };
+    }
+
+    it("threshold envelope makes the second half quieter when ratio > 1", async () => {
+      const numSamples = 44100;
+      const chL = sine(0.6, 440, numSamples, 44100);
+      const chR = sine(0.6, 440, numSamples, 44100);
+      mockStartRenderingWithSignal([chL, chR]);
+      const src = mockBuffer([chL, chR]);
+      const params: AudioParams = {
+        ...DEFAULT_PARAMS,
+        compressorEnabled: 1,
+        threshold: 0,
+        ratio: 8,
+        attack: 1,
+        release: 50,
+        makeup: 0,
+        // Disable other dynamic stages so only the compressor envelope drives.
+        multibandEnabled: 0,
+        saturationEnabled: 0,
+        stereoWidthEnabled: 0,
+        limiterEnabled: 0,
+        parametricEqEnabled: 0,
+      };
+      // Threshold ramp: 0 dBFS for first half (no GR), -30 dBFS for second
+      // half (heavy GR on a -4.4 dBFS sine).
+      const script = makeScriptTargeting("master.compressor.threshold", [
+        [0.0, 0],
+        [0.45, 0],
+        [0.55, -30],
+        [1.0, -30],
+      ]);
+      const result = await renderOffline(src, params, 44100, script);
+      const out = result.getChannelData(0);
+      // Compare RMS of an early window vs a late window, after the threshold
+      // ramp has fully shifted into compression territory.
+      const early = rms(out.subarray(2_000, 10_000));
+      const late = rms(out.subarray(35_000, 43_000));
+      expect(late).toBeLessThan(early * 0.7);
+    });
+
+    it("static-params path is unaffected when script is null (no perf regression)", async () => {
+      const numSamples = 4_410;
+      const chL = sine(0.3, 440, numSamples, 44100);
+      const chR = sine(0.3, 440, numSamples, 44100);
+      mockStartRenderingWithSignal([chL, chR]);
+      const src = mockBuffer([chL, chR]);
+      const params: AudioParams = {
+        ...DEFAULT_PARAMS,
+        compressorEnabled: 1,
+        threshold: -20,
+        ratio: 4,
+        multibandEnabled: 0,
+        saturationEnabled: 0,
+        stereoWidthEnabled: 0,
+        limiterEnabled: 0,
+        parametricEqEnabled: 0,
+      };
+      const noScriptResult = await renderOffline(src, params, 44100);
+      const noScriptOut = Array.from(noScriptResult.getChannelData(0));
+
+      // Re-mock with the same input and render with null script.
+      mockStartRenderingWithSignal([chL, chR]);
+      const src2 = mockBuffer([chL, chR]);
+      const nullScriptResult = await renderOffline(src2, params, 44100, null);
+      const nullScriptOut = Array.from(nullScriptResult.getChannelData(0));
+
+      // Both paths should produce identical output.
+      let maxDiff = 0;
+      for (let i = 0; i < noScriptOut.length; i++) {
+        const d = Math.abs(noScriptOut[i]! - nullScriptOut[i]!);
+        if (d > maxDiff) maxDiff = d;
+      }
+      expect(maxDiff).toBe(0);
+    });
+
+    it("muted move falls back to base param (no compression)", async () => {
+      const numSamples = 4_410;
+      const chL = sine(0.6, 440, numSamples, 44100);
+      const chR = sine(0.6, 440, numSamples, 44100);
+      mockStartRenderingWithSignal([chL, chR]);
+      const src = mockBuffer([chL, chR]);
+      const params: AudioParams = {
+        ...DEFAULT_PARAMS,
+        compressorEnabled: 1,
+        threshold: 0,
+        ratio: 8,
+        multibandEnabled: 0,
+        saturationEnabled: 0,
+        stereoWidthEnabled: 0,
+        limiterEnabled: 0,
+        parametricEqEnabled: 0,
+      };
+      const script = makeScriptTargeting("master.compressor.threshold", [
+        [0.0, -30],
+        [1.0, -30],
+      ]);
+      script.moves[0]!.muted = true;
+      const result = await renderOffline(src, params, 44100, script);
+      const out = result.getChannelData(0);
+      // With base threshold 0 and a -4.4 dBFS sine, no GR. Output peak ≈ input peak.
+      expect(peak(out)).toBeGreaterThan(0.55);
+    });
+  });
+
   describe("limiter", () => {
     it("enforces ceiling on output peaks", async () => {
       const chL = sine(0.9, 440, 44100, 44100);

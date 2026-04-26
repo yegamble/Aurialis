@@ -100,4 +100,64 @@ describe("MultibandCompressorNode", () => {
     const inner = (node as unknown as { _node: AudioWorkletNode })._node;
     expect(inner.disconnect).toHaveBeenCalled();
   });
+
+  describe("setBandEnvelope (T7a — deep-mode envelopes)", () => {
+    it.each<[BandName, "Low" | "Mid" | "High"]>([
+      ["low", "Low"],
+      ["mid", "Mid"],
+      ["high", "High"],
+    ])("posts band threshold envelope for %s", async (band, Cap) => {
+      const node = new MultibandCompressorNode(ctx);
+      await node.init();
+      const env: Array<readonly [number, number]> = [
+        [0, -24],
+        [10, -18],
+      ];
+      node.setBandEnvelope(band, "threshold", env);
+      const inner = (node as unknown as { _node: AudioWorkletNode })._node;
+      expect(inner.port.postMessage).toHaveBeenCalledWith({
+        param: `mb${Cap}Threshold`,
+        envelope: env,
+      });
+    });
+
+    it("posts band makeup envelope", async () => {
+      const node = new MultibandCompressorNode(ctx);
+      await node.init();
+      node.setBandEnvelope("mid", "makeup", [
+        [0, 0],
+        [5, 3],
+      ]);
+      const inner = (node as unknown as { _node: AudioWorkletNode })._node;
+      expect(inner.port.postMessage).toHaveBeenCalledWith({
+        param: "mbMidMakeup",
+        envelope: [
+          [0, 0],
+          [5, 3],
+        ],
+      });
+    });
+
+    it("clears envelope when given an empty array", async () => {
+      const node = new MultibandCompressorNode(ctx);
+      await node.init();
+      node.setBandEnvelope("low", "threshold", []);
+      const inner = (node as unknown as { _node: AudioWorkletNode })._node;
+      expect(inner.port.postMessage).toHaveBeenCalledWith({
+        param: "mbLowThreshold",
+        envelope: [],
+      });
+    });
+
+    it("preserves existing static-value contract (regression)", async () => {
+      const node = new MultibandCompressorNode(ctx);
+      await node.init();
+      node.setBandThreshold("low", -20);
+      const inner = (node as unknown as { _node: AudioWorkletNode })._node;
+      expect(inner.port.postMessage).toHaveBeenCalledWith({
+        param: "mbLowThreshold",
+        value: -20,
+      });
+    });
+  });
 });

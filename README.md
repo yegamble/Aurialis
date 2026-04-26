@@ -6,6 +6,7 @@ Browser-based audio mastering application. Upload a track, choose a genre preset
 
 - **Simple mode** — genre presets with intensity control and quick toggles (warm, bright, wide, loud, cleanup)
 - **Advanced mode** — full parametric EQ, compressor, limiter, saturation, and stereo width controls
+- **Deep mode** — AI-powered structure-aware mastering. Pick one of 5 engineer-style profiles (Modern Pop Polish, Hip-Hop Low-End, Indie Warmth, Metal Wall, Pop Punk Air); the backend analyzes sections, detects AI-music artifacts (e.g., narrow Suno guitars), and emits a `MasteringScript` with time-varying volume/EQ/compression/saturation/width/AI-Repair moves applied per-block in real-time playback and offline export. Edit any move on the timeline to override the AI's choice.
 - **Auto Master** — analyzes audio and suggests genre + intensity settings
 - **Real-time metering** — LUFS, true peak, dynamic range, and L/R level meters
 - **Export** — WAV output at 16/24/32-bit with optional TPDF dither

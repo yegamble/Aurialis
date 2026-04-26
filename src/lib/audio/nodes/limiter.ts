@@ -47,6 +47,18 @@ export class LimiterNode {
     this._node?.port.postMessage({ param: "enabled", value: !bypass });
   }
 
+  /**
+   * Install a deep-mode envelope on a limiter parameter (ceiling, release).
+   * Pass an empty array to clear and revert to the last static value.
+   * Per-block evaluation + one-pole smoother in the worklet (Spike S2).
+   */
+  setEnvelope(
+    param: "ceiling" | "release",
+    points: ReadonlyArray<readonly [number, number]>
+  ): void {
+    this._node?.port.postMessage({ param, envelope: points });
+  }
+
   dispose(): void {
     this._node?.disconnect();
     this._output.disconnect();

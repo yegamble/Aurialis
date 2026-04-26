@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { EQNode } from "../eq";
 
 describe("EQNode (AudioWorklet parametric EQ)", () => {
@@ -161,5 +161,57 @@ describe("EQNode (AudioWorklet parametric EQ)", () => {
     await eq.init();
     eq.dispose();
     expect(eq["_node"]!.disconnect).toHaveBeenCalled();
+  });
+
+  describe("setBandGainEnvelope (T7a — deep-mode envelopes)", () => {
+    it.each<[number, "eq80" | "eq250" | "eq1k" | "eq4k" | "eq12k"]>([
+      [0, "eq80"],
+      [1, "eq250"],
+      [2, "eq1k"],
+      [3, "eq4k"],
+      [4, "eq12k"],
+    ])("posts envelope on legacy gain param for band %i", async (idx, key) => {
+      const eq = new EQNode(ctx);
+      await eq.init();
+      const env: Array<readonly [number, number]> = [
+        [0, 0],
+        [10, 3],
+      ];
+      eq.setBandGainEnvelope(idx, env);
+      expect(eq["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: key,
+        envelope: env,
+      });
+    });
+
+    it("clears envelope when given an empty array", async () => {
+      const eq = new EQNode(ctx);
+      await eq.init();
+      eq.setBandGainEnvelope(0, []);
+      expect(eq["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "eq80",
+        envelope: [],
+      });
+    });
+
+    it("ignores out-of-range band indices", async () => {
+      const eq = new EQNode(ctx);
+      await eq.init();
+      const inner = eq["_node"]!;
+      const before = (inner.port.postMessage as ReturnType<typeof vi.fn>).mock.calls.length;
+      eq.setBandGainEnvelope(99, [[0, 0], [1, 1]]);
+      const after = (inner.port.postMessage as ReturnType<typeof vi.fn>).mock.calls.length;
+      expect(after).toBe(before);
+    });
+
+    it("preserves existing static-value contract (regression)", async () => {
+      const eq = new EQNode(ctx);
+      await eq.init();
+      eq.setGain(0, 4);
+      expect(eq["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "eq80",
+        value: 4,
+      });
+    });
   });
 });

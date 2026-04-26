@@ -10,5 +10,13 @@
   },
   "observability": {
     "enabled": true
+  },
+  // Backend service URLs are read at runtime by the Next.js client.
+  // Both deep analysis (T2/T3/T5) and stem separation share the same
+  // FastAPI service today, but the URLs are kept distinct so they can be
+  // pointed at separate hosts in the future without a code change.
+  "vars": {
+    "NEXT_PUBLIC_SEPARATION_API_URL": "http://localhost:8000",
+    "NEXT_PUBLIC_DEEP_ANALYSIS_API_URL": "http://localhost:8000"
   }
 }

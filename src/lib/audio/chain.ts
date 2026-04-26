@@ -15,9 +15,11 @@ import {
 } from "./nodes/multiband-compressor";
 import { LimiterNode } from "./nodes/limiter";
 import { SaturationNode } from "./nodes/saturation";
+import { AiRepairNode } from "./nodes/ai-repair";
 import { MeteringNode, type MeteringMessage } from "./nodes/metering";
 import type { AudioParams } from "@/lib/stores/audio-store";
 import type { EqBandMode, EqBandType, MultibandMode, SaturationMode } from "@/types/mastering";
+import type { MoveParam } from "@/types/deep-mastering";
 
 export class ProcessingChain {
   private readonly _ctx: AudioContext;
@@ -27,6 +29,7 @@ export class ProcessingChain {
   private _compressor: CompressorNode | null = null;
   private _multiband: MultibandCompressorNode | null = null;
   private _saturation: SaturationNode | null = null;
+  private _aiRepair: AiRepairNode | null = null;
   private _stereoWidth: StereoWidthNode | null = null;
   private _limiter: LimiterNode | null = null;
   private _metering: MeteringNode | null = null;
@@ -81,6 +84,7 @@ export class ProcessingChain {
       this._multiband = new MultibandCompressorNode(this._ctx);
       this._limiter = new LimiterNode(this._ctx);
       this._saturation = new SaturationNode(this._ctx);
+      this._aiRepair = new AiRepairNode(this._ctx);
       this._metering = new MeteringNode(this._ctx);
       this._eq = new EQNode(this._ctx);
 
@@ -89,6 +93,7 @@ export class ProcessingChain {
         this._multiband.init(),
         this._limiter.init(),
         this._saturation.init(),
+        this._aiRepair.init(),
         this._metering.init(),
         this._eq.init(),
       ]);
@@ -103,12 +108,17 @@ export class ProcessingChain {
 
       this._stereoWidth = new StereoWidthNode(this._ctx);
 
-      // Chain: inputGain → EQ → Compressor → MultibandCompressor → Saturation → StereoWidth → Limiter → Metering → outputGain
+      // Chain: inputGain → EQ → Compressor → MultibandCompressor → Saturation
+      // → AiRepair → StereoWidth → Limiter → Metering → outputGain
+      // AI Repair sits BEFORE StereoWidth (per T10 design): the widener
+      // operates on M/S, and StereoWidth's M/S graph reads the corrected
+      // side band as input.
       this._inputGain.connect(this._eq.input);
       this._eq.output.connect(this._compressor.input);
       this._compressor.output.connect(this._multiband.input);
       this._multiband.output.connect(this._saturation.input);
-      this._saturation.output.connect(this._stereoWidth.input);
+      this._saturation.output.connect(this._aiRepair.input);
+      this._aiRepair.output.connect(this._stereoWidth.input);
       this._stereoWidth.output.connect(this._limiter.input);
       this._limiter.output.connect(this._metering.input);
       this._metering.output.connect(this._outputGain);
@@ -456,12 +466,74 @@ export class ProcessingChain {
     }
   }
 
+  /**
+   * Apply a deep-mode envelope to the node that owns the given MoveParam.
+   * Returns true if a node accepted the envelope, false if the param has no
+   * scheduling target yet (e.g., master.aiRepair.amount before T10/T11, or
+   * compressor attack/release for which no envelope path exists).
+   *
+   * Empty `points` clears the envelope and reverts to the last static value.
+   */
+  applyMoveEnvelope(
+    param: MoveParam,
+    points: ReadonlyArray<readonly [number, number]>
+  ): boolean {
+    if (!this._processingAvailable) return false;
+    switch (param) {
+      case "master.compressor.threshold":
+        this._compressor?.setEnvelope("threshold", points);
+        return !!this._compressor;
+      case "master.compressor.ratio":
+        this._compressor?.setEnvelope("ratio", points);
+        return !!this._compressor;
+      case "master.compressor.makeup":
+        this._compressor?.setEnvelope("makeup", points);
+        return !!this._compressor;
+      case "master.eq.band1.gain":
+        this._eq?.setBandGainEnvelope(0, points);
+        return !!this._eq;
+      case "master.eq.band2.gain":
+        this._eq?.setBandGainEnvelope(1, points);
+        return !!this._eq;
+      case "master.eq.band3.gain":
+        this._eq?.setBandGainEnvelope(2, points);
+        return !!this._eq;
+      case "master.eq.band4.gain":
+        this._eq?.setBandGainEnvelope(3, points);
+        return !!this._eq;
+      case "master.eq.band5.gain":
+        this._eq?.setBandGainEnvelope(4, points);
+        return !!this._eq;
+      case "master.saturation.drive":
+        this._saturation?.setEnvelope("drive", points);
+        return !!this._saturation;
+      case "master.stereoWidth.width":
+        this._stereoWidth?.setEnvelope("width", points);
+        return !!this._stereoWidth;
+      case "master.aiRepair.amount":
+        this._aiRepair?.setEnvelope("amount", points);
+        return !!this._aiRepair;
+      // No scheduling target yet:
+      //   master.inputGain          — engine-owned, no per-block worklet
+      //   master.compressor.attack  — not envelope-supported in worklet
+      //   master.compressor.release — not envelope-supported in worklet
+      default:
+        return false;
+    }
+  }
+
+  /** Clear the envelope on the given MoveParam (revert to static value). */
+  clearMoveEnvelope(param: MoveParam): boolean {
+    return this.applyMoveEnvelope(param, []);
+  }
+
   dispose(): void {
     this._inputGain?.disconnect();
     this._eq?.dispose();
     this._compressor?.dispose();
     this._multiband?.dispose();
     this._saturation?.dispose();
+    this._aiRepair?.dispose();
     this._stereoWidth?.dispose();
     this._limiter?.dispose();
     this._metering?.dispose();

@@ -1,0 +1,17 @@
+{
+  "id": "metal_wall",
+  "name": "Metal Wall",
+  "description": "Aggressive saturation, scooped mids, wide guitars. Tight low end, high RMS.",
+  "accentColor": "#F472B6",
+  "bySectionType": {
+    "intro":     { "loudnessLufsDelta":  0.0, "toneOffsetsDb": { "low":  0.5, "mid": -1.0, "high":  1.0 }, "compressionDelta": { "threshold":  0.0, "makeup": 0.0 }, "stereoWidth": 1.10, "saturationDrive": 15 },
+    "verse":     { "loudnessLufsDelta":  0.0, "toneOffsetsDb": { "low":  1.0, "mid": -1.0, "high":  1.0 }, "compressionDelta": { "threshold": -2.0, "makeup": 1.0 }, "stereoWidth": 1.15, "saturationDrive": 22 },
+    "chorus":    { "loudnessLufsDelta":  1.5, "toneOffsetsDb": { "low":  1.5, "mid": -1.5, "high":  1.5 }, "compressionDelta": { "threshold": -4.0, "makeup": 2.0 }, "stereoWidth": 1.30, "saturationDrive": 30 },
+    "bridge":    { "loudnessLufsDelta":  0.0, "toneOffsetsDb": { "low":  0.5, "mid": -1.0, "high":  1.0 }, "compressionDelta": { "threshold": -1.0, "makeup": 0.5 }, "stereoWidth": 1.20, "saturationDrive": 25 },
+    "drop":      { "loudnessLufsDelta":  2.5, "toneOffsetsDb": { "low":  2.0, "mid": -2.0, "high":  2.0 }, "compressionDelta": { "threshold": -5.0, "makeup": 3.0 }, "stereoWidth": 1.40, "saturationDrive": 38 },
+    "breakdown": { "loudnessLufsDelta": -1.0, "toneOffsetsDb": { "low":  2.0, "mid": -1.5, "high":  0.0 }, "compressionDelta": { "threshold":  0.0, "makeup": 0.0 }, "stereoWidth": 1.00, "saturationDrive": 12 },
+    "outro":     { "loudnessLufsDelta": -0.5, "toneOffsetsDb": { "low":  0.5, "mid": -1.0, "high":  1.0 }, "compressionDelta": { "threshold":  0.0, "makeup": 0.0 }, "stereoWidth": 1.10, "saturationDrive": 18 },
+    "unknown":   { "loudnessLufsDelta":  0.0, "toneOffsetsDb": { "low":  0.5, "mid": -1.0, "high":  1.0 }, "compressionDelta": { "threshold": -1.0, "makeup": 0.5 }, "stereoWidth": 1.15, "saturationDrive": 20 }
+  },
+  "aiRepairRecipe": { "defaultAmount": 60, "minNarrownessScore": 0.80 }
+}

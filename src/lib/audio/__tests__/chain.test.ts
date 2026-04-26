@@ -20,10 +20,10 @@ describe("ProcessingChain", () => {
     expect(chain.output).toBeDefined();
   });
 
-  it("should load all 6 worklets during init (incl. multiband-compressor + parametric-eq)", async () => {
+  it("should load all 7 worklets during init (incl. multiband-compressor + parametric-eq + ai-repair)", async () => {
     chain = new ProcessingChain(ctx);
     await chain.init();
-    expect(ctx.audioWorklet.addModule).toHaveBeenCalledTimes(6);
+    expect(ctx.audioWorklet.addModule).toHaveBeenCalledTimes(7);
     const calls = (ctx.audioWorklet.addModule as ReturnType<typeof vi.fn>).mock.calls;
     const paths = calls.map((c: unknown[]) => c[0] as string);
     expect(paths.some((p) => p.includes("compressor-processor"))).toBe(true);
@@ -32,6 +32,7 @@ describe("ProcessingChain", () => {
     expect(paths.some((p) => p.includes("saturation"))).toBe(true);
     expect(paths.some((p) => p.includes("metering"))).toBe(true);
     expect(paths.some((p) => p.includes("parametric-eq-processor"))).toBe(true);
+    expect(paths.some((p) => p.includes("ai-repair-processor"))).toBe(true);
   });
 
   it("should route all parametric EQ params without throwing", async () => {

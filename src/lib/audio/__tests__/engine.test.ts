@@ -201,4 +201,125 @@ describe("AudioEngine", () => {
 
     expect(spy).not.toHaveBeenCalled();
   });
+
+  describe("deep mastering script (T8)", () => {
+    function makeBuffer(): AudioBuffer {
+      return {
+        duration: 30,
+        length: 1_323_000,
+        numberOfChannels: 2,
+        sampleRate: 44100,
+        getChannelData: () => new Float32Array(1_323_000),
+      } as unknown as AudioBuffer;
+    }
+
+    function makeScript() {
+      return {
+        version: 1 as const,
+        trackId: "test",
+        sampleRate: 44100,
+        duration: 30,
+        profile: "modern_pop_polish" as const,
+        sections: [],
+        moves: [
+          {
+            id: "m1",
+            param: "master.compressor.threshold" as const,
+            startSec: 0,
+            endSec: 30,
+            envelope: [
+              [0, -24] as [number, number],
+              [30, -18] as [number, number],
+            ],
+            reason: "test",
+            original: -24,
+            edited: false,
+            muted: false,
+          },
+        ],
+      };
+    }
+
+    it("setScript stores script without throwing when paused", async () => {
+      await engine.init();
+      expect(() => engine.setScript(makeScript())).not.toThrow();
+    });
+
+    it("emits envelopes via chain.applyMoveEnvelope on play()", async () => {
+      await engine.init();
+      const chain = (engine as unknown as { chain: { applyMoveEnvelope: ReturnType<typeof vi.fn> } }).chain;
+      chain.applyMoveEnvelope = vi.fn().mockReturnValue(true);
+      engine.loadBuffer(makeBuffer());
+      engine.setScript(makeScript());
+      await engine.play();
+      expect(chain.applyMoveEnvelope).toHaveBeenCalledWith(
+        "master.compressor.threshold",
+        expect.any(Array)
+      );
+    });
+
+    it("clears envelopes via chain.clearMoveEnvelope on pause()", async () => {
+      await engine.init();
+      const chain = (engine as unknown as { chain: { applyMoveEnvelope: ReturnType<typeof vi.fn>; clearMoveEnvelope: ReturnType<typeof vi.fn> } }).chain;
+      chain.applyMoveEnvelope = vi.fn().mockReturnValue(true);
+      chain.clearMoveEnvelope = vi.fn().mockReturnValue(true);
+      engine.loadBuffer(makeBuffer());
+      engine.setScript(makeScript());
+      await engine.play();
+      engine.pause();
+      expect(chain.clearMoveEnvelope).toHaveBeenCalledWith(
+        "master.compressor.threshold"
+      );
+    });
+
+    it("re-emits envelopes on seek (via play restart)", async () => {
+      await engine.init();
+      const chain = (engine as unknown as { chain: { applyMoveEnvelope: ReturnType<typeof vi.fn>; clearMoveEnvelope: ReturnType<typeof vi.fn> } }).chain;
+      chain.applyMoveEnvelope = vi.fn().mockReturnValue(true);
+      chain.clearMoveEnvelope = vi.fn().mockReturnValue(true);
+      engine.loadBuffer(makeBuffer());
+      engine.setScript(makeScript());
+      await engine.play();
+      const beforeSeek = chain.applyMoveEnvelope.mock.calls.length;
+      engine.seek(10);
+      // seek() while playing destroys source then re-plays — that re-emit
+      // path applies envelopes again with the new offset.
+      expect(chain.applyMoveEnvelope.mock.calls.length).toBeGreaterThan(
+        beforeSeek
+      );
+    });
+
+    it("setScriptActive(false) clears envelopes during playback", async () => {
+      await engine.init();
+      const chain = (engine as unknown as { chain: { applyMoveEnvelope: ReturnType<typeof vi.fn>; clearMoveEnvelope: ReturnType<typeof vi.fn> } }).chain;
+      chain.applyMoveEnvelope = vi.fn().mockReturnValue(true);
+      chain.clearMoveEnvelope = vi.fn().mockReturnValue(true);
+      engine.loadBuffer(makeBuffer());
+      engine.setScript(makeScript());
+      await engine.play();
+      engine.setScriptActive(false);
+      expect(chain.clearMoveEnvelope).toHaveBeenCalled();
+    });
+
+    it("applyMoveEdit posts a single envelope when playing", async () => {
+      await engine.init();
+      const chain = (engine as unknown as { chain: { applyMoveEnvelope: ReturnType<typeof vi.fn>; clearMoveEnvelope: ReturnType<typeof vi.fn> } }).chain;
+      chain.applyMoveEnvelope = vi.fn().mockReturnValue(true);
+      chain.clearMoveEnvelope = vi.fn().mockReturnValue(true);
+      engine.loadBuffer(makeBuffer());
+      engine.setScript(makeScript());
+      await engine.play();
+      const before = chain.applyMoveEnvelope.mock.calls.length;
+      const move = makeScript().moves[0]!;
+      const ok = engine.applyMoveEdit(move);
+      expect(ok).toBe(true);
+      expect(chain.applyMoveEnvelope.mock.calls.length).toBe(before + 1);
+    });
+
+    it("applyMoveEdit no-ops when not playing", async () => {
+      await engine.init();
+      const move = makeScript().moves[0]!;
+      expect(engine.applyMoveEdit(move)).toBe(false);
+    });
+  });
 });

@@ -1,0 +1,161 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aurialis.app/schemas/mastering_script.schema.json",
+  "title": "MasteringScript",
+  "description": "AI-generated time-varying mastering script for the Deep Mastering Mode. Frontend (TypeScript) and backend (Python) both validate against this schema.",
+  "type": "object",
+  "required": [
+    "version",
+    "trackId",
+    "sampleRate",
+    "duration",
+    "profile",
+    "sections",
+    "moves"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "trackId": { "type": "string", "minLength": 1 },
+    "sampleRate": { "type": "number", "exclusiveMinimum": 0 },
+    "duration": { "type": "number", "exclusiveMinimum": 0 },
+    "profile": {
+      "type": "string",
+      "enum": [
+        "modern_pop_polish",
+        "hip_hop_low_end",
+        "indie_warmth",
+        "metal_wall",
+        "pop_punk_air"
+      ]
+    },
+    "sections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Section" }
+    },
+    "moves": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Move" }
+    },
+    "stemAnalysis": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/StemAnalysisReport" }
+    }
+  },
+  "$defs": {
+    "SectionType": {
+      "type": "string",
+      "enum": [
+        "intro",
+        "verse",
+        "chorus",
+        "bridge",
+        "drop",
+        "breakdown",
+        "outro",
+        "unknown"
+      ]
+    },
+    "MoveParam": {
+      "type": "string",
+      "enum": [
+        "master.inputGain",
+        "master.compressor.threshold",
+        "master.compressor.ratio",
+        "master.compressor.attack",
+        "master.compressor.release",
+        "master.compressor.makeup",
+        "master.eq.band1.gain",
+        "master.eq.band2.gain",
+        "master.eq.band3.gain",
+        "master.eq.band4.gain",
+        "master.eq.band5.gain",
+        "master.saturation.drive",
+        "master.stereoWidth.width",
+        "master.aiRepair.amount"
+      ]
+    },
+    "Section": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "startSec",
+        "endSec",
+        "loudnessLufs",
+        "spectralCentroidHz"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "$ref": "#/$defs/SectionType" },
+        "startSec": { "type": "number", "minimum": 0 },
+        "endSec": { "type": "number", "exclusiveMinimum": 0 },
+        "loudnessLufs": { "type": "number" },
+        "spectralCentroidHz": { "type": "number", "minimum": 0 }
+      }
+    },
+    "EnvelopePoint": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        { "type": "number", "minimum": 0 },
+        { "type": "number" }
+      ]
+    },
+    "Move": {
+      "type": "object",
+      "required": [
+        "id",
+        "param",
+        "startSec",
+        "endSec",
+        "envelope",
+        "reason",
+        "original",
+        "edited",
+        "muted"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "param": { "$ref": "#/$defs/MoveParam" },
+        "startSec": { "type": "number", "minimum": 0 },
+        "endSec": { "type": "number", "exclusiveMinimum": 0 },
+        "envelope": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/EnvelopePoint" }
+        },
+        "reason": { "type": "string" },
+        "original": { "type": "number" },
+        "edited": { "type": "boolean" },
+        "muted": { "type": "boolean" }
+      }
+    },
+    "StemAnalysisReport": {
+      "type": "object",
+      "required": [
+        "stemId",
+        "classification",
+        "confidence",
+        "narrownessScore",
+        "spectralCollapseScore",
+        "bandCorrelations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "stemId": { "type": "string", "minLength": 1 },
+        "classification": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "narrownessScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "spectralCollapseScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "bandCorrelations": {
+          "type": "array",
+          "items": { "type": "number", "minimum": -1, "maximum": 1 }
+        }
+      }
+    }
+  }
+}

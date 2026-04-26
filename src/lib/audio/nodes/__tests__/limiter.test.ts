@@ -61,4 +61,56 @@ describe("LimiterNode", () => {
     lim.dispose();
     expect(lim["_node"]!.disconnect).toHaveBeenCalled();
   });
+
+  describe("setEnvelope (T7a — deep-mode envelopes)", () => {
+    it("posts an envelope message on the ceiling param", async () => {
+      const lim = new LimiterNode(ctx);
+      await lim.init();
+      const env: Array<readonly [number, number]> = [
+        [0, -1],
+        [10, -0.5],
+      ];
+      lim.setEnvelope("ceiling", env);
+      expect(lim["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "ceiling",
+        envelope: env,
+      });
+    });
+
+    it("posts an envelope message on the release param", async () => {
+      const lim = new LimiterNode(ctx);
+      await lim.init();
+      lim.setEnvelope("release", [
+        [0, 50],
+        [5, 200],
+      ]);
+      expect(lim["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "release",
+        envelope: [
+          [0, 50],
+          [5, 200],
+        ],
+      });
+    });
+
+    it("clears the envelope when given an empty array", async () => {
+      const lim = new LimiterNode(ctx);
+      await lim.init();
+      lim.setEnvelope("ceiling", []);
+      expect(lim["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "ceiling",
+        envelope: [],
+      });
+    });
+
+    it("preserves the existing static-value contract (regression)", async () => {
+      const lim = new LimiterNode(ctx);
+      await lim.init();
+      lim.setCeiling(-2);
+      expect(lim["_node"]!.port.postMessage).toHaveBeenCalledWith({
+        param: "ceiling",
+        value: -2,
+      });
+    });
+  });
 });

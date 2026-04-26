@@ -1,0 +1,17 @@
+{
+  "id": "pop_punk_air",
+  "name": "Pop Punk Air",
+  "description": "Bright, energetic, mid-forward. Snappy transients, lifted top end, loud chorus.",
+  "accentColor": "#22D3EE",
+  "bySectionType": {
+    "intro":     { "loudnessLufsDelta":  0.0, "toneOffsetsDb": { "low":  0.0, "mid":  0.5, "high":  1.0 }, "compressionDelta": { "threshold":  0.0, "makeup": 0.0 }, "stereoWidth": 1.05, "saturationDrive":  8 },
+    "verse":     { "loudnessLufsDelta":  0.0, "toneOffsetsDb": { "low":  0.0, "mid":  1.0, "high":  1.0 }, "compressionDelta": { "threshold": -1.5, "makeup": 0.5 }, "stereoWidth": 1.10, "saturationDrive": 14 },
+    "chorus":    { "loudnessLufsDelta":  1.5, "toneOffsetsDb": { "low":  0.5, "mid":  1.0, "high":  2.0 }, "compressionDelta": { "threshold": -3.0, "makeup": 1.5 }, "stereoWidth": 1.25, "saturationDrive": 20 },
+    "bridge":    { "loudnessLufsDelta":  0.0, "toneOffsetsDb": { "low": -0.5, "mid":  0.5, "high":  0.5 }, "compressionDelta": { "threshold":  0.0, "makeup": 0.0 }, "stereoWidth": 1.10, "saturationDrive": 12 },
+    "drop":      { "loudnessLufsDelta":  2.0, "toneOffsetsDb": { "low":  1.0, "mid":  1.0, "high":  2.0 }, "compressionDelta": { "threshold": -3.5, "makeup": 2.0 }, "stereoWidth": 1.30, "saturationDrive": 24 },
+    "breakdown": { "loudnessLufsDelta": -1.0, "toneOffsetsDb": { "low": -1.0, "mid":  0.5, "high":  0.5 }, "compressionDelta": { "threshold":  1.0, "makeup": 0.0 }, "stereoWidth": 0.95, "saturationDrive":  6 },
+    "outro":     { "loudnessLufsDelta": -0.5, "toneOffsetsDb": { "low":  0.0, "mid":  0.5, "high":  1.0 }, "compressionDelta": { "threshold":  0.0, "makeup": 0.0 }, "stereoWidth": 1.05, "saturationDrive": 10 },
+    "unknown":   { "loudnessLufsDelta":  0.0, "toneOffsetsDb": { "low":  0.0, "mid":  0.5, "high":  1.0 }, "compressionDelta": { "threshold":  0.0, "makeup": 0.0 }, "stereoWidth": 1.10, "saturationDrive": 12 }
+  },
+  "aiRepairRecipe": { "defaultAmount": 40, "minNarrownessScore": 0.83 }
+}

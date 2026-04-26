@@ -26,6 +26,13 @@ export default defineConfig({
         "src/app/**",
         "src/components/**",
         "src/hooks/**",
+        // AudioWorklet processors run inside AudioWorkletGlobalScope which
+        // Vitest's coverage instrumenter cannot enter. They are verified
+        // indirectly by the parity tests (parametric-eq-parity, multiband-parity,
+        // halfband-parity), the envelope-scheduler unit tests, and the
+        // Playwright E2E spec. Per T18 — see plan doc 2026-04-25-ai-deep-mastering-mode.md.
+        "src/worklets/**",
+        "public/worklets/**",
       ],
       thresholds: {
         lines: 80,

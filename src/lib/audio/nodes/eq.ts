@@ -108,6 +108,22 @@ export class EQNode {
     this.setEnabled(bypass ? 0 : 1);
   }
 
+  /**
+   * Install a deep-mode envelope on a band's gain. Routed through the legacy
+   * eq80/eq250/eq1k/eq4k/eq12k port keys so it lines up with the script
+   * generator's `master.eq.bandN.gain` param mapping. Pass an empty array
+   * to clear. Out-of-range band indices are silently ignored.
+   */
+  setBandGainEnvelope(
+    bandIndex: EqBandIndex | number,
+    points: ReadonlyArray<readonly [number, number]>
+  ): void {
+    const legacyKeys = ["eq80", "eq250", "eq1k", "eq4k", "eq12k"] as const;
+    const key = legacyKeys[bandIndex];
+    if (!key) return;
+    this._node?.port.postMessage({ param: key, envelope: points });
+  }
+
   dispose(): void {
     this._node?.disconnect();
     this._output.disconnect();

@@ -96,6 +96,40 @@ export class StereoWidthNode {
     this._sideLevel.gain.value = s;
   }
 
+  /**
+   * Install a deep-mode envelope on the stereo-width gain. Translates the
+   * shared envelope point list into native AudioParam ramps so the width
+   * graph stays glitch-free over long ramps. Width values are scaled by
+   * 1/100 to match `setWidth` (0–200% maps to 0–2.0 gain).
+   *
+   * Empty array clears any scheduled ramp. Per Spike S2 protocol parity
+   * (T7b), the resulting AudioParam values match
+   * `EnvelopeScheduler.getValueAt` at every block boundary within the
+   * value-equivalent of ±1 sample of timing drift.
+   */
+  setEnvelope(
+    param: "width",
+    points: ReadonlyArray<readonly [number, number]>
+  ): void {
+    void param;
+    const g = this._sideLevel.gain;
+    if (typeof g.cancelScheduledValues === "function") {
+      g.cancelScheduledValues(0);
+    }
+    if (points.length === 0) return;
+    const scale = 1 / 100;
+    const first = points[0];
+    if (typeof g.setValueAtTime === "function") {
+      g.setValueAtTime(first[1] * scale, first[0]);
+    }
+    if (typeof g.linearRampToValueAtTime === "function") {
+      for (let i = 1; i < points.length; i++) {
+        const p = points[i];
+        g.linearRampToValueAtTime(p[1] * scale, p[0]);
+      }
+    }
+  }
+
   /** Set bass mono crossover frequency in Hz */
   setBassMonoFreq(hz: number): void {
     this._bassFilter.frequency.value = hz;

@@ -3,6 +3,7 @@
 import { useRef, useEffect, useCallback, useSyncExternalStore, useState } from "react";
 import { AudioEngine } from "@/lib/audio/engine";
 import { useAudioStore } from "@/lib/stores/audio-store";
+import { useDeepStore } from "@/lib/stores/deep-store";
 import { ParameterBridge } from "@/lib/audio/parameter-bridge";
 import type { MeteringData } from "@/types/audio";
 
@@ -129,6 +130,18 @@ export function useAudioEngine() {
     // Initialize parameter bridge (connects Zustand params to engine)
     bridgeRef.current = new ParameterBridge(engine);
 
+    // T17: bridge the deep mastering script + A/B toggle from deepStore into
+    // the engine so per-move edits and profile applies trigger envelope
+    // re-emit on the running playback.
+    const unsubScript = useDeepStore.subscribe((state, prev) => {
+      if (state.script !== prev.script) {
+        engine.setScript(state.script);
+      }
+      if (state.scriptActive !== prev.scriptActive) {
+        engine.setScriptActive(state.scriptActive);
+      }
+    });
+
     return () => {
       engine.off("statechange", onStateChange);
       engine.off("timeupdate", onTimeUpdate);
@@ -137,6 +150,7 @@ export function useAudioEngine() {
       engine.off("metering", onMetering);
       bridgeRef.current?.destroy();
       bridgeRef.current = null;
+      unsubScript();
     };
     // eslint-disable-next-line react-hooks/refs -- engine is a stable local derived from ref init above
   }, [engine, updateSnapshot]);

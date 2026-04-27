@@ -10,14 +10,22 @@ test environments that mock the analysis functions directly.
 
 from __future__ import annotations
 
+import time
 import uuid
 import threading
 from typing import Any
 
 import numpy as np
 import soundfile as sf
+from opentelemetry import trace
 
-from jobs import Job, create_job, update_job
+from jobs import Job, create_job, is_cancelled, update_job
+from observability import (
+    get_logger,
+    get_tracer,
+    log_phase,
+    run_in_span_context,
+)
 
 # Length below which a section is considered "too short" for LUFS measurement.
 _LUFS_MIN_SEC = 0.4
@@ -37,10 +45,19 @@ def start_deep_analysis(input_path: str, profile: str) -> Job:
         job_type="deep_analysis",
     )
     create_job(job)
+    get_logger().info(
+        "job created", extra={"job_id": job_id, "phase": "queued", "profile": profile}
+    )
+
+    # Capture the active request span so the worker thread can attach to its
+    # context (true parent-child trace tree). See observability.run_in_span_context.
+    captured_span = trace.get_current_span()
 
     thread = threading.Thread(
-        target=_run_deep_analysis,
-        args=(job_id, input_path, profile),
+        target=lambda: run_in_span_context(
+            captured_span,
+            lambda: _run_deep_analysis(job_id, input_path, profile),
+        ),
         daemon=True,
     )
     thread.start()
@@ -48,35 +65,106 @@ def start_deep_analysis(input_path: str, profile: str) -> Job:
 
 
 def _run_deep_analysis(job_id: str, input_path: str, profile: str) -> None:
-    """Background worker — section detection (T2) + per-stem AI-artifact analysis (T3)."""
+    """Background worker — section detection (T2) + per-stem AI-artifact analysis (T3).
+
+    Cancellation: checked at three phase boundaries (after audio load, after
+    section detection, after stem analysis). When `is_cancelled(job_id)` returns
+    True the worker exits via status='error', error='Cancelled by user'.
+    """
+    tracer = get_tracer()
     try:
         update_job(job_id, status="processing", progress=5)
 
-        samples, sr = _load_mono_for_analysis(input_path)
+        # Phase 1: load audio
+        load_start = time.time()
+        get_logger().info(
+            "phase start", extra={"job_id": job_id, "phase": "load"}
+        )
+        with tracer.start_as_current_span("deep_analysis.load") as span:
+            span.set_attribute("job_id", job_id)
+            span.set_attribute("phase", "load")
+            samples, sr = _load_mono_for_analysis(input_path)
+            span.set_attribute("audio.sample_rate", sr)
+            span.set_attribute("audio.duration_sec", samples.shape[0] / sr)
         update_job(job_id, progress=15)
+        log_phase("load", job_id, load_start)
 
-        sections, _confidence = detect_sections(samples, sr)
-        sections = enrich_with_loudness_and_centroid(samples, sr, sections)
+        # Phase boundary: cancel before section detection
+        if is_cancelled(job_id):
+            update_job(job_id, status="error", error="Cancelled by user")
+            log_phase("cancel-observed", job_id, load_start, error="cancelled")
+            return
 
+        # Phase 2a: section detection
+        sections_start = time.time()
+        get_logger().info(
+            "phase start", extra={"job_id": job_id, "phase": "sections"}
+        )
+        with tracer.start_as_current_span("deep_analysis.sections") as span:
+            span.set_attribute("job_id", job_id)
+            span.set_attribute("phase", "sections")
+            span.set_attribute("profile", profile)
+            sections, _confidence = detect_sections(samples, sr)
+            span.set_attribute("sections.count", len(sections))
+
+        # Phase 2b: per-section LUFS + spectral centroid enrichment.
+        # Kept as its own span so Truth #5 (≥ 5 spans per run) holds and so
+        # operators can see how much time enrichment costs vs detection.
+        enrich_start = time.time()
+        get_logger().info(
+            "phase start", extra={"job_id": job_id, "phase": "enrich"}
+        )
+        with tracer.start_as_current_span("deep_analysis.enrich") as span:
+            span.set_attribute("job_id", job_id)
+            span.set_attribute("phase", "enrich")
+            sections = enrich_with_loudness_and_centroid(samples, sr, sections)
         partial: dict = {"sections": [_section_to_dict(s) for s in sections]}
         update_job(job_id, progress=40, partial_result=partial)
+        log_phase("sections", job_id, sections_start)
+        log_phase("enrich", job_id, enrich_start)
 
-        # T3: per-stem AI-artifact analysis. Skipped silently if Demucs is
-        # unavailable (e.g. CPU-only test container) — sections-only result is
-        # still valid for downstream consumers.
-        try:
-            stem_reports = run_stem_artifact_analysis(input_path)
-            partial = {**partial, "stems": stem_reports}
-            update_job(job_id, progress=80, partial_result=partial)
-        except (ImportError, RuntimeError) as stem_err:
-            partial = {**partial, "stems": [], "stems_error": str(stem_err)}
-            update_job(job_id, progress=80, partial_result=partial)
+        # Phase boundary: cancel before stem analysis (longest phase)
+        if is_cancelled(job_id):
+            update_job(job_id, status="error", error="Cancelled by user")
+            log_phase("cancel-observed", job_id, sections_start, error="cancelled")
+            return
+
+        # Phase 3: per-stem AI-artifact analysis. Skipped silently if Demucs
+        # is unavailable (e.g. CPU-only test container).
+        stems_start = time.time()
+        get_logger().info(
+            "phase start", extra={"job_id": job_id, "phase": "stems"}
+        )
+        with tracer.start_as_current_span("deep_analysis.stems") as span:
+            span.set_attribute("job_id", job_id)
+            span.set_attribute("phase", "stems")
+            try:
+                stem_reports = run_stem_artifact_analysis(input_path)
+                partial = {**partial, "stems": stem_reports}
+                span.set_attribute("stems.count", len(stem_reports))
+            except (ImportError, RuntimeError) as stem_err:
+                partial = {**partial, "stems": [], "stems_error": str(stem_err)}
+                span.set_attribute("stems.error", str(stem_err))
+        update_job(job_id, progress=80, partial_result=partial)
+        log_phase("stems", job_id, stems_start)
+
+        # Phase boundary: cancel before script generation (T5)
+        if is_cancelled(job_id):
+            update_job(job_id, status="error", error="Cancelled by user")
+            log_phase("cancel-observed", job_id, stems_start, error="cancelled")
+            return
 
         # T5 will fill `script` here. For now mark done with the partial result.
         update_job(job_id, status="done", progress=100)
+        log_phase("done", job_id, load_start)
 
     except Exception as e:  # noqa: BLE001 — surface error verbatim to client
         update_job(job_id, status="error", error=str(e))
+        get_logger().error(
+            "deep analysis failed",
+            extra={"job_id": job_id, "phase": "fatal", "error": str(e)},
+            exc_info=True,
+        )
 
 
 def run_stem_artifact_analysis(input_path: str) -> list[dict]:

@@ -3,26 +3,25 @@
 /**
  * DeepMastering — top-level panel for the Deep mastering mode.
  *
- * v1 skeleton (T12): wires the Zustand `deepStore` for status / sub-status,
- * renders the placeholder for the engineer profile picker (T13) and timeline
- * (T14). T17 adds the analyze action wiring; until then this panel exposes
- * a no-op "Analyze" button so the page renders cleanly.
- *
  * Mobile (lg-and-down): renders a banner directing the user to desktop, per
  * scope decision (Deep mode is desktop-only in v1).
  */
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDeepStore } from "@/lib/stores/deep-store";
 import { useIsLgViewport } from "@/hooks/use-is-lg-viewport";
 import {
+  cancelDeepAnalysis,
+  DeepAnalysisError,
   fetchDeepResult,
-  pollDeepJobStatus,
   startDeepAnalysis,
+  type DeepErrorDetails,
 } from "@/lib/api/deep-analysis";
+import { pollUntilDone } from "@/lib/api/deep-analysis-polling";
 import type { ProfileId } from "@/types/deep-mastering";
 import { EngineerProfilePicker } from "./EngineerProfilePicker";
 import { DeepTimeline } from "./DeepTimeline";
+import { DeepProgressCard } from "./DeepProgressCard";
 
 export interface DeepMasteringProps {
   /**
@@ -33,53 +32,163 @@ export interface DeepMasteringProps {
   audioFile?: File | null;
 }
 
+function buildClientErrorDetails(e: unknown): DeepErrorDetails {
+  if (e instanceof DeepAnalysisError) return e.details;
+  const msg = e instanceof Error ? e.message : String(e);
+  return {
+    message: msg,
+    status: "client",
+    raw: msg,
+    at: new Date().toISOString(),
+  };
+}
+
 export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): React.ReactElement {
   const isLg = useIsLgViewport();
   const status = useDeepStore((s) => s.status);
   const subStatus = useDeepStore((s) => s.subStatus);
+  const progress = useDeepStore((s) => s.progress);
   const profile = useDeepStore((s) => s.profile);
   const scriptActive = useDeepStore((s) => s.scriptActive);
   const script = useDeepStore((s) => s.script);
+  const errorDetails = useDeepStore((s) => s.errorDetails);
+  const startedAt = useDeepStore((s) => s.startedAt);
   const setScriptActive = useDeepStore((s) => s.setScriptActive);
   const setStatus = useDeepStore((s) => s.setStatus);
   const setSubStatus = useDeepStore((s) => s.setSubStatus);
+  const setProgress = useDeepStore((s) => s.setProgress);
+  const setStartedAt = useDeepStore((s) => s.setStartedAt);
   const setScript = useDeepStore((s) => s.setScript);
   const setError = useDeepStore((s) => s.setError);
   const setProfile = useDeepStore((s) => s.setProfile);
 
+  const abortRef = useRef<AbortController | null>(null);
+  const cancellingRef = useRef(false);
+  const activeJobIdRef = useRef<string | null>(null);
+  const lastProfileRef = useRef<ProfileId>(profile);
+
+  // Drive an "elapsed" tick from `now` so we don't have to setState directly
+  // in the effect body. `now` only advances while a job is active.
+  const [now, setNow] = useState(() => Date.now());
+  const isActive = status === "analyzing" || status === "cancelling";
+  useEffect(() => {
+    if (!isActive) return;
+    // 1s cadence — elapsedSec floors to whole seconds anyway, so faster
+    // ticks would just churn React without visible UX change.
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isActive]);
+  const elapsedSec =
+    isActive && startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+
+  // Abort any in-flight job on unmount.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort(
+        new DOMException("component unmounted", "AbortError")
+      );
+    };
+  }, []);
+
   const runAnalyze = useCallback(
     async (profileId: ProfileId) => {
       if (!audioFile) return;
+      // Cancel any prior in-flight run before starting
+      abortRef.current?.abort(
+        new DOMException("superseded", "AbortError")
+      );
+      const ctl = new AbortController();
+      abortRef.current = ctl;
+      cancellingRef.current = false;
+      activeJobIdRef.current = null;
+      lastProfileRef.current = profileId;
+
       setStatus("analyzing");
       setSubStatus(null);
+      setProgress(0);
+      setStartedAt(Date.now());
       setError(null);
+
       try {
-        const { jobId } = await startDeepAnalysis(audioFile, profileId);
-        // Poll until job is done. Update sub-status on each poll.
-        while (true) {
-          const s = await pollDeepJobStatus(jobId);
-          setSubStatus(s.subStatus);
-          if (s.status === "done") break;
-          if (s.status === "error") {
-            throw new Error(s.error ?? "Deep analysis failed");
-          }
-          await new Promise((r) => setTimeout(r, 1000));
+        const { jobId } = await startDeepAnalysis(
+          audioFile,
+          profileId,
+          ctl.signal
+        );
+        activeJobIdRef.current = jobId;
+
+        const result = await pollUntilDone({
+          jobId,
+          signal: ctl.signal,
+          isCancelling: () => cancellingRef.current,
+          onPoll: (s) => {
+            setSubStatus(s.subStatus);
+            setProgress(s.progress);
+          },
+        });
+
+        if (result.kind === "cancelled") {
+          // Backend honored the cancel — reset to idle
+          setStatus("idle");
+          setSubStatus(null);
+          setProgress(0);
+          setStartedAt(null);
+          return;
         }
-        const result = await fetchDeepResult(jobId);
-        setScript(result);
+
+        // result.kind === "done"
+        const script = await fetchDeepResult(jobId, ctl.signal);
+        setScript(script);
         setStatus("ready");
       } catch (e) {
+        // Component unmount or new analyze run superseded — silent
+        if (e instanceof DOMException && e.name === "AbortError") {
+          return;
+        }
         setStatus("error");
-        setError((e as Error).message);
+        setError(buildClientErrorDetails(e));
       }
     },
-    [audioFile, setStatus, setSubStatus, setScript, setError],
+    [
+      audioFile,
+      setStatus,
+      setSubStatus,
+      setProgress,
+      setStartedAt,
+      setScript,
+      setError,
+    ]
   );
+
+  const handleCancel = useCallback(() => {
+    if (status !== "analyzing") return;
+    cancellingRef.current = true;
+    setStatus("cancelling");
+    const jobId = activeJobIdRef.current;
+    if (jobId) {
+      // Fire DELETE in background; result handled by polling loop.
+      void cancelDeepAnalysis(jobId).catch(() => {
+        // Ignore — polling loop's hard-bound will surface a cancel-timeout
+        // if the backend never honors. 404 returns { ok: false, status: 404 }
+        // (no throw). 5xx throws but we swallow here; user already sees
+        // "Cancelling…" and the polling loop will report the real error.
+      });
+    }
+  }, [status, setStatus]);
+
+  const handleRetry = useCallback(() => {
+    setError(null);
+    // Read the current store profile rather than the ref so a profile change
+    // since the last analyze (URL hydration, external setProfile, etc.) is
+    // honored. Falls back to the ref if the store is somehow uninitialized.
+    const current = useDeepStore.getState().profile ?? lastProfileRef.current;
+    void runAnalyze(current);
+  }, [runAnalyze, setError]);
 
   const handleApplyProfile = useCallback(
     (next: ProfileId) => {
-      // Profile-switch dirty guard (T17). If any move has been edited, ask
-      // before discarding edits — implemented via window.confirm to keep the
+      // Profile-switch dirty guard. If any move has been edited, ask before
+      // discarding edits — implemented via window.confirm to keep the
       // dependency surface small.
       const current = useDeepStore.getState();
       const dirtyCount = current.script?.moves.filter((m) => m.edited).length ?? 0;
@@ -107,6 +216,9 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
       </div>
     );
   }
+
+  const analyzeButtonDisabled =
+    !audioFile || status === "analyzing" || status === "cancelling";
 
   return (
     <div
@@ -137,10 +249,10 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
         <button
           type="button"
           data-testid="deep-analyze-button"
-          disabled={!audioFile || status === "analyzing"}
+          disabled={analyzeButtonDisabled}
           onClick={() => void runAnalyze(profile)}
           className={`rounded-md px-4 py-2 text-xs text-white transition-colors ${
-            !audioFile || status === "analyzing"
+            analyzeButtonDisabled
               ? "bg-[rgba(255,255,255,0.1)] opacity-60 cursor-not-allowed"
               : "bg-[#0a84ff] hover:bg-[#0066cc]"
           }`}
@@ -150,7 +262,11 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
               : "Analyze the loaded track with the selected profile"
           }
         >
-          {status === "analyzing" ? "Analyzing…" : "Analyze"}
+          {status === "analyzing"
+            ? "Analyzing…"
+            : status === "cancelling"
+              ? "Cancelling…"
+              : "Analyze"}
         </button>
         <button
           type="button"
@@ -176,31 +292,15 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
         {subStatus ? ` · ${subStatus}` : ""}
       </p>
 
-      {status === "analyzing" && (
-        <ol
-          data-testid="deep-progress-stages"
-          className="space-y-1 text-[10px] text-[rgba(255,255,255,0.55)]"
-        >
-          <li
-            data-active={subStatus === "sections" ? "true" : "false"}
-            className={subStatus === "sections" ? "text-white" : ""}
-          >
-            1. Detecting sections...
-          </li>
-          <li
-            data-active={subStatus === "stems" ? "true" : "false"}
-            className={subStatus === "stems" ? "text-white" : ""}
-          >
-            2. Analyzing stems...
-          </li>
-          <li
-            data-active={subStatus === "script" ? "true" : "false"}
-            className={subStatus === "script" ? "text-white" : ""}
-          >
-            3. Generating script...
-          </li>
-        </ol>
-      )}
+      <DeepProgressCard
+        status={status}
+        subStatus={subStatus}
+        progress={progress}
+        elapsedSec={elapsedSec}
+        errorDetails={errorDetails}
+        onRetry={handleRetry}
+        onCancel={handleCancel}
+      />
 
       <DeepTimeline script={script} />
     </div>

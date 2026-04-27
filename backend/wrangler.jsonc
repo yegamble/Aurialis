@@ -1,0 +1,52 @@
+{
+  // Cloudflare Worker that fronts the Aurialis backend (FastAPI + Demucs +
+  // madmom) running in a Cloudflare Container.
+  //
+  // The frontend Worker (root wrangler.jsonc) reads
+  // NEXT_PUBLIC_DEEP_ANALYSIS_API_URL — point that at this Worker's URL
+  // (e.g. https://aurialis-backend.<account>.workers.dev) after first deploy.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aurialis-backend",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-09-27",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // The container image is built from this Dockerfile on every `wrangler
+  // deploy`. Cloudflare's build runs in their infrastructure, so the image
+  // must build successfully on amd64 (python:3.11-slim is multi-arch — fine).
+  //
+  // First deploy is slow (~6-8 min): pip downloads PyTorch + Demucs models.
+  // Subsequent deploys cache layers up to the COPY ., so they're ~30s.
+  "containers": [
+    {
+      "class_name": "BackendContainer",
+      "image": "./Dockerfile",
+      "instance_type": "standard",
+      "name": "aurialis-backend-container",
+      "max_instances": 5
+    }
+  ],
+
+  // Containers are addressed via Durable Object stubs — the binding name
+  // ("BACKEND") is what the Worker uses to forward requests.
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "BackendContainer",
+        "name": "BACKEND"
+      }
+    ]
+  },
+
+  // SQLite-backed Durable Object class for the container — required.
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["BackendContainer"]
+    }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}

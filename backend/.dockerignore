@@ -2,3 +2,14 @@ __pycache__
 *.pyc
 .pytest_cache
 .mypy_cache
+
+# Cloudflare Containers builds the image — exclude the Worker scaffolding
+# and node tooling so they don't bloat the image or invalidate cache layers.
+src
+node_modules
+package.json
+package-lock.json
+pnpm-lock.yaml
+tsconfig.json
+wrangler.jsonc
+.wrangler

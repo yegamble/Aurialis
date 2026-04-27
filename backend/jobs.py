@@ -42,6 +42,9 @@ class Job:
     # {"sections": [...], "stems": [...]} after stem analysis,
     # {"sections": [...], "stems": [...], "script": {...}} after script generation.
     partial_result: dict = field(default_factory=dict)
+    # Cooperative cancel flag — DELETE /jobs/{id} flips it; the worker thread
+    # checks at phase boundaries and exits via status="error" when set.
+    cancelled: bool = False
 
 
 def _load_jobs() -> dict[str, Job]:
@@ -56,6 +59,7 @@ def _load_jobs() -> dict[str, Job]:
             # Defaults for fields added after initial deploy
             jdata.setdefault("job_type", "separation")
             jdata.setdefault("partial_result", {})
+            jdata.setdefault("cancelled", False)
             jobs[jid] = Job(**jdata, stems=stems)
         return jobs
     except (json.JSONDecodeError, TypeError):
@@ -98,6 +102,12 @@ def update_job(job_id: str, **kwargs) -> Optional[Job]:
             setattr(job, key, value)
         _save_jobs(jobs)
         return job
+
+
+def is_cancelled(job_id: str) -> bool:
+    """Cheap read of the cancel flag. Returns False for unknown jobs (no exception)."""
+    job = get_job(job_id)
+    return bool(job and job.cancelled)
 
 
 def cleanup_expired() -> int:

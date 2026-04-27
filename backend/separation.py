@@ -8,8 +8,6 @@ import uuid
 import time
 import threading
 import soundfile as sf
-import torch
-import torchaudio
 from pathlib import Path
 
 from jobs import Job, StemInfo, create_job, update_job
@@ -64,8 +62,12 @@ def _run_separation(
         # 10% — loading file and model
         update_job(job_id, status="processing", progress=10)
 
-        from demucs.pretrained import get_model
-        from demucs.apply import apply_model
+        # Lazy heavy ML imports — keeps the module loadable in test envs
+        # without torch/torchaudio installed.
+        import torch  # type: ignore[import-untyped]
+        import torchaudio  # type: ignore[import-untyped]
+        from demucs.pretrained import get_model  # type: ignore[import-untyped]
+        from demucs.apply import apply_model  # type: ignore[import-untyped]
 
         model = get_model(model_name)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

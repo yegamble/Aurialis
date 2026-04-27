@@ -4,9 +4,17 @@ import type {
   Move,
   ProfileId,
 } from "@/types/deep-mastering";
-import type { DeepSubStatus } from "@/lib/api/deep-analysis";
+import type {
+  DeepErrorDetails,
+  DeepSubStatus,
+} from "@/lib/api/deep-analysis";
 
-export type DeepStatus = "idle" | "analyzing" | "ready" | "error";
+export type DeepStatus =
+  | "idle"
+  | "analyzing"
+  | "cancelling"
+  | "ready"
+  | "error";
 
 const DEFAULT_PROFILE: ProfileId = "modern_pop_polish";
 
@@ -19,17 +27,23 @@ export interface DeepState {
   status: DeepStatus;
   /** Most-advanced phase reached during analyze (sections → stems → script). */
   subStatus: DeepSubStatus;
+  /** Polling progress percent 0..100 (mirrors backend `Job.progress`). */
+  progress: number;
+  /** ms since epoch when the current analyze run started; null when idle. */
+  startedAt: number | null;
   /** A/B toggle: when false, the engine should treat the script as muted. */
   scriptActive: boolean;
-  /** Last error message, if any. */
-  error: string | null;
+  /** Last error details, if any. Drives the error UI. */
+  errorDetails: DeepErrorDetails | null;
 
   setProfile: (id: ProfileId) => void;
   setStatus: (s: DeepStatus) => void;
   setSubStatus: (s: DeepSubStatus) => void;
+  setProgress: (n: number) => void;
+  setStartedAt: (ms: number | null) => void;
   setScript: (s: MasteringScript | null) => void;
   setScriptActive: (active: boolean) => void;
-  setError: (e: string | null) => void;
+  setError: (details: DeepErrorDetails | null) => void;
 
   /** Patch a Move and flag it as edited. No-op if moveId not found. */
   applyMoveEdit: (moveId: string, patch: Partial<Move>) => void;
@@ -46,15 +60,19 @@ export const useDeepStore = create<DeepState>((set, get) => ({
   profile: DEFAULT_PROFILE,
   status: "idle",
   subStatus: null,
+  progress: 0,
+  startedAt: null,
   scriptActive: true,
-  error: null,
+  errorDetails: null,
 
   setProfile: (id) => set({ profile: id }),
   setStatus: (s) => set({ status: s }),
   setSubStatus: (s) => set({ subStatus: s }),
+  setProgress: (n) => set({ progress: n }),
+  setStartedAt: (ms) => set({ startedAt: ms }),
   setScript: (s) => set({ script: s }),
   setScriptActive: (scriptActive) => set({ scriptActive }),
-  setError: (error) => set({ error }),
+  setError: (errorDetails) => set({ errorDetails }),
 
   applyMoveEdit: (moveId, patch) => {
     const script = get().script;
@@ -108,7 +126,9 @@ export const useDeepStore = create<DeepState>((set, get) => ({
       profile: DEFAULT_PROFILE,
       status: "idle",
       subStatus: null,
+      progress: 0,
+      startedAt: null,
       scriptActive: true,
-      error: null,
+      errorDetails: null,
     }),
 }));

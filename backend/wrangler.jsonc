@@ -4,9 +4,9 @@
   //
   // The frontend Worker (root wrangler.jsonc) reads
   // NEXT_PUBLIC_DEEP_ANALYSIS_API_URL — point that at this Worker's URL
-  // (e.g. https://aurialis-backend.<account>.workers.dev) after first deploy.
+  // (e.g. https://aurialis-core.<account>.workers.dev) after first deploy.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "aurialis-backend",
+  "name": "aurialis-core",
   "main": "src/worker.ts",
   "compatibility_date": "2025-09-27",
   "compatibility_flags": ["nodejs_compat"],
@@ -22,7 +22,7 @@
       "class_name": "BackendContainer",
       "image": "./Dockerfile",
       "instance_type": "standard",
-      "name": "aurialis-backend-container",
+      "name": "aurialis-core-container",
       "max_instances": 5
     }
   ],

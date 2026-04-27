@@ -25,6 +25,29 @@ export interface JobStatus {
   error: string | null;
 }
 
+interface ErrorResponse {
+  detail?: string;
+}
+
+interface StartSeparationResponse {
+  job_id: string;
+  status: string;
+}
+
+interface JobStatusResponse {
+  job_id: string;
+  status: JobStatus["status"];
+  progress: number;
+  model: string;
+  stems: StemStatus[];
+  error: string | null;
+}
+
+interface HealthResponse {
+  gpu: boolean;
+  models: string[];
+}
+
 /**
  * Upload an audio file to the separation backend and start processing.
  */
@@ -42,11 +65,13 @@ export async function startSeparation(
   });
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({ detail: "Unknown error" }));
+    const err = (await response
+      .json()
+      .catch(() => ({ detail: "Unknown error" }))) as ErrorResponse;
     throw new Error(err.detail ?? `Separation failed: ${response.status}`);
   }
 
-  const data = await response.json();
+  const data = (await response.json()) as StartSeparationResponse;
   return { jobId: data.job_id, status: data.status };
 }
 
@@ -57,11 +82,13 @@ export async function pollJobStatus(jobId: string): Promise<JobStatus> {
   const response = await fetch(`${SEPARATION_API_URL}/jobs/${jobId}/status`);
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({ detail: "Unknown error" }));
+    const err = (await response
+      .json()
+      .catch(() => ({ detail: "Unknown error" }))) as ErrorResponse;
     throw new Error(err.detail ?? `Status check failed: ${response.status}`);
   }
 
-  const data = await response.json();
+  const data = (await response.json()) as JobStatusResponse;
   return {
     jobId: data.job_id,
     status: data.status,
@@ -84,7 +111,9 @@ export async function downloadStem(
   );
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({ detail: "Unknown error" }));
+    const err = (await response
+      .json()
+      .catch(() => ({ detail: "Unknown error" }))) as ErrorResponse;
     throw new Error(err.detail ?? `Download failed: ${response.status}`);
   }
 
@@ -102,7 +131,7 @@ export async function checkBackendHealth(): Promise<{
   try {
     const response = await fetch(`${SEPARATION_API_URL}/health`);
     if (!response.ok) return { ok: false, gpu: false, models: [] };
-    const data = await response.json();
+    const data = (await response.json()) as HealthResponse;
     return { ok: true, gpu: data.gpu, models: data.models };
   } catch {
     return { ok: false, gpu: false, models: [] };

@@ -30,6 +30,25 @@ export interface DeepJobStatus {
   error: string | null;
 }
 
+interface ErrorResponse {
+  detail?: string;
+}
+
+interface DeepStartResponse {
+  job_id: string;
+  status: string;
+}
+
+interface DeepJobStatusResponse {
+  job_id: string;
+  status: DeepJobStatus["status"];
+  progress: number;
+  model: string;
+  job_type?: string;
+  partial_result?: Record<string, unknown>;
+  error: string | null;
+}
+
 /** Start a deep-analysis job for the given audio file + profile. */
 export async function startDeepAnalysis(
   file: File,
@@ -45,13 +64,13 @@ export async function startDeepAnalysis(
   });
 
   if (!response.ok) {
-    const err = await response
+    const err = (await response
       .json()
-      .catch(() => ({ detail: "Unknown error" }));
+      .catch(() => ({ detail: "Unknown error" }))) as ErrorResponse;
     throw new Error(err.detail ?? `Deep analysis failed: ${response.status}`);
   }
 
-  const data = await response.json();
+  const data = (await response.json()) as DeepStartResponse;
   return { jobId: data.job_id, status: data.status };
 }
 
@@ -61,12 +80,12 @@ export async function pollDeepJobStatus(jobId: string): Promise<DeepJobStatus> {
     `${DEEP_ANALYSIS_API_URL}/jobs/${jobId}/status`
   );
   if (!response.ok) {
-    const err = await response
+    const err = (await response
       .json()
-      .catch(() => ({ detail: "Unknown error" }));
+      .catch(() => ({ detail: "Unknown error" }))) as ErrorResponse;
     throw new Error(err.detail ?? `Status check failed: ${response.status}`);
   }
-  const data = await response.json();
+  const data = (await response.json()) as DeepJobStatusResponse;
   const partial: Record<string, unknown> = data.partial_result ?? {};
   return {
     jobId: data.job_id,
@@ -95,9 +114,9 @@ export async function fetchDeepResult(jobId: string): Promise<MasteringScript> {
     `${DEEP_ANALYSIS_API_URL}/jobs/${jobId}/result`
   );
   if (!response.ok) {
-    const err = await response
+    const err = (await response
       .json()
-      .catch(() => ({ detail: "Unknown error" }));
+      .catch(() => ({ detail: "Unknown error" }))) as ErrorResponse;
     throw new Error(err.detail ?? `Result fetch failed: ${response.status}`);
   }
   return (await response.json()) as MasteringScript;

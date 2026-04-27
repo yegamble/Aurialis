@@ -85,9 +85,15 @@ export const useAudioStore = create<AudioState>((set) => ({
     }),
 }));
 
+// Dev convenience hook for E2E + manual debugging. Exposed in any build
+// where `NODE_ENV !== "production"` OR `NEXT_PUBLIC_E2E_HOOKS=1` (CI builds
+// production-mode bundles for E2E and needs the hook to read store state).
+// Production deploys do NOT set the env var, so the hook stays out of the
+// prod bundle.
 if (
   typeof window !== "undefined" &&
-  process.env.NODE_ENV !== "production"
+  (process.env.NODE_ENV !== "production" ||
+    process.env.NEXT_PUBLIC_E2E_HOOKS === "1")
 ) {
   (window as unknown as { __aurialisAudioStore?: typeof useAudioStore }).__aurialisAudioStore = useAudioStore;
 }

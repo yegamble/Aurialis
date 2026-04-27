@@ -121,6 +121,11 @@ describe("pollUntilDone", () => {
       },
       pollFn
     );
+    // Attach a no-op handler synchronously so Node doesn't fire
+    // unhandledRejection during the timer advance below — vitest's CI
+    // reporter treats unhandled rejections as fatal even when the test's
+    // `.rejects` matcher catches them later.
+    promise.catch(() => {});
 
     await tick(3);
     await expect(promise).rejects.toMatchObject({
@@ -147,12 +152,12 @@ describe("pollUntilDone", () => {
       },
       pollFn
     );
+    promise.catch(() => {});
 
     await tick(1);
     await expect(promise).rejects.toMatchObject({
       details: { status: "404" },
     });
-    // Only one call — no retry on 4xx
     expect(pollFn).toHaveBeenCalledTimes(1);
   });
 
@@ -275,6 +280,7 @@ describe("pollUntilDone", () => {
       },
       pollFn
     );
+    promise.catch(() => {});
 
     await tick(2);
     await expect(promise).rejects.toMatchObject({

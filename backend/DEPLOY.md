@@ -28,7 +28,7 @@ madmom from git@main (Cython compile). Subsequent deploys cache the
 After deploy, wrangler prints the Worker URL, e.g.:
 
 ```
-https://aurialis-backend.<your-subdomain>.workers.dev
+https://aurialis-core.<your-subdomain>.workers.dev
 ```
 
 ## Wire the frontend
@@ -38,8 +38,8 @@ placeholders:
 
 ```jsonc
 "vars": {
-  "NEXT_PUBLIC_SEPARATION_API_URL": "https://aurialis-backend.<sub>.workers.dev",
-  "NEXT_PUBLIC_DEEP_ANALYSIS_API_URL": "https://aurialis-backend.<sub>.workers.dev"
+  "NEXT_PUBLIC_SEPARATION_API_URL": "https://aurialis-core.<sub>.workers.dev",
+  "NEXT_PUBLIC_DEEP_ANALYSIS_API_URL": "https://aurialis-core.<sub>.workers.dev"
 }
 ```
 

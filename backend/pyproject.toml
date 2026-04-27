@@ -1,5 +1,5 @@
 [project]
-name = "aurialis-backend"
+name = "aurialis-core"
 version = "0.1.0"
 description = "Aurialis Smart Split + Deep Analysis backend"
 requires-python = ">=3.12"

@@ -9,8 +9,13 @@ soundfile>=0.12.0
 # Deep analysis (T2 / T3)
 librosa>=0.10.2
 pyloudnorm>=0.1.1
-# madmom requires numpy<2 + cython; pinned to its last stable release.
-madmom==0.16.1
+# madmom requires numpy<2 + cython.
+# We pull from git@main (commit 0123ac3 + later) instead of pypi==0.16.1
+# because the published 0.16.1 sdist ships pre-generated Cython .c files that
+# `#include "longintrepr.h"` — a header Python made private in 3.10+. The
+# main branch has these files regenerated against modern Python C APIs and
+# builds cleanly on 3.11.
+madmom @ git+https://github.com/CPJKU/madmom.git@main
 
 # Schema validation + tests
 jsonschema>=4.21

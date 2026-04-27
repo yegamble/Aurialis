@@ -1,0 +1,17 @@
+{
+  "name": "aurialis-backend-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker that fronts the Aurialis FastAPI container.",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "@cloudflare/containers": "^0.3.3",
+    "@cloudflare/workers-types": "^4.20260426.1",
+    "typescript": "5.8.3",
+    "wrangler": "^4.85.0"
+  }
+}

@@ -22,7 +22,7 @@
   // below with the deployed Worker URL (e.g.
   // `https://aurialis-core.<account>.workers.dev`).
   "vars": {
-    "NEXT_PUBLIC_SEPARATION_API_URL": "https://aurialis-core.yegamble.workers.dev",
-    "NEXT_PUBLIC_DEEP_ANALYSIS_API_URL": "https://aurialis-core.yegamble.workers.dev"
+    "NEXT_PUBLIC_SEPARATION_API_URL": "https://aurialis-core.yosefgamble.com",
+    "NEXT_PUBLIC_DEEP_ANALYSIS_API_URL": "https://aurialis-core.yosefgamble.com"
   }
 }

@@ -1,5 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import "fake-indexeddb/auto";
 import { useDeepStore } from "../deep-store";
+import { useAudioStore } from "../audio-store";
+import { useLibraryStore } from "../library-store";
 import type { MasteringScript, Move } from "@/types/deep-mastering";
 
 const buildMove = (overrides: Partial<Move> = {}): Move => ({
@@ -108,15 +111,118 @@ describe("deepStore", () => {
     expect(useDeepStore.getState().script).toEqual(script);
   });
 
-  it("reset clears all state", () => {
+  it("reset clears all state including transient flags", () => {
     useDeepStore.getState().setScript(buildScript());
     useDeepStore.getState().setStatus("ready");
     useDeepStore.getState().setSubStatus("script");
+    useDeepStore.getState().setLoadedFromLibrary(true);
+    useDeepStore.getState().setSuppressLibraryAutoUpdate(true);
     useDeepStore.getState().reset();
     const s = useDeepStore.getState();
     expect(s.script).toBeNull();
     expect(s.status).toBe("idle");
     expect(s.subStatus).toBeNull();
     expect(s.scriptActive).toBe(true);
+    expect(s.loadedFromLibrary).toBe(false);
+    expect(s.suppressLibraryAutoUpdate).toBe(false);
   });
 });
+
+describe("deepStore — library persistence side-effect", () => {
+  async function setupClean(): Promise<void> {
+    useDeepStore.getState().reset();
+    useAudioStore.getState().reset();
+    const { createStore, clear } = await import("idb-keyval");
+    await clear(createStore("aurialis-library-entries-v1", "kv"));
+    await clear(createStore("aurialis-library-prefs-v1", "kv"));
+    await useLibraryStore.getState().hydrate();
+  }
+
+  beforeEach(async () => {
+    await setupClean();
+  });
+
+  it("setScript with file present + script → adds an entry to the library", async () => {
+    const file = new File([new Uint8Array([1, 2, 3, 4, 5])], "song.wav", {
+      type: "audio/wav",
+      lastModified: 1700000000000,
+    });
+    useAudioStore.getState().setFile(file);
+
+    useDeepStore.getState().setScript(buildScript());
+    // Side-effect is fire-and-forget; flush microtasks so the addEntry promise resolves.
+    await new Promise((r) => setTimeout(r, 50));
+
+    const entries = useLibraryStore.getState().entries;
+    expect(entries.length).toBe(1);
+    expect(entries[0]!.fileName).toBe("song.wav");
+    expect(entries[0]!.script).not.toBeNull();
+  });
+
+  it("setScript(null) does not write to library", async () => {
+    const file = new File([new Uint8Array([1, 2, 3, 4, 5])], "song.wav", {
+      type: "audio/wav",
+    });
+    useAudioStore.getState().setFile(file);
+
+    useDeepStore.getState().setScript(null);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(useLibraryStore.getState().entries.length).toBe(0);
+  });
+
+  it("setScript with skipPersist=true does not write to library", async () => {
+    const file = new File([new Uint8Array([1, 2, 3, 4, 5])], "song.wav", {
+      type: "audio/wav",
+    });
+    useAudioStore.getState().setFile(file);
+
+    useDeepStore.getState().setScript(buildScript(), { skipPersist: true });
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(useLibraryStore.getState().entries.length).toBe(0);
+  });
+
+  it("setScript while suppressLibraryAutoUpdate=true does not write to library", async () => {
+    const file = new File([new Uint8Array([1, 2, 3, 4, 5])], "song.wav", {
+      type: "audio/wav",
+    });
+    useAudioStore.getState().setFile(file);
+    useDeepStore.getState().setSuppressLibraryAutoUpdate(true);
+
+    useDeepStore.getState().setScript(buildScript());
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(useLibraryStore.getState().entries.length).toBe(0);
+  });
+
+  it("re-analyzing the same file updates the existing entry, no duplicate", async () => {
+    const file = new File([new Uint8Array([1, 2, 3, 4, 5])], "song.wav", {
+      type: "audio/wav",
+      lastModified: 1700000000000,
+    });
+    useAudioStore.getState().setFile(file);
+
+    useDeepStore.getState().setScript(buildScript([buildMove({ id: "m1" })]));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(useLibraryStore.getState().entries.length).toBe(1);
+
+    useDeepStore.getState().setScript(buildScript([buildMove({ id: "m2", reason: "v2" })]));
+    await new Promise((r) => setTimeout(r, 50));
+
+    const entries = useLibraryStore.getState().entries;
+    expect(entries.length).toBe(1);
+    expect(entries[0]!.script!.moves[0]!.id).toBe("m2");
+  });
+
+  it("setScript with no file in audio-store is a no-op for persistence", async () => {
+    // No setFile call.
+    useDeepStore.getState().setScript(buildScript());
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(useLibraryStore.getState().entries.length).toBe(0);
+  });
+});
+
+// Suppress unused import warning when vi isn't used elsewhere.
+void vi;

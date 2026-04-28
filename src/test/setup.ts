@@ -1,4 +1,5 @@
 /// <reference types="vitest" />
+import { webcrypto } from "node:crypto";
 import "@testing-library/jest-dom/vitest";
 
 // AudioWorklet mock — must be defined before MockAudioContext
@@ -178,6 +179,15 @@ if (typeof Blob !== "undefined" && !Blob.prototype.arrayBuffer) {
       reader.readAsArrayBuffer(this);
     });
   };
+}
+
+// jsdom doesn't ship Web Crypto. Polyfill from Node's webcrypto so
+// crypto.subtle.digest works in tests (used by library-fingerprint).
+if (typeof globalThis.crypto === "undefined" || typeof globalThis.crypto.subtle === "undefined") {
+  Object.defineProperty(globalThis, "crypto", {
+    configurable: true,
+    value: webcrypto,
+  });
 }
 
 // Mock URL.createObjectURL

@@ -1,0 +1,24 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e6]
+      - heading "Aurialis" [level=1] [ref=e8]
+    - paragraph [ref=e9]: Professional audio mastering in your browser
+  - button "Upload audio files. Drop audio here or click to browse." [ref=e11] [cursor=pointer]:
+    - img [ref=e13]
+    - generic [ref=e16]:
+      - paragraph [ref=e17]: Drop audio here or click to browse
+      - paragraph [ref=e18]: WAV, MP3, FLAC, OGG, AAC, M4A · Multiple files or ZIP for stem mixing
+  - generic [ref=e19]:
+    - generic [ref=e20]:
+      - img [ref=e22]
+      - paragraph [ref=e24]: One-Knob Mastering
+      - paragraph [ref=e25]: Simple mode for everyone
+    - generic [ref=e26]:
+      - img [ref=e28]
+      - paragraph [ref=e30]: Pro Controls
+      - paragraph [ref=e31]: Full chain for experts
+    - generic [ref=e32]:
+      - img [ref=e34]
+      - paragraph [ref=e37]: Export Ready
+      - paragraph [ref=e38]: Streaming & Hi-Res formats

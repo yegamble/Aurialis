@@ -1,0 +1,147 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e44] [cursor=pointer]:
+    - img [ref=e45]
+  - alert [ref=e48]
+  - generic [ref=e70]:
+    - banner [ref=e71]:
+      - generic [ref=e72]:
+        - button "Back to upload" [ref=e73]:
+          - img [ref=e74]
+        - generic [ref=e76]:
+          - img [ref=e78]
+          - generic [ref=e80]: Aurialis
+      - generic [ref=e81]:
+        - button "simple" [pressed] [ref=e82]
+        - button "advanced" [ref=e83]
+        - button "deep" [ref=e84]
+    - generic [ref=e85]:
+      - complementary [ref=e86]:
+        - generic [ref=e88]:
+          - generic [ref=e89]:
+            - slider "Mastering intensity" [ref=e90] [cursor=pointer]:
+              - img [ref=e91]
+              - generic [ref=e96]: "50"
+            - paragraph [ref=e97]: Intensity
+            - button "Auto Master" [ref=e98]:
+              - img [ref=e99]
+              - text: Auto Master
+          - generic [ref=e102]:
+            - paragraph [ref=e103]: Genre
+            - generic [ref=e104]:
+              - button "Hip-Hop" [ref=e105]:
+                - img [ref=e106]
+                - text: Hip-Hop
+              - button "Pop" [pressed] [ref=e110]:
+                - img [ref=e111]
+                - text: Pop
+              - button "Rock" [ref=e113]:
+                - img [ref=e114]
+                - text: Rock
+              - button "Electronic" [ref=e116]:
+                - img [ref=e117]
+                - text: Electronic
+              - button "Jazz" [ref=e123]:
+                - img [ref=e124]
+                - text: Jazz
+              - button "Classical" [ref=e129]:
+                - img [ref=e130]
+                - text: Classical
+              - button "R&B" [ref=e132]:
+                - img [ref=e133]
+                - text: R&B
+              - button "Lo-Fi" [ref=e139]:
+                - img [ref=e140]
+                - text: Lo-Fi
+              - button "Podcast" [ref=e144]:
+                - img [ref=e145]
+                - text: Podcast
+          - generic [ref=e148]:
+            - paragraph [ref=e149]: Quick Toggles
+            - generic [ref=e150]:
+              - button "Clean Up" [ref=e151]:
+                - img [ref=e152]
+                - text: Clean Up
+              - button "Warm" [ref=e154]:
+                - img [ref=e155]
+                - text: Warm
+              - button "Bright" [ref=e161]:
+                - img [ref=e162]
+                - text: Bright
+              - button "Wide" [ref=e168]:
+                - img [ref=e169]
+                - text: Wide
+              - button "Loud" [ref=e174]:
+                - img [ref=e175]
+                - text: Loud
+      - main [ref=e179]:
+        - generic [ref=e180]:
+          - generic [ref=e181]:
+            - img [ref=e183]
+            - generic [ref=e187]:
+              - generic [ref=e188]:
+                - paragraph [ref=e189]: demo-track.wav
+                - generic [ref=e190]: Loaded from library
+              - paragraph [ref=e191]: 0:00 · 44.1 kHz · 0ch
+          - generic [ref=e192]:
+            - paragraph [ref=e193]: "--- LUFS"
+            - paragraph [ref=e194]: "--- dBTP"
+            - paragraph [ref=e195]: "LRA: --- LU"
+            - paragraph [ref=e196]: "Corr: +1.00"
+            - paragraph [ref=e197]: "MB: ---"
+        - slider "Audio waveform. Click to seek." [ref=e198] [cursor=pointer]
+        - generic [ref=e200]:
+          - button "Click to compare bypass" [ref=e201]:
+            - generic [ref=e202]: A
+            - generic [ref=e203]: Processed
+          - button "Stop and return to beginning" [ref=e204]:
+            - img [ref=e205]
+          - button "Play" [disabled] [ref=e207]:
+            - img [ref=e208]
+          - generic [ref=e210]: 0:00 / 0:00
+        - generic "Frequency spectrum display" [ref=e211]
+        - generic [ref=e213]:
+          - paragraph [ref=e214]: Export
+          - generic [ref=e215]:
+            - button "Streaming" [ref=e216]
+            - button "CD Quality" [pressed] [ref=e217]
+            - button "Hi-Res" [ref=e218]
+          - generic [ref=e219]:
+            - generic [ref=e220]:
+              - paragraph [ref=e221]: Sample Rate
+              - combobox "Sample Rate" [ref=e222] [cursor=pointer]:
+                - option "44.1 kHz" [selected]
+                - option "48 kHz"
+                - option "96 kHz"
+            - generic [ref=e223]:
+              - paragraph [ref=e224]: Bit Depth
+              - combobox "Bit Depth" [ref=e225] [cursor=pointer]:
+                - option "16-bit" [selected]
+                - option "24-bit"
+                - option "32-bit float"
+            - generic [ref=e226]:
+              - paragraph [ref=e227]: Dither
+              - combobox "Dither" [ref=e228] [cursor=pointer]:
+                - option "None"
+                - option "TPDF" [selected]
+          - button "Export WAV" [ref=e229]:
+            - img [ref=e230]
+            - text: Export WAV
+      - complementary [ref=e233]:
+        - generic [ref=e234]:
+          - generic [ref=e235]:
+            - generic [ref=e236]: Levels
+            - generic [ref=e237]: 0.0LUFS
+          - generic [ref=e238]:
+            - generic [ref=e240]: L
+            - generic [ref=e243]: R
+          - generic [ref=e245]:
+            - generic [ref=e246]:
+              - paragraph [ref=e247]: Target
+              - paragraph [ref=e248]: "-14.0LUFS"
+            - generic [ref=e249]:
+              - paragraph [ref=e250]: True Peak
+              - paragraph [ref=e251]: 0.0dBTP
+            - generic [ref=e252]:
+              - paragraph [ref=e253]: Dynamic Range
+              - paragraph [ref=e254]: 0.0dB
+        - generic [ref=e256]: Goniometer

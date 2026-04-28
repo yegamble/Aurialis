@@ -8,6 +8,8 @@ import type {
   DeepErrorDetails,
   DeepSubStatus,
 } from "@/lib/api/deep-analysis";
+import { useAudioStore } from "./audio-store";
+import { useLibraryStore } from "./library-store";
 
 export type DeepStatus =
   | "idle"
@@ -35,15 +37,25 @@ export interface DeepState {
   scriptActive: boolean;
   /** Last error details, if any. Drives the error UI. */
   errorDetails: DeepErrorDetails | null;
+  /** True when the active script was loaded from the library (vs freshly analyzed). Drives the badge. */
+  loadedFromLibrary: boolean;
+  /**
+   * When true, library-store side-effects (auto-save on setScript, settings
+   * auto-update) are suppressed. Used during the "Start fresh" flow so the
+   * old library entry stays intact until the next user-initiated Analyze.
+   */
+  suppressLibraryAutoUpdate: boolean;
 
   setProfile: (id: ProfileId) => void;
   setStatus: (s: DeepStatus) => void;
   setSubStatus: (s: DeepSubStatus) => void;
   setProgress: (n: number) => void;
   setStartedAt: (ms: number | null) => void;
-  setScript: (s: MasteringScript | null) => void;
+  setScript: (s: MasteringScript | null, opts?: { skipPersist?: boolean }) => void;
   setScriptActive: (active: boolean) => void;
   setError: (details: DeepErrorDetails | null) => void;
+  setLoadedFromLibrary: (v: boolean) => void;
+  setSuppressLibraryAutoUpdate: (v: boolean) => void;
 
   /** Patch a Move and flag it as edited. No-op if moveId not found. */
   applyMoveEdit: (moveId: string, patch: Partial<Move>) => void;
@@ -64,15 +76,25 @@ export const useDeepStore = create<DeepState>((set, get) => ({
   startedAt: null,
   scriptActive: true,
   errorDetails: null,
+  loadedFromLibrary: false,
+  suppressLibraryAutoUpdate: false,
 
   setProfile: (id) => set({ profile: id }),
   setStatus: (s) => set({ status: s }),
   setSubStatus: (s) => set({ subStatus: s }),
   setProgress: (n) => set({ progress: n }),
   setStartedAt: (ms) => set({ startedAt: ms }),
-  setScript: (s) => set({ script: s }),
+  setScript: (s, opts) => {
+    set({ script: s });
+    if (s && !opts?.skipPersist && !get().suppressLibraryAutoUpdate) {
+      void persistScriptToLibrary(s);
+    }
+  },
   setScriptActive: (scriptActive) => set({ scriptActive }),
   setError: (errorDetails) => set({ errorDetails }),
+  setLoadedFromLibrary: (loadedFromLibrary) => set({ loadedFromLibrary }),
+  setSuppressLibraryAutoUpdate: (suppressLibraryAutoUpdate) =>
+    set({ suppressLibraryAutoUpdate }),
 
   applyMoveEdit: (moveId, patch) => {
     const script = get().script;
@@ -130,5 +152,25 @@ export const useDeepStore = create<DeepState>((set, get) => ({
       startedAt: null,
       scriptActive: true,
       errorDetails: null,
+      loadedFromLibrary: false,
+      suppressLibraryAutoUpdate: false,
     }),
 }));
+
+/**
+ * Persist a fresh script to the library. Looks up the active audio file via
+ * `useAudioStore` — no-op when the store is empty (script can't be associated
+ * with a song). Errors are logged, not thrown — losing a save is annoying but
+ * shouldn't break the analysis flow.
+ */
+async function persistScriptToLibrary(script: MasteringScript): Promise<void> {
+  try {
+    const file = useAudioStore.getState().file;
+    if (!file) return;
+    const lib = useLibraryStore.getState();
+    if (!lib.hydrated) return;
+    await lib.addEntry(file, { script });
+  } catch (err) {
+    console.error("[deep-store] failed to persist script to library", err);
+  }
+}

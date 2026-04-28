@@ -22,6 +22,8 @@ import { ABToggle } from "@/components/mastering/ABToggle";
 import { ExportPanel } from "@/components/export/ExportPanel";
 import { useAudioStore } from "@/lib/stores/audio-store";
 import { useUIStore } from "@/lib/stores/ui-store";
+import { useDeepStore } from "@/lib/stores/deep-store";
+import { useLibraryStore } from "@/lib/stores/library-store";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { useVisualization } from "@/hooks/useVisualization";
 import { useIsLgViewport } from "@/hooks/use-is-lg-viewport";
@@ -99,16 +101,46 @@ export default function MasterPage() {
   const setParams = useAudioStore((s) => s.setParams);
   const metering = useAudioStore((s) => s.metering);
 
+  // Library bridge — used to persist + restore mastering settings per song.
+  const loadedFromLibrary = useDeepStore((s) => s.loadedFromLibrary);
+  const suppressLibraryAutoUpdate = useDeepStore((s) => s.suppressLibraryAutoUpdate);
+  const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
+  const updateLibrarySettings = useLibraryStore((s) => s.updateSettings);
+
   // Export state
   const [isExporting, setIsExporting] = useState(false);
 
-  // Simple mode: genre, intensity (0-100), and toggles
-  const [genre, setGenre] = useState<GenreName>("pop");
-  const [intensity, setIntensity] = useState(50);
-  const [toggles, setToggles] = useState({ ...INITIAL_TOGGLES });
-  const [tonePreset, setTonePreset] = useState<TonePresetName | null>(null);
+  // Simple mode: genre, intensity (0-100), and toggles. Hydrated from the
+  // library entry on mount when loadedFromLibrary is set.
+  const initialSimple = (() => {
+    if (loadedFromLibrary && activeFingerprint) {
+      const entry = useLibraryStore.getState().entries.find((e) => e.fingerprint === activeFingerprint);
+      const s = entry?.settings;
+      if (s) {
+        return {
+          genre: s.simple.genre,
+          intensity: s.simple.intensity,
+          toggles: { ...INITIAL_TOGGLES, ...s.simple.toggles },
+          tonePreset: s.tonePreset,
+          outputPreset: s.outputPreset,
+        };
+      }
+    }
+    return {
+      genre: "pop" as GenreName,
+      intensity: 50,
+      toggles: { ...INITIAL_TOGGLES },
+      tonePreset: null as TonePresetName | null,
+      outputPreset: null as OutputPresetName | null,
+    };
+  })();
+
+  const [genre, setGenre] = useState<GenreName>(initialSimple.genre);
+  const [intensity, setIntensity] = useState(initialSimple.intensity);
+  const [toggles, setToggles] = useState(initialSimple.toggles);
+  const [tonePreset, setTonePreset] = useState<TonePresetName | null>(initialSimple.tonePreset);
   const [outputPreset, setOutputPreset] = useState<OutputPresetName | null>(
-    null
+    initialSimple.outputPreset
   );
 
   // Re-compute params whenever genre/intensity/toggles change
@@ -122,14 +154,38 @@ export default function MasterPage() {
     setParams(applySimpleToggles(base, activeToggles));
   };
 
-  // Sync store params with the genre/intensity system on mount.
-  // The store initializes with neutral defaults; this aligns them with the
-  // actual genre+intensity+toggles state so the first toggle doesn't cause
-  // an unexpected param jump.
+  // Sync store params with the genre/intensity system on mount — UNLESS we
+  // were loaded from library (in which case the store already holds restored
+  // params and recomputing would clobber them with derived defaults).
   useEffect(() => {
+    if (loadedFromLibrary) return;
     recomputeParams(genre, intensity, toggles);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally run once — captures initial genre/intensity/toggles
+  }, []);
+
+  // Auto-save mastering settings to the library entry whenever any tracked
+  // slice changes. Skipped during Start-fresh (suppress flag) and when no
+  // active library entry exists yet (e.g., fresh upload pre-Analyze).
+  useEffect(() => {
+    if (!activeFingerprint || suppressLibraryAutoUpdate) return;
+    updateLibrarySettings(activeFingerprint, {
+      params,
+      simple: { genre, intensity, toggles },
+      tonePreset,
+      outputPreset,
+      savedAt: Date.now(),
+    });
+  }, [
+    activeFingerprint,
+    suppressLibraryAutoUpdate,
+    updateLibrarySettings,
+    params,
+    genre,
+    intensity,
+    toggles,
+    tonePreset,
+    outputPreset,
+  ]);
 
   const handleGenreChange = (newGenre: GenreName) => {
     setGenre(newGenre);
@@ -334,7 +390,10 @@ export default function MasterPage() {
                 <Music className="w-4 h-4 text-[#0a84ff]" />
               </div>
               <div>
-                <p className="text-white text-sm">{file.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-white text-sm">{file.name}</p>
+                  <LibraryStateBadge />
+                </div>
                 <p className="text-[rgba(255,255,255,0.35)] text-xs">
                   {formatTime(duration)} &middot;{" "}
                   {(sampleRate / 1000).toFixed(1)} kHz &middot;{" "}
@@ -502,4 +561,32 @@ export default function MasterPage() {
       </div>
     </div>
   );
+}
+
+function LibraryStateBadge(): React.ReactElement | null {
+  const loadedFromLibrary = useDeepStore((s) => s.loadedFromLibrary);
+  const suppress = useDeepStore((s) => s.suppressLibraryAutoUpdate);
+
+  if (loadedFromLibrary) {
+    return (
+      <span
+        data-testid="loaded-from-library-badge"
+        className="text-[10px] px-1.5 py-0.5 rounded bg-[#0a84ff]/15 text-[#0a84ff] uppercase tracking-wider"
+      >
+        Loaded from library
+      </span>
+    );
+  }
+  if (suppress) {
+    return (
+      <span
+        data-testid="started-fresh-badge"
+        className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 uppercase tracking-wider"
+        title="Analyze to overwrite the saved version"
+      >
+        Fresh — analyze to overwrite
+      </span>
+    );
+  }
+  return null;
 }

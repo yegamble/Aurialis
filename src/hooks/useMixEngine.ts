@@ -13,6 +13,11 @@ import { generateAutoMix } from "@/lib/audio/auto-mixer";
 import { loadStemsFromFiles, loadStemsFromZip, isZipFile } from "@/lib/audio/stem-loader";
 import { DEFAULT_CHANNEL_PARAMS, STEM_COLORS } from "@/types/mixer";
 import type { StemTrack, StemChannelParams, AnalyzedStem } from "@/types/mixer";
+import {
+  emitStage,
+  emitErrorTrace,
+  newRunId,
+} from "@/lib/analysis-stage/emitter";
 
 interface MixEngineSnapshot {
   isPlaying: boolean;
@@ -275,34 +280,81 @@ export function useMixEngine() {
 
     useMixerStore.getState().setIsAutoMixing(true);
 
-    // Analyze all stems
-    const analyzed: AnalyzedStem[] = stems.map((stem) => {
-      const result = analyzeStem(stem.audioBuffer!, stem.name);
-      result.stemId = stem.id;
+    const runId = newRunId();
+    useMixerStore.getState().setAutoMixRunId(runId);
+    const total = stems.length;
+    const analyzed: AnalyzedStem[] = [];
+    let currentStemIndex = 0;
+    let currentStemName = "";
 
-      // Update classification in store
-      useMixerStore
-        .getState()
-        .setClassification(stem.id, result.classification, result.confidence);
+    try {
+      // Analyze all stems with per-stem stage events.
+      for (let i = 0; i < stems.length; i++) {
+        const stem = stems[i]!;
+        currentStemIndex = i;
+        currentStemName = stem.name;
+        const stage = `stem-${i + 1}/${total}`;
+        emitStage({
+          flow: "auto-mix",
+          runId,
+          stage,
+          phase: "start",
+          note: stem.name,
+        });
+        const result = analyzeStem(stem.audioBuffer!, stem.name);
+        result.stemId = stem.id;
+        useMixerStore
+          .getState()
+          .setClassification(stem.id, result.classification, result.confidence);
+        analyzed.push(result);
+      }
 
-      return result;
-    });
+      // Generate auto-mix params.
+      emitStage({
+        flow: "auto-mix",
+        runId,
+        stage: "generate-mix",
+        phase: "start",
+      });
+      const { stemParams, masterParams } = generateAutoMix(analyzed);
 
-    // Generate auto-mix params
-    const { stemParams, masterParams } =
-      generateAutoMix(analyzed);
+      // Apply to store + engine.
+      emitStage({
+        flow: "auto-mix",
+        runId,
+        stage: "apply",
+        phase: "start",
+      });
+      useMixerStore.getState().setAutoMixResults(stemParams);
+      useMixerStore.getState().setMasterParams(masterParams);
+      for (const [stemId, params] of Object.entries(stemParams)) {
+        engine.applyChannelParams(stemId, params);
+      }
+      engine.applyMasterParams(masterParams);
 
-    // Apply to store
-    useMixerStore.getState().setAutoMixResults(stemParams);
-    useMixerStore.getState().setMasterParams(masterParams);
-
-    // Apply to engine
-    for (const [stemId, params] of Object.entries(stemParams)) {
-      engine.applyChannelParams(stemId, params);
+      emitStage({
+        flow: "auto-mix",
+        runId,
+        stage: "done",
+        phase: "end",
+        progress: 100,
+      });
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Auto-mix failed";
+      const stageName = `stem-${currentStemIndex + 1}/${total}`;
+      emitStage({
+        flow: "auto-mix",
+        runId,
+        stage: stageName,
+        phase: "error",
+        note: `${currentStemName}: ${message}`,
+      });
+      emitErrorTrace(runId, `${currentStemName}: ${message}`);
+      throw e;
+    } finally {
+      useMixerStore.getState().setIsAutoMixing(false);
     }
-    engine.applyMasterParams(masterParams);
-
-    useMixerStore.getState().setIsAutoMixing(false);
   }, [engine]);
 
   const setStemOffset = useCallback(

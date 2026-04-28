@@ -141,6 +141,125 @@ describe("DeepProgressCard", () => {
     expect(screen.getByTestId("deep-progress-retry")).toBeEnabled();
   });
 
+  describe("failed-at-stage label", () => {
+    it("renders 'Failed at: <label>' when failedAtStageLabel is set", () => {
+      const details: DeepErrorDetails = {
+        message: "Backend 500",
+        status: "500",
+        raw: "{}",
+        at: "2026-04-28T15:00:00.000Z",
+      };
+      render(
+        <DeepProgressCard
+          status="error"
+          subStatus={null}
+          progress={0}
+          elapsedSec={5}
+          errorDetails={details}
+          onRetry={noop}
+          onCancel={noop}
+          failedAtStageLabel="Analyzing stems"
+        />
+      );
+      expect(
+        screen.getByTestId("deep-progress-error-message")
+      ).toHaveTextContent("Failed at: Analyzing stems");
+      // Original message still rendered as a sub-line so the user keeps the
+      // technical detail.
+      expect(
+        screen.getByTestId("deep-progress-error-detail-message")
+      ).toHaveTextContent("Backend 500");
+    });
+
+    it("falls back to the error message when failedAtStageLabel is null", () => {
+      const details: DeepErrorDetails = {
+        message: "Backend 500",
+        status: "500",
+        raw: "{}",
+        at: "2026-04-28T15:00:00.000Z",
+      };
+      render(
+        <DeepProgressCard
+          status="error"
+          subStatus={null}
+          progress={0}
+          elapsedSec={5}
+          errorDetails={details}
+          onRetry={noop}
+          onCancel={noop}
+          failedAtStageLabel={null}
+        />
+      );
+      expect(
+        screen.getByTestId("deep-progress-error-message")
+      ).toHaveTextContent("Backend 500");
+      // No sub-line when there's no separate failed-at headline.
+      expect(
+        screen.queryByTestId("deep-progress-error-detail-message")
+      ).toBeNull();
+    });
+  });
+
+  describe("per-stage durations", () => {
+    it("renders duration suffix only for stages with > 0 ms duration", () => {
+      render(
+        <DeepProgressCard
+          status="analyzing"
+          subStatus="stems"
+          progress={50}
+          elapsedSec={45}
+          errorDetails={null}
+          onRetry={noop}
+          onCancel={noop}
+          stageDurationsMs={{ sections: 4200, stems: 12000 }}
+        />
+      );
+      expect(
+        screen.getByTestId("deep-progress-stage-sections-duration")
+      ).toHaveTextContent("4.2s");
+      expect(
+        screen.getByTestId("deep-progress-stage-stems-duration")
+      ).toHaveTextContent("12.0s");
+      // script has no duration → no suffix element rendered
+      expect(
+        screen.queryByTestId("deep-progress-stage-script-duration")
+      ).toBeNull();
+    });
+  });
+
+  describe("stage trace in error details", () => {
+    it("renders stageTraceText below the technical details when expanded", () => {
+      const details: DeepErrorDetails = {
+        message: "Boom",
+        status: "500",
+        raw: "{}",
+        at: "2026-04-28T15:00:00.000Z",
+      };
+      render(
+        <DeepProgressCard
+          status="error"
+          subStatus={null}
+          progress={0}
+          elapsedSec={5}
+          errorDetails={details}
+          onRetry={noop}
+          onCancel={noop}
+          failedAtStageLabel="Analyzing stems"
+          stageTraceText="queued +0.0s\nsections +1.2s\nstems +5.4s (failed)"
+        />
+      );
+      // Hidden by default
+      expect(screen.queryByTestId("deep-progress-stage-trace")).toBeNull();
+      fireEvent.click(screen.getByTestId("deep-progress-details-toggle"));
+      expect(
+        screen.getByTestId("deep-progress-stage-trace")
+      ).toHaveTextContent(/queued/);
+      expect(
+        screen.getByTestId("deep-progress-stage-trace")
+      ).toHaveTextContent(/stems/);
+    });
+  });
+
   it("error state without details still renders a fallback message", () => {
     render(
       <DeepProgressCard

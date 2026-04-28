@@ -763,3 +763,69 @@ test.describe("Export buttons", () => {
     expect(download.suggestedFilename()).toMatch(/\.wav$/i);
   });
 });
+
+/**
+ * Verbose progress (harness) — Mastering Auto-master.
+ * Verifies the inline progress indicator shows during analysis and that
+ * the harness emits ordered `[analysis:mastering-auto:<phase>]` lines.
+ */
+test.describe("Verbose progress (harness) — Mastering Auto-master", () => {
+  test("emits ordered phase console.info lines on Auto-master click", async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    const lines: string[] = [];
+    page.on("console", (msg) => {
+      // Capture all console types — Next.js sometimes routes info as log/debug.
+      lines.push(msg.text());
+    });
+
+    await uploadAndNavigate(page);
+    await showSimple(page);
+
+    // Wait for the audio engine to load the buffer before clicking
+    // Auto-master — otherwise handleAutoMaster early-returns on null buffer.
+    await page.waitForFunction(
+      () => {
+        const labels = document.querySelectorAll("button");
+        return Array.from(labels).some((b) => /auto master/i.test(b.textContent ?? ""));
+      },
+      { timeout: 10_000 }
+    );
+
+    const autoBtn = page
+      .getByRole("button", { name: /auto.?master/i })
+      .first();
+    await autoBtn.waitFor({ state: "visible" });
+    // Give the audio buffer a moment to finish decoding.
+    await page.waitForTimeout(2000);
+    await autoBtn.click();
+
+    // Wait until the final 'done' line appears, with a generous timeout for
+    // longer audio files. Polls every 250ms.
+    await page.waitForFunction(
+      (capturedLines: string[]) =>
+        capturedLines.some((l) => l.includes("[analysis:mastering-auto:done]")),
+      lines,
+      { timeout: 30_000, polling: 250 }
+    ).catch(() => {
+      // Fall through — we'll assert below with a better error message.
+    });
+
+    const harness = lines.filter((l) =>
+      l.includes("[analysis:mastering-auto:")
+    );
+    const stagesInOrder = ["loudness", "peak", "dynamic-range", "spectral-balance", "done"];
+    let lastIdx = -1;
+    for (const stage of stagesInOrder) {
+      const idx = harness.findIndex(
+        (l, i) => i > lastIdx && l.includes(`[analysis:mastering-auto:${stage}]`)
+      );
+      expect(
+        idx,
+        `expected ordered stage [${stage}] to appear after previous stages. Captured: ${JSON.stringify(harness.slice(0, 10))}`
+      ).toBeGreaterThan(lastIdx);
+      lastIdx = idx;
+    }
+  });
+});

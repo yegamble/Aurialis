@@ -17,15 +17,27 @@ import {
 import { StemUpload } from "@/components/mixer/StemUpload";
 import { StemList } from "@/components/mixer/StemList";
 import { StemTimeline } from "@/components/mixer/StemTimeline";
-import { SeparationProgress } from "@/components/mixer/SeparationProgress";
+import { SeparationProgressCard } from "@/components/mix/SeparationProgressCard";
 import { useMixEngine } from "@/hooks/useMixEngine";
 import { useMixerStore } from "@/lib/stores/mixer-store";
 import {
   startSeparation,
-  pollJobStatus,
   downloadStem,
   checkBackendHealth,
+  SeparationError,
+  type SeparationErrorDetails,
 } from "@/lib/api/separation";
+import { pollSeparationUntilDone } from "@/lib/api/separation-polling";
+import {
+  computeSeparationStageView,
+  deriveSeparationStage,
+  emitSeparationDownloading,
+  emitSeparationUploadStart,
+  makeSeparationStageEmitter,
+  type SeparationStage,
+} from "@/lib/api/separation-stage";
+import { emitStage, emitErrorTrace, newRunId } from "@/lib/analysis-stage/emitter";
+import { useAnalysisStageStore } from "@/lib/stores/analysis-stage-store";
 import type { JobStatus } from "@/lib/api/separation";
 import type { StemChannelParams } from "@/types/mixer";
 
@@ -39,7 +51,21 @@ export default function MixPage() {
   const router = useRouter();
   const stems = useMixerStore((s) => s.stems);
   const isAutoMixing = useMixerStore((s) => s.isAutoMixing);
+  const autoMixRunId = useMixerStore((s) => s.autoMixRunId);
   const masterParams = useMixerStore((s) => s.masterParams);
+  const autoMixRun = useAnalysisStageStore((s) =>
+    autoMixRunId ? s.runs[autoMixRunId] : undefined
+  );
+  const autoMixActiveStage = autoMixRun?.activeStage ?? null;
+  const autoMixLabel = isAutoMixing
+    ? autoMixActiveStage && autoMixActiveStage.startsWith("stem-")
+      ? `Analyzing ${autoMixActiveStage.replace("stem-", "stem ")}`
+      : autoMixActiveStage === "generate-mix"
+        ? "Generating mix…"
+        : autoMixActiveStage === "apply"
+          ? "Applying mix…"
+          : "Analyzing…"
+    : "Auto Mix";
 
   const {
     isPlaying,
@@ -65,10 +91,50 @@ export default function MixPage() {
   // Separation state
   const [isSeparating, setIsSeparating] = useState(false);
   const [separationStatus, setSeparationStatus] = useState<JobStatus | null>(null);
+  const [separationError, setSeparationError] =
+    useState<SeparationErrorDetails | null>(null);
+  const [separationRunId, setSeparationRunId] = useState<string | null>(null);
+  const [separationStartedAt, setSeparationStartedAt] = useState<number | null>(
+    null
+  );
+  const [separationNow, setSeparationNow] = useState(() => Date.now());
   const [showModelSelect, setShowModelSelect] = useState(false);
   const [pendingSingleFile, setPendingSingleFile] = useState<File | null>(null);
   const [smartRepairEnabled, setSmartRepairEnabled] = useState(true);
   const [backendAvailable, setBackendAvailable] = useState<boolean | null>(null);
+
+  // Tick separationNow once per second while a run is active so the elapsed
+  // timer in SeparationProgressCard updates live (mirrors DeepMastering).
+  useEffect(() => {
+    if (!isSeparating) return;
+    const id = setInterval(() => setSeparationNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isSeparating]);
+
+  // Subscribe to the harness store for the current separation run so the card
+  // can show per-stage durations + failed-at label.
+  const separationRun = useAnalysisStageStore((s) =>
+    separationRunId ? s.runs[separationRunId] : undefined
+  );
+  const separationView = computeSeparationStageView(
+    separationRun,
+    separationNow
+  );
+  const separationActiveStage: SeparationStage | null = separationStatus
+    ? deriveSeparationStage(separationStatus)
+    : null;
+  const separationElapsedSec =
+    isSeparating && separationStartedAt
+      ? Math.max(
+          0,
+          Math.floor((separationNow - separationStartedAt) / 1000)
+        )
+      : 0;
+  const separationCardStatus: "idle" | "analyzing" | "error" = separationError
+    ? "error"
+    : isSeparating
+      ? "analyzing"
+      : "idle";
 
   // Check backend on mount
   useEffect(() => {
@@ -111,6 +177,7 @@ export default function MixPage() {
       setPendingSingleFile(null);
       setIsSeparating(true);
       setLoadError(null);
+      setSeparationError(null);
       setSeparationStatus({
         jobId: "",
         status: "queued",
@@ -120,29 +187,40 @@ export default function MixPage() {
         error: null,
       });
 
+      const runId = newRunId();
+      setSeparationRunId(runId);
+      setSeparationStartedAt(Date.now());
+      setSeparationNow(Date.now());
+      emitSeparationUploadStart(runId);
+      const ctl = new AbortController();
+
+      let jobId = "";
       try {
-        const { jobId } = await startSeparation(file, model);
+        const startResult = await startSeparation(file, model, ctl.signal);
+        jobId = startResult.jobId;
 
-        // Poll until done
-        const poll = async (): Promise<JobStatus> => {
-          const status = await pollJobStatus(jobId);
-          setSeparationStatus(status);
-          if (status.status === "done" || status.status === "error") {
-            return status;
+        const stageEmitter = makeSeparationStageEmitter(runId);
+        const pollResult = await pollSeparationUntilDone(
+          {
+            jobId,
+            signal: ctl.signal,
+            isCancelling: () => false,
+            onPoll: (status, elapsedMs) => {
+              setSeparationStatus(status);
+              stageEmitter(status, elapsedMs);
+            },
           }
-          await new Promise((r) => setTimeout(r, 2000));
-          return poll();
-        };
+        );
 
-        const finalStatus = await poll();
-
-        if (finalStatus.status === "error") {
-          setLoadError(finalStatus.error ?? "Separation failed");
+        if (pollResult.kind === "cancelled") {
           setIsSeparating(false);
           return;
         }
 
+        const finalStatus = pollResult.final;
+
         // Download all stems and load into mixer
+        emitSeparationDownloading(runId);
         await engine.init();
         const ctx = engine.ctx!;
         const stemBuffers: Array<{ name: string; buffer: AudioBuffer }> = [];
@@ -205,9 +283,40 @@ export default function MixPage() {
         // Auto-mix after separation
         await autoMix();
 
+        // Mark the harness run as done now that downloads + auto-mix complete.
+        emitStage({
+          flow: "smart-split",
+          runId,
+          stage: "done",
+          phase: "end",
+          progress: 100,
+        });
         setIsSeparating(false);
       } catch (e) {
-        setLoadError(e instanceof Error ? e.message : "Separation failed");
+        if (e instanceof DOMException && e.name === "AbortError") {
+          setIsSeparating(false);
+          return;
+        }
+        const details: SeparationErrorDetails =
+          e instanceof SeparationError
+            ? e.details
+            : {
+                message: e instanceof Error ? e.message : "Separation failed",
+                status: "client",
+                jobId: jobId || undefined,
+                raw: e instanceof Error ? (e.stack ?? e.message) : String(e),
+                at: new Date().toISOString(),
+              };
+        emitStage({
+          flow: "smart-split",
+          runId,
+          stage: "error",
+          phase: "error",
+          note: details.message,
+        });
+        emitErrorTrace(runId, details.message);
+        setSeparationError(details);
+        setLoadError(details.message);
         setIsSeparating(false);
       }
     },
@@ -253,7 +362,16 @@ export default function MixPage() {
 
       setIsSeparating(true);
       setLoadError(null);
+      setSeparationError(null);
 
+      const runId = newRunId();
+      setSeparationRunId(runId);
+      setSeparationStartedAt(Date.now());
+      setSeparationNow(Date.now());
+      emitSeparationUploadStart(runId);
+      const ctl = new AbortController();
+
+      let jobId = "";
       try {
         // Encode the stem's audio buffer to WAV for upload
         const { encodeWav } = await import("@/lib/audio/wav-encoder");
@@ -262,24 +380,35 @@ export default function MixPage() {
         const file = new File([blob], `${stem.name}`, { type: "audio/wav" });
 
         // Start separation on the "other" stem
-        const { jobId } = await startSeparation(file, "htdemucs_6s");
+        const startResult = await startSeparation(
+          file,
+          "htdemucs_6s",
+          ctl.signal
+        );
+        jobId = startResult.jobId;
 
-        const poll = async (): Promise<JobStatus> => {
-          const status = await pollJobStatus(jobId);
-          setSeparationStatus(status);
-          if (status.status === "done" || status.status === "error") return status;
-          await new Promise((r) => setTimeout(r, 2000));
-          return poll();
-        };
+        const stageEmitter = makeSeparationStageEmitter(runId);
+        const pollResult = await pollSeparationUntilDone(
+          {
+            jobId,
+            signal: ctl.signal,
+            isCancelling: () => false,
+            onPoll: (status, elapsedMs) => {
+              setSeparationStatus(status);
+              stageEmitter(status, elapsedMs);
+            },
+          }
+        );
 
-        const finalStatus = await poll();
-        if (finalStatus.status === "error") {
-          setLoadError(finalStatus.error ?? "Re-separation failed");
+        if (pollResult.kind === "cancelled") {
           setIsSeparating(false);
           return;
         }
 
+        const finalStatus = pollResult.final;
+
         // Download sub-stems
+        emitSeparationDownloading(runId);
         await engine.init();
         const ctx = engine.ctx!;
         const { generateWaveformPeaks } = await import("@/lib/audio/stem-loader");
@@ -312,9 +441,40 @@ export default function MixPage() {
         useMixerStore.getState().addStems(newTracks);
         for (const t of newTracks) engine.addStem(t);
 
+        emitStage({
+          flow: "smart-split",
+          runId,
+          stage: "done",
+          phase: "end",
+          progress: 100,
+        });
         setIsSeparating(false);
       } catch (e) {
-        setLoadError(e instanceof Error ? e.message : "Re-separation failed");
+        if (e instanceof DOMException && e.name === "AbortError") {
+          setIsSeparating(false);
+          return;
+        }
+        const details: SeparationErrorDetails =
+          e instanceof SeparationError
+            ? e.details
+            : {
+                message:
+                  e instanceof Error ? e.message : "Re-separation failed",
+                status: "client",
+                jobId: jobId || undefined,
+                raw: e instanceof Error ? (e.stack ?? e.message) : String(e),
+                at: new Date().toISOString(),
+              };
+        emitStage({
+          flow: "smart-split",
+          runId,
+          stage: "error",
+          phase: "error",
+          note: details.message,
+        });
+        emitErrorTrace(runId, details.message);
+        setSeparationError(details);
+        setLoadError(details.message);
         setIsSeparating(false);
       }
     },
@@ -429,10 +589,11 @@ export default function MixPage() {
             <button
               onClick={handleAutoMix}
               disabled={isAutoMixing}
+              data-testid="auto-mix-button"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white text-xs transition-colors disabled:opacity-40"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              {isAutoMixing ? "Analyzing..." : "Auto Mix"}
+              {autoMixLabel}
             </button>
             <button
               onClick={handleSendToMaster}
@@ -514,13 +675,16 @@ export default function MixPage() {
           )}
 
           {/* Separation progress */}
-          {isSeparating && separationStatus && (
-            <SeparationProgress
-              status={separationStatus.status}
-              progress={separationStatus.progress}
-              model={separationStatus.model}
-              stems={separationStatus.stems}
-              error={separationStatus.error}
+          {(isSeparating || separationError) && (
+            <SeparationProgressCard
+              status={separationCardStatus}
+              activeStage={separationActiveStage}
+              progress={separationStatus?.progress ?? 0}
+              elapsedSec={separationElapsedSec}
+              errorDetails={separationError}
+              stageDurationsMs={separationView.stageDurationsMs}
+              failedAtStageLabel={separationView.failedAtStageLabel}
+              stageTraceText={separationView.stageTraceText}
             />
           )}
 

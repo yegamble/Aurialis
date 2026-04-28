@@ -5,6 +5,7 @@
 
 import { computeIntegratedLufs } from "./dsp/lufs";
 import { BiquadFilter, lowPassCoeffs, highPassCoeffs } from "./dsp/biquad";
+import { emitStage } from "@/lib/analysis-stage/emitter";
 
 export interface AnalysisResult {
   /** Integrated loudness in LUFS (-Infinity for silence) */
@@ -22,9 +23,11 @@ export interface AnalysisResult {
 }
 
 /**
- * Analyse an AudioBuffer and return loudness, dynamics, and spectral balance.
+ * Synchronous analysis path. Kept for tests and any caller that needs to
+ * block on the result on the main thread. Production callers should prefer
+ * the async {@link analyzeAudio} variant which yields between phases.
  */
-export function analyzeAudio(buffer: AudioBuffer): AnalysisResult {
+export function analyzeAudioSync(buffer: AudioBuffer): AnalysisResult {
   const sampleRate = buffer.sampleRate;
   const left = buffer.getChannelData(0);
   const right = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : left;
@@ -50,8 +53,8 @@ export function analyzeAudio(buffer: AudioBuffer): AnalysisResult {
   const N = left.length;
   let sumSq = 0;
   for (let i = 0; i < N; i++) sumSq += left[i] * left[i];
-  const rms = Math.sqrt(sumSq / N);
-  const rmsDb = rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+  const rmsValue = Math.sqrt(sumSq / N);
+  const rmsDb = rmsValue > 0 ? 20 * Math.log10(rmsValue) : -Infinity;
   const dynamicRange = isFinite(peakDb) && isFinite(rmsDb) ? peakDb - rmsDb : 0;
 
   // 4. Spectral balance — compute RMS energy in three bands on a mono mix
@@ -63,6 +66,128 @@ export function analyzeAudio(buffer: AudioBuffer): AnalysisResult {
   const { bassRatio, midRatio, highRatio } = computeSpectralBalance(mono, sampleRate);
 
   return { integratedLufs, peakDb, dynamicRange, bassRatio, midRatio, highRatio };
+}
+
+/** Options for the async analyzer. */
+export interface AnalyzeAudioOptions {
+  /**
+   * When set, emit `[analysis:mastering-auto:<phase>]` stage events through
+   * the analysis-stage harness on each phase boundary.
+   */
+  runId?: string;
+}
+
+/**
+ * Async analysis path. Computes the same numbers as {@link analyzeAudioSync}
+ * but yields to the event loop between the four phases (loudness → peak →
+ * dynamic-range → spectral-balance) so the main thread can repaint the
+ * progress indicator. When `opts.runId` is provided, emits stage events
+ * through the harness so the UI and the console can narrate progress.
+ */
+export async function analyzeAudio(
+  buffer: AudioBuffer,
+  opts: AnalyzeAudioOptions = {}
+): Promise<AnalysisResult> {
+  const { runId } = opts;
+  const sampleRate = buffer.sampleRate;
+  const left = buffer.getChannelData(0);
+  const right = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : left;
+
+  // Phase 1: integrated LUFS
+  if (runId) {
+    emitStage({
+      flow: "mastering-auto",
+      runId,
+      stage: "loudness",
+      phase: "start",
+    });
+  }
+  const integratedLufs = computeIntegratedLufs(left, right, sampleRate);
+  await Promise.resolve();
+
+  // Phase 2: true peak
+  if (runId) {
+    emitStage({
+      flow: "mastering-auto",
+      runId,
+      stage: "peak",
+      phase: "start",
+    });
+  }
+  let peak = 0;
+  for (let i = 0; i < left.length; i++) {
+    const s = Math.abs(left[i]);
+    if (s > peak) peak = s;
+    // Yield every CHUNK_SIZE samples to keep the main thread responsive on
+    // very long buffers. CHUNK_SIZE = 65536 ≈ 1.5 s of 44.1 kHz audio.
+    if ((i & 65535) === 65535) await Promise.resolve();
+  }
+  if (right !== left) {
+    for (let i = 0; i < right.length; i++) {
+      const s = Math.abs(right[i]);
+      if (s > peak) peak = s;
+      if ((i & 65535) === 65535) await Promise.resolve();
+    }
+  }
+  const peakDb = peak > 0 ? 20 * Math.log10(peak) : -Infinity;
+
+  // Phase 3: dynamic range (RMS-based)
+  if (runId) {
+    emitStage({
+      flow: "mastering-auto",
+      runId,
+      stage: "dynamic-range",
+      phase: "start",
+    });
+  }
+  const N = left.length;
+  let sumSq = 0;
+  for (let i = 0; i < N; i++) {
+    sumSq += left[i] * left[i];
+    if ((i & 65535) === 65535) await Promise.resolve();
+  }
+  const rmsValue = Math.sqrt(sumSq / N);
+  const rmsDb = rmsValue > 0 ? 20 * Math.log10(rmsValue) : -Infinity;
+  const dynamicRange = isFinite(peakDb) && isFinite(rmsDb) ? peakDb - rmsDb : 0;
+  await Promise.resolve();
+
+  // Phase 4: spectral balance
+  if (runId) {
+    emitStage({
+      flow: "mastering-auto",
+      runId,
+      stage: "spectral-balance",
+      phase: "start",
+    });
+  }
+  const mono = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    mono[i] = right !== left ? (left[i] + right[i]) / 2 : left[i];
+  }
+  const { bassRatio, midRatio, highRatio } = computeSpectralBalance(
+    mono,
+    sampleRate
+  );
+
+  // Done.
+  if (runId) {
+    emitStage({
+      flow: "mastering-auto",
+      runId,
+      stage: "done",
+      phase: "end",
+      progress: 100,
+    });
+  }
+
+  return {
+    integratedLufs,
+    peakDb,
+    dynamicRange,
+    bassRatio,
+    midRatio,
+    highRatio,
+  };
 }
 
 // ---------------------------------------------------------------------------

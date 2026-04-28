@@ -30,6 +30,12 @@ import { useIsLgViewport } from "@/hooks/use-is-lg-viewport";
 import { applyIntensity, PLATFORM_PRESETS, type GenreName } from "@/lib/audio/presets";
 import { analyzeAudio } from "@/lib/audio/analysis";
 import { computeAutoMasterParams } from "@/lib/audio/auto-master";
+import {
+  emitStage,
+  emitErrorTrace,
+  newRunId,
+} from "@/lib/analysis-stage/emitter";
+import { useAnalysisStageStore } from "@/lib/stores/analysis-stage-store";
 import { exportWav } from "@/lib/audio/export";
 import type { ExportSettings } from "@/components/export/ExportPanel";
 import type { ToggleName, AudioParams } from "@/types/mastering";
@@ -232,16 +238,57 @@ export default function MasterPage() {
     }
   };
 
-  const handleAutoMaster = () => {
+  const [autoMasterStatus, setAutoMasterStatus] = useState<
+    | { kind: "idle" }
+    | { kind: "analyzing" }
+    | { kind: "error"; message: string; stage: string }
+  >({ kind: "idle" });
+  const [autoMasterRunId, setAutoMasterRunId] = useState<string | null>(null);
+
+  // Subscribe to the harness store for the active mastering-auto run so the
+  // inline progress indicator can show which phase is currently running.
+  const autoMasterRun = useAnalysisStageStore((s) =>
+    autoMasterRunId ? s.runs[autoMasterRunId] : undefined
+  );
+  const autoMasterActiveStage = autoMasterRun?.activeStage ?? "loudness";
+
+  const handleAutoMaster = async (): Promise<void> => {
     const audioBuffer = engine?.audioBuffer;
     if (!audioBuffer) return;
-    const analysis = analyzeAudio(audioBuffer);
-    const result = computeAutoMasterParams(analysis);
-    const resetToggles = { ...INITIAL_TOGGLES };
-    setGenre(result.genre);
-    setIntensity(result.intensity);
-    setToggles(resetToggles);
-    recomputeParams(result.genre, result.intensity, resetToggles);
+    const runId = newRunId();
+    setAutoMasterRunId(runId);
+    setAutoMasterStatus({ kind: "analyzing" });
+    try {
+      const analysis = await analyzeAudio(audioBuffer, { runId });
+      const result = computeAutoMasterParams(analysis);
+      const resetToggles = { ...INITIAL_TOGGLES };
+      setGenre(result.genre);
+      setIntensity(result.intensity);
+      setToggles(resetToggles);
+      recomputeParams(result.genre, result.intensity, resetToggles);
+      setAutoMasterStatus({ kind: "idle" });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Auto-master failed";
+      // Best-effort: identify the failing stage from the most-recent start
+      // event. The harness store always records that.
+      const { useAnalysisStageStore } = await import(
+        "@/lib/stores/analysis-stage-store"
+      );
+      const run = useAnalysisStageStore.getState().runs[runId];
+      const lastStart = run?.stages
+        ? [...run.stages].reverse().find((ev) => ev.phase === "start")
+        : undefined;
+      const failedStage = lastStart?.stage ?? "unknown";
+      emitStage({
+        flow: "mastering-auto",
+        runId,
+        stage: failedStage,
+        phase: "error",
+        note: message,
+      });
+      emitErrorTrace(runId, message);
+      setAutoMasterStatus({ kind: "error", message, stage: failedStage });
+    }
   };
 
   const handleOutputPresetChange = (preset: OutputPresetName) => {
@@ -348,6 +395,25 @@ export default function MasterPage() {
                     onToggle={handleToggle}
                     onAutoMaster={handleAutoMaster}
                   />
+                  {autoMasterStatus.kind === "analyzing" ? (
+                    <div
+                      data-testid="auto-master-progress"
+                      role="status"
+                      aria-live="polite"
+                      className="mt-2 rounded-md border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[10px] text-[rgba(255,255,255,0.7)]"
+                    >
+                      Analyzing… {autoMasterActiveStage}
+                    </div>
+                  ) : autoMasterStatus.kind === "error" ? (
+                    <div
+                      data-testid="auto-master-error"
+                      role="alert"
+                      className="mt-2 rounded-md border border-red-500/60 bg-red-500/5 px-3 py-2 text-[10px] text-red-300"
+                    >
+                      Failed at: {autoMasterStatus.stage} —{" "}
+                      {autoMasterStatus.message}
+                    </div>
+                  ) : null}
                 </motion.div>
               ) : mode === "advanced" ? (
                 <motion.div
@@ -516,15 +582,36 @@ export default function MasterPage() {
               </summary>
               <div className="pt-2">
                 {mode === "simple" ? (
-                  <SimpleMastering
-                    intensity={intensity}
-                    onIntensityChange={handleIntensityChange}
-                    genre={genre}
-                    onGenreChange={handleGenreChange}
-                    toggles={toggles}
-                    onToggle={handleToggle}
-                    onAutoMaster={handleAutoMaster}
-                  />
+                  <>
+                    <SimpleMastering
+                      intensity={intensity}
+                      onIntensityChange={handleIntensityChange}
+                      genre={genre}
+                      onGenreChange={handleGenreChange}
+                      toggles={toggles}
+                      onToggle={handleToggle}
+                      onAutoMaster={handleAutoMaster}
+                    />
+                    {autoMasterStatus.kind === "analyzing" ? (
+                      <div
+                        data-testid="auto-master-progress-mobile"
+                        role="status"
+                        aria-live="polite"
+                        className="mt-2 rounded-md border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[10px] text-[rgba(255,255,255,0.7)]"
+                      >
+                        Analyzing… {autoMasterActiveStage}
+                      </div>
+                    ) : autoMasterStatus.kind === "error" ? (
+                      <div
+                        data-testid="auto-master-error-mobile"
+                        role="alert"
+                        className="mt-2 rounded-md border border-red-500/60 bg-red-500/5 px-3 py-2 text-[10px] text-red-300"
+                      >
+                        Failed at: {autoMasterStatus.stage} —{" "}
+                        {autoMasterStatus.message}
+                      </div>
+                    ) : null}
+                  </>
                 ) : mode === "advanced" ? (
                   <AdvancedMastering
                     params={{ ...params }}

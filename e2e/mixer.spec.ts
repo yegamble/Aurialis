@@ -303,3 +303,42 @@ test.describe("Playback Controls", () => {
     ).toBeVisible();
   });
 });
+
+/**
+ * Verbose progress (harness) — Stem-Mixer auto-mix per-stem stage emits.
+ */
+test.describe("Verbose progress (harness) — Auto Mix", () => {
+  test("emits per-stem stage console.info lines on Auto Mix click", async ({
+    page,
+  }) => {
+    test.setTimeout(60000);
+    const lines: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "info" || msg.type() === "log") {
+        lines.push(msg.text());
+      }
+    });
+
+    await navigateToMix(page);
+    await uploadStems(page, STEM_FILES);
+
+    await page.getByTestId("auto-mix-button").click();
+    // Auto-mix is fast (mostly synchronous); allow up to 5s.
+    await page.waitForTimeout(2000);
+
+    const harness = lines.filter((l) => l.includes("[analysis:auto-mix:"));
+    // 4 stems uploaded → expect stem-1/4 through stem-4/4 starts.
+    expect(
+      harness.some((l) => l.includes("[analysis:auto-mix:stem-1/4]"))
+    ).toBe(true);
+    expect(
+      harness.some((l) => l.includes("[analysis:auto-mix:stem-4/4]"))
+    ).toBe(true);
+    expect(
+      harness.some((l) => l.includes("[analysis:auto-mix:generate-mix]"))
+    ).toBe(true);
+    expect(harness.some((l) => l.includes("[analysis:auto-mix:done]"))).toBe(
+      true
+    );
+  });
+});

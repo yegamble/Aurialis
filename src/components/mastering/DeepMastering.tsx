@@ -18,6 +18,13 @@ import {
   type DeepErrorDetails,
 } from "@/lib/api/deep-analysis";
 import { pollUntilDone } from "@/lib/api/deep-analysis-polling";
+import {
+  computeDeepStageView,
+  emitUploadStart,
+  makeDeepStageEmitter,
+} from "@/lib/api/deep-stage";
+import { emitStage, emitErrorTrace, newRunId } from "@/lib/analysis-stage/emitter";
+import { useAnalysisStageStore } from "@/lib/stores/analysis-stage-store";
 import type { ProfileId } from "@/types/deep-mastering";
 import { EngineerProfilePicker } from "./EngineerProfilePicker";
 import { DeepTimeline } from "./DeepTimeline";
@@ -61,6 +68,8 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
   const setScript = useDeepStore((s) => s.setScript);
   const setError = useDeepStore((s) => s.setError);
   const setProfile = useDeepStore((s) => s.setProfile);
+  const runId = useDeepStore((s) => s.runId);
+  const setRunId = useDeepStore((s) => s.setRunId);
 
   const abortRef = useRef<AbortController | null>(null);
   const cancellingRef = useRef(false);
@@ -80,6 +89,12 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
   }, [isActive]);
   const elapsedSec =
     isActive && startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+
+  // Subscribe to the harness store for the current run; recompute view-derived
+  // props on each store change. `now` ticks during active runs (1s cadence
+  // above), causing the in-progress stage's duration label to update live.
+  const run = useAnalysisStageStore((s) => (runId ? s.runs[runId] : undefined));
+  const stageView = computeDeepStageView(run, now);
 
   // Abort any in-flight job on unmount.
   useEffect(() => {
@@ -103,11 +118,14 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
       activeJobIdRef.current = null;
       lastProfileRef.current = profileId;
 
+      const id = newRunId();
+      setRunId(id);
       setStatus("analyzing");
       setSubStatus(null);
       setProgress(0);
       setStartedAt(Date.now());
       setError(null);
+      emitUploadStart(id);
 
       try {
         const { jobId } = await startDeepAnalysis(
@@ -117,13 +135,15 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
         );
         activeJobIdRef.current = jobId;
 
+        const stageEmitter = makeDeepStageEmitter(id);
         const result = await pollUntilDone({
           jobId,
           signal: ctl.signal,
           isCancelling: () => cancellingRef.current,
-          onPoll: (s) => {
+          onPoll: (s, elapsedMs) => {
             setSubStatus(s.subStatus);
             setProgress(s.progress);
+            stageEmitter(s, elapsedMs);
           },
         });
 
@@ -145,8 +165,19 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
         if (e instanceof DOMException && e.name === "AbortError") {
           return;
         }
+        const details = buildClientErrorDetails(e);
+        // Emit error to the harness BEFORE flipping store state so the
+        // chronological trace lands ahead of any UI re-render.
+        emitStage({
+          flow: "deep",
+          runId: id,
+          stage: "error",
+          phase: "error",
+          note: details.message,
+        });
+        emitErrorTrace(id, details.message);
         setStatus("error");
-        setError(buildClientErrorDetails(e));
+        setError(details);
       }
     },
     [
@@ -157,6 +188,7 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
       setStartedAt,
       setScript,
       setError,
+      setRunId,
     ]
   );
 
@@ -300,6 +332,9 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
         errorDetails={errorDetails}
         onRetry={handleRetry}
         onCancel={handleCancel}
+        failedAtStageLabel={stageView.failedAtStageLabel}
+        stageDurationsMs={stageView.stageDurationsMs}
+        stageTraceText={stageView.stageTraceText}
       />
 
       <DeepTimeline script={script} />

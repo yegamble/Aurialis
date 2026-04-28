@@ -51,10 +51,25 @@ pnpm deploy   # runs OpenNext build then wrangler deploy
 
 ## Sizing notes
 
-- **Instance type**: `standard` (4 vCPU / 4 GB RAM) — set in
-  `wrangler.jsonc`. Demucs separation on a 4-min track uses ~3 GB peak,
-  so don't drop below standard. Bumping to `enhanced` (8 vCPU / 8 GB RAM)
-  ~halves separation latency at ~2× cost.
+- **Instance type**: `standard-4` (4 vCPU / 12 GiB RAM / 20 GB disk) — set in
+  `wrangler.jsonc`. Cloudflare's predefined Container tiers (verified
+  2026-04-28 against
+  <https://developers.cloudflare.com/containers/platform-details/limits/>)
+  are: `lite` (1/16 vCPU), `basic` (1/4 vCPU), `standard-1` (1/2 vCPU,
+  4 GiB), `standard-2` (1 vCPU, 6 GiB), `standard-3` (2 vCPU, 8 GiB),
+  `standard-4` (4 vCPU, 12 GiB).
+- **Why standard-4**: Demucs `htdemucs_6s` is roughly 3× realtime per
+  full vCPU. On `standard-1` (1/2 vCPU) a 4-minute song takes 40-60
+  minutes of compute — well past the frontend polling loop's 10-minute
+  total cap, surfacing as "Analysis timed out" to users. `standard-4`
+  finishes a 4-minute song in ~30 seconds and a 10-minute song in well
+  under the cap. **Note:** the legacy alias `"standard"` (without the
+  `-N` suffix) is the same as `standard-1` and was the tier this repo
+  shipped with prior to 2026-04-28 — that alias caused the "stuck /
+  timeout" symptom.
+- **Fallback**: if hosting cost matters more than analysis speed, drop
+  to `standard-2` (1 vCPU / 6 GiB) — expect ~2-3 minutes per
+  4-minute song.
 - **`max_instances: 5`**: caps horizontal scale. Each instance can serve
   one request at a time (FastAPI is single-process by default in this
   image). Raise if user load grows.
@@ -63,17 +78,15 @@ pnpm deploy   # runs OpenNext build then wrangler deploy
 
 ## Cost reality check
 
-Standard tier billing (as of 2025-09): ~$0.000020/CPU-sec +
-~$0.0000035/GB-RAM-sec. A 30-second separation at 4 vCPU + 4 GB:
-
-```
-0.00002 * 4 * 30  =  $0.0024 (CPU)
-0.0000035 * 4 * 30 = $0.00042 (RAM)
-total              ≈ $0.003 / separation request
-```
-
-Plus ~10 minutes of sleepAfter idle = ~$0.05/hour for the kept-warm
-instance. Quiet periods cost ~$0/hour because the container sleeps.
+Cloudflare Container billing scales per-vCPU-second and per-GiB-RAM-second.
+A 30-second separation at 4 vCPU + 12 GiB on `standard-4` costs roughly
+4× the CPU and 3× the RAM of the prior `standard-1` config; with the
+average separation finishing in ~1/10th the wall-clock time on the
+larger tier, total cost per separation comes out roughly comparable
+(faster + bigger ≈ same as slower + smaller). The bigger win is
+that requests now actually complete instead of timing out. Set up a
+Cloudflare billing alert (see step 5 in the upload control plane
+section below) as the backstop.
 
 ## Direct-to-R2 upload control plane
 

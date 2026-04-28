@@ -17,6 +17,8 @@ export interface MixerState {
   masterVolume: number;
   masterParams: AudioParams;
   isAutoMixing: boolean;
+  /** Active analysis-stage harness runId for the current/last auto-mix run. */
+  autoMixRunId: string | null;
   selectedStemId: string | null;
   originalMixBuffer: AudioBuffer | null;
 
@@ -39,6 +41,7 @@ export interface MixerState {
   setCurrentTime: (time: number) => void;
   setMasterVolume: (volume: number) => void;
   setIsAutoMixing: (mixing: boolean) => void;
+  setAutoMixRunId: (id: string | null) => void;
   setSelectedStemId: (id: string | null) => void;
   reset: () => void;
 }
@@ -51,6 +54,7 @@ export const useMixerStore = create<MixerState>((set) => ({
   masterVolume: 0,
   masterParams: { ...DEFAULT_PARAMS },
   isAutoMixing: false,
+  autoMixRunId: null,
   selectedStemId: null,
   originalMixBuffer: null,
 
@@ -111,6 +115,7 @@ export const useMixerStore = create<MixerState>((set) => ({
   setCurrentTime: (currentTime) => set({ currentTime }),
   setMasterVolume: (masterVolume) => set({ masterVolume }),
   setIsAutoMixing: (isAutoMixing) => set({ isAutoMixing }),
+  setAutoMixRunId: (autoMixRunId) => set({ autoMixRunId }),
   setSelectedStemId: (selectedStemId) => set({ selectedStemId }),
 
   reset: () =>
@@ -122,6 +127,7 @@ export const useMixerStore = create<MixerState>((set) => ({
       masterVolume: 0,
       masterParams: { ...DEFAULT_PARAMS },
       isAutoMixing: false,
+      autoMixRunId: null,
       selectedStemId: null,
       originalMixBuffer: null,
     }),

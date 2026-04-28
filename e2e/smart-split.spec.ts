@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -161,5 +161,74 @@ test.describe("Backend Warning", () => {
     await expect(
       page.getByText(/separation backend not available/i)
     ).toBeVisible({ timeout: 10000 });
+  });
+});
+
+/**
+ * Verbose progress (harness) — hermetic via `page.route`. No live backend
+ * required.
+ */
+test.describe("Verbose progress (harness) — Smart Split", () => {
+  const SS_JOB = "ss-job-1";
+
+  test("failed-at-stage label shows on backend error mid-flight", async ({
+    page,
+  }) => {
+    // Fake the health check so the page enters "backend available" mode and
+    // single-file uploads trigger separation instead of direct loading.
+    await page.route("**/health", (route: Route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, gpu: false, models: ["htdemucs"] }),
+      })
+    );
+    await page.route("**/separate", (route: Route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ job_id: SS_JOB, status: "queued" }),
+      })
+    );
+    let pollCount = 0;
+    await page.route(`**/jobs/${SS_JOB}/status`, (route: Route) => {
+      pollCount++;
+      if (pollCount === 1) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            job_id: SS_JOB,
+            status: "processing",
+            progress: 50,
+            model: "htdemucs",
+            stems: [],
+            error: null,
+          }),
+        });
+      }
+      return route.fulfill({
+        status: 410,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "Backend gone" }),
+      });
+    });
+
+    await navigateToMix(page);
+    // Trigger single-file separation flow.
+    await page.locator('input[type="file"]').setInputFiles(MIXED_TRACK);
+    // The model select dialog appears for single files when backend available.
+    // Buttons are labeled "4 Stems" / "6 Stems" (see src/app/mix/page.tsx:644).
+    const fourStems = page.getByRole("button", { name: /4 Stems/i });
+    await fourStems.waitFor({ state: "visible", timeout: 10_000 });
+    await fourStems.click();
+
+    // SeparationProgressCard renders error UI with failed-at headline.
+    await expect(page.getByTestId("separation-progress-error")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(
+      page.getByTestId("separation-progress-error-message")
+    ).toContainText(/Failed at:/i);
   });
 });

@@ -36,7 +36,14 @@
     {
       "class_name": "BackendContainer",
       "image": "./Dockerfile",
-      "instance_type": "standard",
+      // Instance type sizing: Demucs htdemucs_6s is ~3× realtime per full vCPU.
+      // standard-4 (4 vCPU / 12 GiB / 20 GB disk) finishes a 4-min song in ~30 s,
+      // well under the polling loop's 10-min total cap. Smaller tiers (standard-1
+      // = 1/2 vCPU) routinely time out on songs >3 minutes and surface to the
+      // user as "Analysis timed out". If hosting cost matters more than analysis
+      // speed, drop to standard-2 (1 vCPU / 6 GiB) — expect ~2-3 min per song.
+      // Catalog: https://developers.cloudflare.com/containers/platform-details/limits/
+      "instance_type": "standard-4",
       "name": "aurialis-core-container",
       "max_instances": 5
     }

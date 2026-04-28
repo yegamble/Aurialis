@@ -101,12 +101,15 @@ def _build_mono_96khz(path: Path) -> None:
 
 
 def _build_corrupted(path: Path) -> None:
-    """Real WAV header, body chopped to 50 bytes — passes magic, fails soundfile.info()."""
-    tmp = path.with_suffix(".wav.full")
-    _build_sine_wav(tmp, seconds=0.5, sample_rate=48_000, mono=True)
-    data = tmp.read_bytes()[:50]
-    tmp.unlink()
-    path.write_bytes(data)
+    """RIFF/WAVE magic only, no real fmt/data chunks — passes magic-byte
+    sniff, fails ``soundfile.info()`` with 'No data chunk marker'.
+
+    A naive truncation of a real WAV (e.g. first 50 bytes) preserves a
+    complete fmt chunk plus the start of the data chunk — ``sf.info()``
+    happily reports metadata and validation accepts it. The handcrafted
+    header below has the magic bytes only; libsndfile rejects it deterministically.
+    """
+    path.write_bytes(b"RIFF\x24\x00\x00\x00WAVE" + b"\x00" * 12)
 
 
 def _build_long_10min(path: Path) -> None:

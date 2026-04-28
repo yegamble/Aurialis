@@ -651,7 +651,7 @@
                       "pm.test('TS-009: response is < 500 (no server crash on bad filename)', () => pm.expect(pm.response.code).to.be.below(500));",
                       "pm.test('TS-009: X-Injected header is NOT present in response', () => {",
                       "  const injected = pm.response.headers.get('X-Injected');",
-                      "  pm.expect(injected, 'response leaked injected header').to.be.null;",
+                      "  pm.expect(injected, 'response leaked injected header').to.not.exist;",
                       "});",
                       "pm.test('TS-009: response body does not echo raw CRLF from filename', () => {",
                       "  const text = pm.response.text() || '';",

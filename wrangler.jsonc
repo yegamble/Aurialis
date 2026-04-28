@@ -23,6 +23,7 @@
   // `https://aurialis-core.<account>.workers.dev`).
   "vars": {
     "NEXT_PUBLIC_SEPARATION_API_URL": "https://aurialis-core.yosefgamble.com",
-    "NEXT_PUBLIC_DEEP_ANALYSIS_API_URL": "https://aurialis-core.yosefgamble.com"
+    "NEXT_PUBLIC_DEEP_ANALYSIS_API_URL": "https://aurialis-core.yosefgamble.com",
+    "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAADFNPdaK9423tgxr"
   }
 }

@@ -36,22 +36,29 @@ if [[ ! -f "$lifecycle_file" ]]; then
     exit 1
 fi
 
+# Use `npx wrangler` so the script works whether or not wrangler is on PATH.
+# CI doesn't install it globally; local dev usually does, but npx is harmless.
+WRANGLER="${WRANGLER:-npx wrangler}"
+
 echo "==> Ensuring bucket $BUCKET exists"
-if wrangler r2 bucket list 2>/dev/null | grep -q "^$BUCKET$"; then
+if $WRANGLER r2 bucket list 2>/dev/null | grep -q "name: *$BUCKET\$"; then
     echo "    bucket already exists, skipping create"
 else
-    wrangler r2 bucket create "$BUCKET"
+    $WRANGLER r2 bucket create "$BUCKET"
 fi
 
+# Wrangler 4.x renamed `put` -> `set` for these subcommands and the JSON
+# schema switched from S3-style PascalCase to camelCase. The committed
+# r2-lifecycle.json / r2-cors.json files are in the camelCase format.
 echo "==> Applying lifecycle rules (48h object expiration + 1d incomplete-multipart abort)"
-wrangler r2 bucket lifecycle put "$BUCKET" --file="$lifecycle_file"
+$WRANGLER r2 bucket lifecycle set "$BUCKET" --file="$lifecycle_file" --force
 
 echo "==> Applying CORS rules (PUT from aurialis.yosefgamble.com + localhost:3000)"
-wrangler r2 bucket cors put "$BUCKET" --file="$cors_file"
+$WRANGLER r2 bucket cors set "$BUCKET" --file="$cors_file" --force
 
 echo ""
 echo "Done. Verify with:"
-echo "    wrangler r2 bucket lifecycle get $BUCKET"
-echo "    wrangler r2 bucket cors get $BUCKET"
+echo "    $WRANGLER r2 bucket lifecycle list $BUCKET"
+echo "    $WRANGLER r2 bucket cors list $BUCKET"
 echo ""
 echo "Next: do the manual dashboard steps listed at the top of this script."

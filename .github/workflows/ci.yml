@@ -95,7 +95,7 @@ jobs:
         working-directory: backend
         env:
           MAX_UPLOAD_BYTES_OVERRIDE: "209715200"
-        run: uv run python tests/postman/fixtures/generate-fixtures.py --clean
+        run: uv run --with numpy --with soundfile python tests/postman/fixtures/generate-fixtures.py --clean
       - name: Run Postman PR Suite
         env:
           MAX_UPLOAD_BYTES_OVERRIDE: "209715200"

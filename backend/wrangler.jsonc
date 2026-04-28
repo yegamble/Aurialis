@@ -22,8 +22,7 @@
     "CHUNK_SIZE_BYTES": "16777216",
     "PART_PRESIGN_EXPIRY_SECONDS": "21600",
     "GET_PRESIGN_EXPIRY_SECONDS": "600",
-    "ALLOWED_ORIGINS": "https://aurialis.yosefgamble.com,http://localhost:3000",
-    "TURNSTILE_SITE_KEY_PUBLIC": "see-NEXT_PUBLIC_TURNSTILE_SITE_KEY-on-frontend"
+    "ALLOWED_ORIGINS": "https://aurialis.yosefgamble.com,http://localhost:3000"
   },
 
   // The container image is built from this Dockerfile on every `wrangler

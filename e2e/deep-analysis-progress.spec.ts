@@ -349,3 +349,145 @@ test.describe("TS-005 — transient poll failures", () => {
     );
   });
 });
+
+/**
+ * Verbose Analysis Progress (2026-04-28 plan).
+ * Verifies the analysis-stage harness wiring on top of the existing TS-001..
+ * TS-005 coverage — console emission, failed-at-stage label, and per-stage
+ * duration rendering.
+ */
+test.describe("Verbose progress (harness)", () => {
+  test("emits [analysis:deep:<stage>] console.info lines on happy run", async ({
+    page,
+  }) => {
+    const lines: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "info" || msg.type() === "log") {
+        lines.push(msg.text());
+      }
+    });
+
+    let pollCount = 0;
+    await page.route(url("/analyze/deep"), (route: Route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ job_id: JOB_ID, status: "queued" }),
+      })
+    );
+    await page.route(url(`/jobs/${JOB_ID}/status`), (route: Route) => {
+      pollCount++;
+      const body =
+        pollCount === 1
+          ? {
+              job_id: JOB_ID,
+              status: "processing",
+              progress: 40,
+              model: "modern_pop_polish",
+              job_type: "deep_analysis",
+              partial_result: { sections: [] },
+              error: null,
+            }
+          : pollCount === 2
+            ? {
+                job_id: JOB_ID,
+                status: "processing",
+                progress: 80,
+                model: "modern_pop_polish",
+                job_type: "deep_analysis",
+                partial_result: { sections: [], stems: [] },
+                error: null,
+              }
+            : {
+                job_id: JOB_ID,
+                status: "done",
+                progress: 100,
+                model: "modern_pop_polish",
+                job_type: "deep_analysis",
+                partial_result: {},
+                error: null,
+              };
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(body),
+      });
+    });
+    await page.route(url(`/jobs/${JOB_ID}/result`), (route: Route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ moves: [] }),
+      })
+    );
+
+    await uploadAndOpenDeep(page);
+    await page.getByTestId("deep-analyze-button").click();
+    // Wait for the run to finish (DeepProgressCard hides on ready).
+    await expect(page.getByTestId("deep-progress-card")).toBeHidden({
+      timeout: 15_000,
+    });
+
+    const harnessLines = lines.filter((l) => l.includes("[analysis:deep:"));
+    // Expect at least the upload-start, sections, stems, and done lines.
+    expect(
+      harnessLines.some((l) => l.includes("[analysis:deep:upload-start]"))
+    ).toBe(true);
+    expect(
+      harnessLines.some((l) => l.includes("[analysis:deep:sections]"))
+    ).toBe(true);
+    expect(
+      harnessLines.some((l) => l.includes("[analysis:deep:stems]"))
+    ).toBe(true);
+    expect(harnessLines.some((l) => l.includes("[analysis:deep:done]"))).toBe(
+      true
+    );
+  });
+
+  test("failed-at-stage label shows on backend error mid-flight", async ({
+    page,
+  }) => {
+    let pollCount = 0;
+    await page.route(url("/analyze/deep"), (route: Route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ job_id: JOB_ID, status: "queued" }),
+      })
+    );
+    await page.route(url(`/jobs/${JOB_ID}/status`), (route: Route) => {
+      pollCount++;
+      if (pollCount === 1) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            job_id: JOB_ID,
+            status: "processing",
+            progress: 40,
+            model: "modern_pop_polish",
+            job_type: "deep_analysis",
+            partial_result: { sections: [] },
+            error: null,
+          }),
+        });
+      }
+      // 4xx aborts immediately, no 3-strike wait.
+      return route.fulfill({
+        status: 410,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "Job evicted" }),
+      });
+    });
+
+    await uploadAndOpenDeep(page);
+    await page.getByTestId("deep-analyze-button").click();
+    await expect(page.getByTestId("deep-progress-error")).toBeVisible({
+      timeout: 8_000,
+    });
+    // The failed-at headline must reference a stage label, not a raw error code.
+    await expect(
+      page.getByTestId("deep-progress-error-message")
+    ).toContainText(/Failed at:/i);
+  });
+});

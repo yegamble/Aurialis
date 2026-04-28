@@ -1,51 +1,49 @@
 "use client";
 
 import { memo, useState } from "react";
-import type { DeepErrorDetails, DeepSubStatus } from "@/lib/api/deep-analysis";
-import type { DeepStatus } from "@/lib/stores/deep-store";
+import type { SeparationErrorDetails } from "@/lib/api/separation";
+import type { SeparationStage } from "@/lib/api/separation-stage";
 
-export interface DeepProgressCardProps {
-  status: DeepStatus;
-  subStatus: DeepSubStatus;
+export type SeparationStatus =
+  | "idle"
+  | "analyzing"
+  | "cancelling"
+  | "ready"
+  | "error";
+
+export interface SeparationProgressCardProps {
+  status: SeparationStatus;
+  /** Active backend stage; null when no run is active. */
+  activeStage: SeparationStage | null;
   /** 0..100 (clamped). */
   progress: number;
   /** Whole seconds since the run started. */
   elapsedSec: number;
   /** Populated when `status === "error"`. */
-  errorDetails: DeepErrorDetails | null;
-  /** Fires when the user clicks Retry from the error state. */
-  onRetry: () => void;
-  /** Fires when the user clicks Cancel from the analyzing state. */
-  onCancel: () => void;
-  /**
-   * Human-readable label of the stage that was active when the run failed.
-   * When provided + `status === 'error'`, the headline reads
-   * `Failed at: <label>`. When null, the headline is just the error message.
-   */
-  failedAtStageLabel?: string | null;
-  /**
-   * Per-stage durations in milliseconds derived from the analysis-stage
-   * harness. Renders next to each stage in the visible list. Missing keys
-   * render no duration suffix (the stage hasn't started yet or hasn't
-   * accumulated time).
-   */
+  errorDetails: SeparationErrorDetails | null;
+  /** Optional Cancel handler. When omitted, the cancel button is hidden. */
+  onCancel?: () => void;
+  /** Optional Retry handler. When omitted, the retry button is hidden. */
+  onRetry?: () => void;
+  /** Per-stage durations from the analysis-stage harness. */
   stageDurationsMs?: {
-    sections?: number;
-    stems?: number;
-    script?: number;
+    "separating-stems"?: number;
+    finalizing?: number;
+    downloading?: number;
   };
-  /**
-   * Pretty-printed chronological stage trace. When set + the user expands
-   * "Show details" on the error card, it renders below the technical
-   * details block.
-   */
+  /** Failed-at-stage human label. */
+  failedAtStageLabel?: string | null;
+  /** Pretty-printed stage trace for the error details `<pre>`. */
   stageTraceText?: string | null;
 }
 
-const STAGES: ReadonlyArray<{ key: Exclude<DeepSubStatus, null>; label: string }> = [
-  { key: "sections", label: "Detecting sections" },
-  { key: "stems", label: "Analyzing stems" },
-  { key: "script", label: "Generating script" },
+const STAGES: ReadonlyArray<{
+  key: "separating-stems" | "finalizing" | "downloading";
+  label: string;
+}> = [
+  { key: "separating-stems", label: "Separating stems" },
+  { key: "finalizing", label: "Finalizing" },
+  { key: "downloading", label: "Downloading stems" },
 ];
 
 function formatElapsed(sec: number): string {
@@ -62,7 +60,6 @@ function clampPercent(n: number): number {
   return n;
 }
 
-/** Format ms as compact "1.2s" / "1m02s" for stage duration labels. */
 function formatStageDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
@@ -72,18 +69,18 @@ function formatStageDuration(ms: number): string {
   return `${m}m${s.toString().padStart(2, "0")}s`;
 }
 
-function DeepProgressCardImpl({
+function SeparationProgressCardImpl({
   status,
-  subStatus,
+  activeStage,
   progress,
   elapsedSec,
   errorDetails,
-  onRetry,
   onCancel,
-  failedAtStageLabel,
+  onRetry,
   stageDurationsMs,
+  failedAtStageLabel,
   stageTraceText,
-}: DeepProgressCardProps): React.ReactElement | null {
+}: SeparationProgressCardProps): React.ReactElement | null {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   if (status === "idle" || status === "ready") return null;
@@ -94,36 +91,38 @@ function DeepProgressCardImpl({
       : (errorDetails?.message ?? "Something went wrong.");
     return (
       <div
-        data-testid="deep-progress-error"
+        data-testid="separation-progress-error"
         role="alert"
         className="rounded-md border border-red-500/60 bg-red-500/5 p-3 text-xs text-[rgba(255,255,255,0.85)]"
       >
         <p
-          data-testid="deep-progress-error-message"
+          data-testid="separation-progress-error-message"
           className="font-medium text-red-300"
         >
           {headline}
         </p>
         {failedAtStageLabel && errorDetails?.message ? (
           <p
-            data-testid="deep-progress-error-detail-message"
+            data-testid="separation-progress-error-detail-message"
             className="mt-1 text-[rgba(255,255,255,0.7)]"
           >
             {errorDetails.message}
           </p>
         ) : null}
         <div className="mt-2 flex items-center gap-2">
+          {onRetry ? (
+            <button
+              type="button"
+              data-testid="separation-progress-retry"
+              onClick={onRetry}
+              className="rounded-md bg-[#0a84ff] px-3 py-1.5 text-white hover:bg-[#0066cc]"
+            >
+              Retry
+            </button>
+          ) : null}
           <button
             type="button"
-            data-testid="deep-progress-retry"
-            onClick={onRetry}
-            className="rounded-md bg-[#0a84ff] px-3 py-1.5 text-white hover:bg-[#0066cc]"
-          >
-            Retry
-          </button>
-          <button
-            type="button"
-            data-testid="deep-progress-details-toggle"
+            data-testid="separation-progress-details-toggle"
             aria-expanded={detailsOpen}
             onClick={() => setDetailsOpen((v) => !v)}
             className="rounded-md border border-[rgba(255,255,255,0.15)] px-3 py-1.5 text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.04)]"
@@ -134,19 +133,18 @@ function DeepProgressCardImpl({
         {detailsOpen ? (
           <>
             <pre
-              data-testid="deep-progress-error-details"
+              data-testid="separation-progress-error-details"
               className="mt-3 overflow-x-auto rounded bg-black/40 p-2 text-[10px] leading-tight text-[rgba(255,255,255,0.7)]"
             >
 {`URL:       ${errorDetails?.url ?? "(unknown)"}
 Status:    ${errorDetails?.status ?? "(unknown)"}
 Job ID:    ${errorDetails?.jobId ?? "(none)"}
-Trace ID:  ${errorDetails?.traceId ?? "(none captured)"}
 At:        ${errorDetails?.at ?? "(unknown)"}
 Raw:       ${errorDetails?.raw ?? "(no raw payload)"}`}
             </pre>
             {stageTraceText ? (
               <pre
-                data-testid="deep-progress-stage-trace"
+                data-testid="separation-progress-stage-trace"
                 className="mt-2 overflow-x-auto rounded bg-black/40 p-2 text-[10px] leading-tight text-[rgba(255,255,255,0.7)]"
               >
                 {stageTraceText}
@@ -158,27 +156,26 @@ Raw:       ${errorDetails?.raw ?? "(no raw payload)"}`}
     );
   }
 
-  // analyzing OR cancelling
   const isCancelling = status === "cancelling";
   const percent = clampPercent(progress);
 
   return (
     <div
-      data-testid="deep-progress-card"
+      data-testid="separation-progress-card"
       role="status"
       aria-live="polite"
       className="rounded-md border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] p-3 text-xs text-[rgba(255,255,255,0.85)]"
     >
       <div className="flex items-center justify-between">
         <div className="text-[rgba(255,255,255,0.7)]">
-          {isCancelling ? "Cancelling…" : "Analyzing…"}
+          {isCancelling ? "Cancelling…" : "Separating…"}
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-[rgba(255,255,255,0.6)]">
             {percent}%
           </span>
           <span
-            data-testid="deep-progress-elapsed"
+            data-testid="separation-progress-elapsed"
             className="text-[10px] tabular-nums text-[rgba(255,255,255,0.6)]"
           >
             {formatElapsed(elapsedSec)}
@@ -191,7 +188,7 @@ Raw:       ${errorDetails?.raw ?? "(no raw payload)"}`}
         aria-hidden="true"
       >
         <div
-          data-testid="deep-progress-bar-fill"
+          data-testid="separation-progress-bar-fill"
           className="h-full bg-[#0a84ff] transition-[width] duration-300 ease-out"
           style={{ width: `${percent}%` }}
         />
@@ -199,12 +196,12 @@ Raw:       ${errorDetails?.raw ?? "(no raw payload)"}`}
 
       <ol className="mt-3 space-y-1 text-[10px] text-[rgba(255,255,255,0.55)]">
         {STAGES.map((stage, i) => {
-          const active = subStatus === stage.key;
+          const active = activeStage === stage.key;
           const durationMs = stageDurationsMs?.[stage.key];
           return (
             <li
               key={stage.key}
-              data-testid={`deep-progress-stage-${stage.key}`}
+              data-testid={`separation-progress-stage-${stage.key}`}
               data-active={active ? "true" : "false"}
               className={active ? "text-white" : ""}
             >
@@ -212,7 +209,7 @@ Raw:       ${errorDetails?.raw ?? "(no raw payload)"}`}
               {active ? "…" : ""}
               {typeof durationMs === "number" && durationMs > 0 ? (
                 <span
-                  data-testid={`deep-progress-stage-${stage.key}-duration`}
+                  data-testid={`separation-progress-stage-${stage.key}-duration`}
                   className="ml-2 tabular-nums text-[rgba(255,255,255,0.45)]"
                 >
                   {formatStageDuration(durationMs)}
@@ -223,33 +220,25 @@ Raw:       ${errorDetails?.raw ?? "(no raw payload)"}`}
         })}
       </ol>
 
-      {isCancelling ? (
-        <p
-          data-testid="deep-progress-cancelling-note"
-          className="mt-3 text-[10px] text-[rgba(255,255,255,0.55)]"
-        >
-          Cancelling — this can take up to 30 seconds while the current phase
-          finishes.
-        </p>
+      {onCancel ? (
+        <div className="mt-3 flex items-center justify-end">
+          <button
+            type="button"
+            data-testid="separation-progress-cancel"
+            onClick={onCancel}
+            disabled={isCancelling}
+            className={`rounded-md border border-[rgba(255,255,255,0.15)] px-3 py-1.5 text-[rgba(255,255,255,0.85)] transition-colors ${
+              isCancelling
+                ? "cursor-not-allowed opacity-50"
+                : "hover:bg-[rgba(255,255,255,0.06)]"
+            }`}
+          >
+            Cancel
+          </button>
+        </div>
       ) : null}
-
-      <div className="mt-3 flex items-center justify-end">
-        <button
-          type="button"
-          data-testid="deep-progress-cancel"
-          onClick={onCancel}
-          disabled={isCancelling}
-          className={`rounded-md border border-[rgba(255,255,255,0.15)] px-3 py-1.5 text-[rgba(255,255,255,0.85)] transition-colors ${
-            isCancelling
-              ? "cursor-not-allowed opacity-50"
-              : "hover:bg-[rgba(255,255,255,0.06)]"
-          }`}
-        >
-          Cancel
-        </button>
-      </div>
     </div>
   );
 }
 
-export const DeepProgressCard = memo(DeepProgressCardImpl);
+export const SeparationProgressCard = memo(SeparationProgressCardImpl);

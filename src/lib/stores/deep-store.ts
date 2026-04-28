@@ -37,6 +37,12 @@ export interface DeepState {
   scriptActive: boolean;
   /** Last error details, if any. Drives the error UI. */
   errorDetails: DeepErrorDetails | null;
+  /**
+   * Per-run UUID for the analysis-stage harness. Lets `DeepProgressCard`
+   * subscribe to the chronological stage trace in `useAnalysisStageStore`.
+   * Null when no analysis has been run for the current track.
+   */
+  runId: string | null;
   /** True when the active script was loaded from the library (vs freshly analyzed). Drives the badge. */
   loadedFromLibrary: boolean;
   /**
@@ -51,6 +57,7 @@ export interface DeepState {
   setSubStatus: (s: DeepSubStatus) => void;
   setProgress: (n: number) => void;
   setStartedAt: (ms: number | null) => void;
+  setRunId: (id: string | null) => void;
   setScript: (s: MasteringScript | null, opts?: { skipPersist?: boolean }) => void;
   setScriptActive: (active: boolean) => void;
   setError: (details: DeepErrorDetails | null) => void;
@@ -76,6 +83,7 @@ export const useDeepStore = create<DeepState>((set, get) => ({
   startedAt: null,
   scriptActive: true,
   errorDetails: null,
+  runId: null,
   loadedFromLibrary: false,
   suppressLibraryAutoUpdate: false,
 
@@ -84,6 +92,7 @@ export const useDeepStore = create<DeepState>((set, get) => ({
   setSubStatus: (s) => set({ subStatus: s }),
   setProgress: (n) => set({ progress: n }),
   setStartedAt: (ms) => set({ startedAt: ms }),
+  setRunId: (runId) => set({ runId }),
   setScript: (s, opts) => {
     set({ script: s });
     if (s && !opts?.skipPersist && !get().suppressLibraryAutoUpdate) {
@@ -152,6 +161,7 @@ export const useDeepStore = create<DeepState>((set, get) => ({
       startedAt: null,
       scriptActive: true,
       errorDetails: null,
+      runId: null,
       loadedFromLibrary: false,
       suppressLibraryAutoUpdate: false,
     }),

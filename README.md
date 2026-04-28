@@ -44,6 +44,17 @@ pnpm install
 pnpm dev          # Start dev server on port 3000
 ```
 
+### Environment variables
+
+Public (`NEXT_PUBLIC_*`) variables are baked into the client bundle at build
+time. Optional dev-only flags:
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `NEXT_PUBLIC_ANALYSIS_VERBOSE` | `false` | When `true`, the analysis-stage harness emits per-tick `console.debug` lines on every poll iteration. `console.info` for stage transitions and `console.error` for failures fire regardless. Useful for debugging slow analyses; leave off in production to avoid console noise. |
+| `NEXT_PUBLIC_SEPARATION_API_URL` | `http://localhost:8000` | Smart Split / separation backend URL. |
+| `NEXT_PUBLIC_DEEP_ANALYSIS_API_URL` | `(falls back to SEPARATION_API_URL)` | Deep Analysis backend URL. |
+
 ### Linting & Type Checking
 
 ```bash

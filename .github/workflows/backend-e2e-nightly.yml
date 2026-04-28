@@ -39,7 +39,7 @@ jobs:
           exit 1
       - name: Generate Postman fixtures
         working-directory: backend
-        run: uv run python tests/postman/fixtures/generate-fixtures.py --clean
+        run: uv run --with numpy --with soundfile python tests/postman/fixtures/generate-fixtures.py --clean
       - name: Run PR Suite
         run: pnpm run test:backend:postman
       - name: Run Long Audio (Nightly)

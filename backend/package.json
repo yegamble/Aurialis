@@ -6,12 +6,19 @@
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "test:worker": "vitest run --config vitest.worker.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "aws4fetch": "^1.0.20"
   },
   "devDependencies": {
     "@cloudflare/containers": "^0.3.3",
+    "@cloudflare/vitest-pool-workers": "^0.8.71",
     "@cloudflare/workers-types": "^4.20260426.1",
     "typescript": "5.8.3",
+    "vitest": "~3.2.0",
     "wrangler": "^4.85.0"
   }
 }

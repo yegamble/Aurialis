@@ -58,3 +58,62 @@ jobs:
       - run: pnpm run build
       - run: pnpm run test:generate-signals
       - run: pnpm run test:e2e
+
+  backend-e2e:
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v6
+      - name: Install Node deps (Newman)
+        run: pnpm install --frozen-lockfile
+      - name: Install backend Python deps
+        working-directory: backend
+        run: uv sync --no-dev || uv pip install -r requirements.txt
+      - name: Boot backend container
+        env:
+          MAX_UPLOAD_BYTES_OVERRIDE: "209715200"
+        run: docker compose up backend -d --build
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/health > /dev/null; then
+              echo "backend healthy after ${i}*5s"; exit 0
+            fi
+            sleep 5
+          done
+          echo "backend failed to come up within 5 min" >&2
+          docker compose logs backend
+          exit 1
+      - name: Generate Postman fixtures
+        working-directory: backend
+        env:
+          MAX_UPLOAD_BYTES_OVERRIDE: "209715200"
+        run: uv run python tests/postman/fixtures/generate-fixtures.py --clean
+      - name: Run Postman PR Suite
+        env:
+          MAX_UPLOAD_BYTES_OVERRIDE: "209715200"
+        run: pnpm run test:backend:postman
+      - name: Upload JUnit results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-junit
+          path: backend/tests/postman/results/newman-results.xml
+      - name: Cleanup fixtures (always)
+        if: always()
+        run: |
+          rm -rf backend/tests/postman/fixtures/*.bin \
+                 backend/tests/postman/fixtures/*.wav \
+                 backend/tests/postman/fixtures/*.mp3 \
+                 backend/tests/postman/fixtures/*.m4a \
+                 backend/tests/postman/fixtures/*.pdf \
+                 backend/tests/postman/fixtures/*.exe \
+                 backend/tests/postman/fixtures/*.sha256 || true
+          docker compose down -v || true

@@ -75,6 +75,68 @@ total              ≈ $0.003 / separation request
 Plus ~10 minutes of sleepAfter idle = ~$0.05/hour for the kept-warm
 instance. Quiet periods cost ~$0/hour because the container sleeps.
 
+## Direct-to-R2 upload control plane
+
+Browsers upload audio directly to a Cloudflare R2 bucket (`aurialis-uploads`)
+via S3 multipart presigned URLs. The Worker only handles the small JSON
+control plane (`/upload/initiate`, `/upload/complete`, `/upload/abort`) and
+mints a 10-minute presigned GET URL when forwarding `/analyze/deep` and
+`/separate` to the container. R2 access keys live in Worker secrets and
+never reach the container.
+
+### One-time provisioning
+
+1. **Create the bucket and apply lifecycle + CORS:**
+
+   ```sh
+   cd backend
+   bash scripts/provision-r2.sh
+   ```
+
+   The script is idempotent. It creates `aurialis-uploads`, applies the
+   48-hour object expiration + 1-day incomplete-multipart abort lifecycle
+   from `r2-lifecycle.json`, and applies the CORS rules from
+   `r2-cors.json`.
+
+2. **Mint an R2 API token** at
+   <https://dash.cloudflare.com/?to=/:account/r2/api-tokens>. Scope:
+   *Object Read & Write* on `aurialis-uploads` only. Save the
+   Access Key ID + Secret Access Key + Account ID.
+
+3. **Store the secrets in the Worker:**
+
+   ```sh
+   cd backend
+   pnpm wrangler secret put R2_ACCESS_KEY_ID
+   pnpm wrangler secret put R2_SECRET_ACCESS_KEY
+   pnpm wrangler secret put R2_ACCOUNT_ID
+   pnpm wrangler secret put TURNSTILE_SECRET_KEY
+   ```
+
+   Verify with `pnpm wrangler secret list`.
+
+4. **Create a Turnstile widget** at
+   <https://dash.cloudflare.com/?to=/:account/turnstile>. Mode:
+   *Invisible*. Hostnames: `aurialis.yosefgamble.com`, `localhost`.
+   Copy the **site key** into the frontend `wrangler.jsonc` under
+   `vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY` and into `.env.production`.
+   Copy the **secret key** into the Worker secret
+   `TURNSTILE_SECRET_KEY` from step 3.
+
+5. **Set up a Cloudflare billing alert** at
+   <https://dash.cloudflare.com/?to=/:account/billing/notifications>.
+   Recommended: alert at $50/day on R2 storage + Class A operations.
+   The anonymous `/upload/initiate` endpoint is rate-limited per IP and
+   globally, but a billing alert is the backstop.
+
+### Verify
+
+```sh
+pnpm wrangler r2 bucket lifecycle get aurialis-uploads   # 48h + multipart abort
+pnpm wrangler r2 bucket cors get aurialis-uploads        # PUT from prod + localhost
+pnpm wrangler secret list                                # 4 secrets present
+```
+
 ## Troubleshooting
 
 - **`Image size exceeds limit`** during deploy → you're on free tier;
@@ -87,3 +149,10 @@ instance. Quiet periods cost ~$0/hour because the container sleeps.
   Worker fetch limit). Make sure the frontend uses the polling pattern
   (`POST /analyze/deep` + `GET /jobs/{id}/status`) — synchronous calls
   to long-running endpoints will hit the Worker timeout.
+- **R2 PUT returns CORS error in browser** → re-apply CORS via
+  `bash scripts/provision-r2.sh`. Browsers cache the preflight for an
+  hour — if you changed `r2-cors.json`, hard-reload or wait.
+- **`/upload/complete` 500s with "ETag mismatch"** → the browser stripped
+  the quotes from the ETag header. Verify `r2-cors.json` has
+  `"ExposeHeaders": ["ETag"]` and the frontend captures the header
+  byte-for-byte (no manipulation).

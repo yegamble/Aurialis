@@ -19,6 +19,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:backend:postman": "bash backend/tests/postman/run-newman.sh --env local --folder \"PR Suite\" --delay-request 2000",
+    "test:backend:postman:long": "bash backend/tests/postman/run-newman.sh --env local --folder \"Long Audio (Nightly)\" --delay-request 5000",
+    "test:backend:postman:smoke": "bash backend/tests/postman/run-newman.sh --env production --folder \"Production Smoke\"",
     "test:generate-signals": "node e2e/fixtures/generate-test-wav.mjs",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview"
@@ -64,6 +67,7 @@
     "eslint-config-next": "^16.2.2",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "26.1.0",
+    "newman": "^6.2.2",
     "postcss": "8.5.3",
     "tailwindcss": "4.1.12",
     "tsx": "^4.21.0",

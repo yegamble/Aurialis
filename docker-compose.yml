@@ -9,6 +9,10 @@ services:
       - smart-split-temp:/tmp/smart-split
     environment:
       - PYTHONUNBUFFERED=1
+      # Pass through size cap override from the host shell. CI sets this to
+      # ~200 MB so the 250 MB oversized.bin fixture triggers a 413; local dev
+      # leaves it unset and the validator uses its 1 GB default.
+      - MAX_UPLOAD_BYTES_OVERRIDE
     restart: unless-stopped
 
 volumes:

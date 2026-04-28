@@ -93,6 +93,27 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+  smoke-production:
+    name: Production smoke (read-only Newman)
+    needs: deploy-backend
+    if: ${{ needs.changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Wait for Cloudflare propagation
+        run: sleep 30
+      - name: Run Production Smoke folder
+        run: pnpm run test:backend:postman:smoke
+
   deploy-frontend:
     name: Deploy frontend (OpenNext + Cloudflare Workers)
     needs: changes

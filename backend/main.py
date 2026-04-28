@@ -2,19 +2,33 @@
 Smart Split Backend — FastAPI service for Demucs stem separation.
 Provides REST endpoints for uploading audio, tracking separation progress,
 and downloading individual stems.
+
+Entry points for /analyze/deep and /separate dispatch by Content-Type:
+- application/json — Worker has minted a presigned R2 GET URL; container
+  streams the object via r2_download.download_to_tempfile, validates early,
+  then starts the job. This is the path for direct-to-R2 uploads.
+- multipart/form-data — Legacy path, kept until Task 9 of the
+  direct-r2-upload plan removes it. Increments the
+  ``multipart_legacy_calls`` log counter so the deploy gate can verify zero
+  traffic before deletion.
 """
 
+import logging
 import os
 import tempfile
+from typing import Annotated
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, HttpUrl
 
 from jobs import get_job, cleanup_expired, update_job
 from separation import start_separation, VALID_MODELS
 from deep_analysis import start_deep_analysis
 from observability import setup_telemetry
+from r2_download import download_to_tempfile
+from validation import validate_audio_upload
 
 VALID_PROFILES = (
     "modern_pop_polish",
@@ -26,6 +40,16 @@ VALID_PROFILES = (
 
 TEMP_DIR = "/tmp/smart-split"
 ALLOWED_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
+
+_logger = logging.getLogger("aurialis.main")
+
+
+def _unlink_quiet(path: str) -> None:
+    """Unlink a path, swallowing 'already gone' errors."""
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
 
 
 def _detect_gpu() -> bool:
@@ -55,6 +79,19 @@ def _detect_models() -> list[str]:
     return models
 
 
+# ---- Pydantic JSON bodies ----
+
+
+class AnalyzeDeepBody(BaseModel):
+    fetchUrl: HttpUrl
+    profile: str = "modern_pop_polish"
+
+
+class SeparateBody(BaseModel):
+    fetchUrl: HttpUrl
+    model: str = "htdemucs"
+
+
 # ---- Route handlers (module-level so they're easy to test in isolation) ----
 
 
@@ -67,11 +104,12 @@ async def _health():
     }
 
 
-async def _separate(
-    file: UploadFile = File(...),
-    model: str = Form("htdemucs"),
+async def _separate_multipart(
+    file: UploadFile,
+    model: str,
 ):
-    """Upload an audio file and start Demucs separation."""
+    """Legacy multipart upload handler. Removed in plan Task 9."""
+    _logger.info("multipart_legacy_calls path=/separate")
     if model not in VALID_MODELS:
         raise HTTPException(
             status_code=400,
@@ -80,19 +118,55 @@ async def _separate(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
+    data = await validate_audio_upload(file)
+
     os.makedirs(TEMP_DIR, exist_ok=True)
     ext = os.path.splitext(file.filename)[1].lower()
     suffix = ext if ext in ALLOWED_EXTENSIONS else ".wav"
 
-    with tempfile.NamedTemporaryFile(
-        dir=TEMP_DIR, suffix=suffix, delete=False
-    ) as tmp:
-        content = await file.read()
-        tmp.write(content)
+    with tempfile.NamedTemporaryFile(dir=TEMP_DIR, suffix=suffix, delete=False) as tmp:
+        tmp.write(data)
         input_path = tmp.name
 
-    job = start_separation(input_path, model)
+    try:
+        job = start_separation(input_path, model)
+    except Exception:
+        _unlink_quiet(input_path)
+        raise
     return {"job_id": job.id, "status": job.status}
+
+
+async def _separate_json(body: SeparateBody):
+    if body.model not in VALID_MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model: {body.model}. Must be one of {VALID_MODELS}",
+        )
+    tmp_path = download_to_tempfile(str(body.fetchUrl), temp_dir=TEMP_DIR)
+    try:
+        job = start_separation(str(tmp_path), body.model)
+    except Exception:
+        _unlink_quiet(str(tmp_path))
+        raise
+    return {"job_id": job.id, "status": job.status}
+
+
+async def _separate(
+    request: Request,
+    file: Annotated[UploadFile | None, File()] = None,
+    model: Annotated[str, Form()] = "htdemucs",
+):
+    """Upload an audio file (multipart) or supply a fetchUrl (JSON) and start
+    Demucs separation."""
+    ct = (request.headers.get("content-type") or "").lower()
+    if ct.startswith("application/json"):
+        body = SeparateBody(**(await request.json()))
+        return await _separate_json(body)
+    if file is None:
+        raise HTTPException(
+            status_code=400, detail="Missing 'file' (multipart) or JSON body"
+        )
+    return await _separate_multipart(file, model)
 
 
 async def _job_status(job_id: str):
@@ -112,11 +186,12 @@ async def _job_status(job_id: str):
     }
 
 
-async def _analyze_deep(
-    file: UploadFile = File(...),
-    profile: str = Form("modern_pop_polish"),
+async def _analyze_deep_multipart(
+    file: UploadFile,
+    profile: str,
 ):
-    """Upload an audio file and start a deep-analysis job."""
+    """Legacy multipart upload handler. Removed in plan Task 9."""
+    _logger.info("multipart_legacy_calls path=/analyze/deep")
     if profile not in VALID_PROFILES:
         raise HTTPException(
             status_code=400,
@@ -125,19 +200,55 @@ async def _analyze_deep(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
+    data = await validate_audio_upload(file)
+
     os.makedirs(TEMP_DIR, exist_ok=True)
     ext = os.path.splitext(file.filename)[1].lower()
     suffix = ext if ext in ALLOWED_EXTENSIONS else ".wav"
 
-    with tempfile.NamedTemporaryFile(
-        dir=TEMP_DIR, suffix=suffix, delete=False
-    ) as tmp:
-        content = await file.read()
-        tmp.write(content)
+    with tempfile.NamedTemporaryFile(dir=TEMP_DIR, suffix=suffix, delete=False) as tmp:
+        tmp.write(data)
         input_path = tmp.name
 
-    job = start_deep_analysis(input_path, profile)
+    try:
+        job = start_deep_analysis(input_path, profile)
+    except Exception:
+        _unlink_quiet(input_path)
+        raise
     return {"job_id": job.id, "status": job.status}
+
+
+async def _analyze_deep_json(body: AnalyzeDeepBody):
+    if body.profile not in VALID_PROFILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid profile: {body.profile}. Must be one of {VALID_PROFILES}",
+        )
+    tmp_path = download_to_tempfile(str(body.fetchUrl), temp_dir=TEMP_DIR)
+    try:
+        job = start_deep_analysis(str(tmp_path), body.profile)
+    except Exception:
+        _unlink_quiet(str(tmp_path))
+        raise
+    return {"job_id": job.id, "status": job.status}
+
+
+async def _analyze_deep(
+    request: Request,
+    file: Annotated[UploadFile | None, File()] = None,
+    profile: Annotated[str, Form()] = "modern_pop_polish",
+):
+    """Upload an audio file (multipart) or supply a fetchUrl (JSON) and start
+    a deep-analysis job."""
+    ct = (request.headers.get("content-type") or "").lower()
+    if ct.startswith("application/json"):
+        body = AnalyzeDeepBody(**(await request.json()))
+        return await _analyze_deep_json(body)
+    if file is None:
+        raise HTTPException(
+            status_code=400, detail="Missing 'file' (multipart) or JSON body"
+        )
+    return await _analyze_deep_multipart(file, profile)
 
 
 async def _job_result(job_id: str):

@@ -58,7 +58,13 @@ pnpm test                             # Unit tests (Vitest)
 pnpm test -- --coverage               # With coverage report
 pnpm run test:generate-signals        # Generate test WAV fixtures
 pnpm exec playwright test --workers=2 # E2E tests
+
+pnpm run test:backend:postman         # Backend Postman/Newman PR Suite
+pnpm run test:backend:postman:long    # Backend nightly long-audio
+pnpm run test:backend:postman:smoke   # Production read-only smoke
 ```
+
+Backend tests (pytest + Postman) live under `backend/`. See [`backend/README.md`](backend/README.md) for the full suite, fixture generation, and CI wiring.
 
 ### Build & Deploy
 

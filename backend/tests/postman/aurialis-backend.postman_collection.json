@@ -1,0 +1,877 @@
+{
+  "info": {
+    "name": "Aurialis Backend E2E",
+    "_postman_id": "aurialis-backend-e2e",
+    "description": "End-to-end Postman/Newman suite for the Aurialis FastAPI backend. PR Suite is the merge-blocking subset; Long Audio (Nightly) runs on cron; Production Smoke runs read-only against the live container post-deploy.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "PR Suite",
+      "description": "Merge-blocking. Runs in PR CI against docker-compose backend on localhost:8000. Excludes long-audio (deferred to nightly).",
+      "item": [
+        {
+          "name": "Health",
+          "description": "TS-001 - basic reachability + GPU/model report.",
+          "item": [
+            {
+              "name": "TS-001: Health Check",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/health",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["health"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-001: status is 200', () => pm.response.to.have.status(200));",
+                      "pm.test('TS-001: response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+                      "const body = pm.response.json();",
+                      "pm.test('TS-001: status field is ok', () => pm.expect(body.status).to.eql('ok'));",
+                      "pm.test('TS-001: gpu is boolean', () => pm.expect(body.gpu).to.be.a('boolean'));",
+                      "pm.test('TS-001: models is array', () => pm.expect(body.models).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Happy Path",
+          "description": "TS-002, TS-003, TS-004 - separation enqueue, deep-analysis polled to completion, cancel idempotency.",
+          "item": [
+            {
+              "name": "TS-002: Separate Enqueue",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/normal_3s.wav"},
+                    {"key": "model", "value": "htdemucs", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/separate", "host": ["{{baseUrl}}"], "path": ["separate"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-002: status is 200', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('TS-002: has job_id (UUID)', () => pm.expect(body.job_id).to.match(/^[0-9a-f-]{36}$/));",
+                      "pm.test('TS-002: status is queued or processing', () => pm.expect(['queued', 'processing']).to.include(body.status));",
+                      "pm.environment.set('separationJobId', body.job_id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-002: Separation Job Status",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/jobs/{{separationJobId}}/status",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["jobs", "{{separationJobId}}", "status"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-002: status is 200', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('TS-002: schema has expected fields', () => {",
+                      "  pm.expect(body).to.have.property('job_id');",
+                      "  pm.expect(body).to.have.property('status');",
+                      "  pm.expect(body).to.have.property('progress');",
+                      "  pm.expect(body).to.have.property('model');",
+                      "  pm.expect(body).to.have.property('stems').that.is.an('array');",
+                      "});",
+                      "pm.test('TS-002: model echoed back', () => pm.expect(body.model).to.eql('htdemucs'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-003: Deep Analyze Enqueue",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/normal_3s.wav"},
+                    {"key": "profile", "value": "modern_pop_polish", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/analyze/deep", "host": ["{{baseUrl}}"], "path": ["analyze", "deep"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-003: status is 200', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('TS-003: has job_id (UUID)', () => pm.expect(body.job_id).to.match(/^[0-9a-f-]{36}$/));",
+                      "pm.environment.set('deepJobId', body.job_id);",
+                      "pm.environment.set('pollCount', '0');"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-003: Poll Status",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/jobs/{{deepJobId}}/status",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["jobs", "{{deepJobId}}", "status"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-003 poll: status is 200', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "if (body.status === 'done') {",
+                      "  pm.environment.unset('pollCount');",
+                      "  pm.execution.setNextRequest('TS-003: Get Result');",
+                      "} else if (body.status === 'error') {",
+                      "  pm.test('TS-003: job did not error', () => { throw new Error('Job errored: ' + body.error); });",
+                      "  pm.execution.setNextRequest(null);",
+                      "} else {",
+                      "  const count = parseInt(pm.environment.get('pollCount') || '0') + 1;",
+                      "  pm.environment.set('pollCount', String(count));",
+                      "  const max = parseInt(pm.environment.get('pollMaxIterations') || '45');",
+                      "  if (count >= max) {",
+                      "    pm.test('TS-003: poll did not time out', () => { throw new Error('Poll timeout after ' + count + ' iterations'); });",
+                      "    pm.execution.setNextRequest(null);",
+                      "  } else {",
+                      "    pm.execution.setNextRequest('TS-003: Poll Status');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-003: Get Result",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/jobs/{{deepJobId}}/result",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["jobs", "{{deepJobId}}", "result"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-003: result status is 200', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('TS-003: sections array non-empty', () => pm.expect(body.sections).to.be.an('array').that.is.not.empty);",
+                      "pm.test('TS-003: script object present', () => pm.expect(body.script).to.be.an('object'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-003: Bogus Job 404",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/jobs/00000000-0000-0000-0000-000000000000/status",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["jobs", "00000000-0000-0000-0000-000000000000", "status"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-003: bogus job returns 404', () => pm.response.to.have.status(404));",
+                      "const body = pm.response.json();",
+                      "pm.test('TS-003: detail mentions Job not found', () => pm.expect(body.detail).to.include('Job not found'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-004: Cancel Enqueue",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/normal_3s.wav"},
+                    {"key": "profile", "value": "modern_pop_polish", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/analyze/deep", "host": ["{{baseUrl}}"], "path": ["analyze", "deep"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-004: enqueue 200', () => pm.response.to.have.status(200));",
+                      "pm.environment.set('cancelJobId', pm.response.json().job_id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-004: Cancel Job",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/jobs/{{cancelJobId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["jobs", "{{cancelJobId}}"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-004: cancel 200', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('TS-004: cancelled flag', () => pm.expect([true, false]).to.include(body.cancelled));",
+                      "pm.test('TS-004: returns job_id', () => pm.expect(body.job_id).to.eql(pm.environment.get('cancelJobId')));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-004: Cancel Idempotent",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/jobs/{{cancelJobId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["jobs", "{{cancelJobId}}"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-004: idempotent 200', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('TS-004: idempotent returns valid response', () => {",
+                      "  pm.expect(body).to.have.property('cancelled');",
+                      "  pm.expect(body).to.have.property('status');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Audio Edge Cases",
+          "description": "TS-005, TS-008 - tiny, mono+SR, corrupted-WAV.",
+          "item": [
+            {
+              "name": "TS-005: Tiny WAV",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/tiny.wav"},
+                    {"key": "model", "value": "htdemucs", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/separate", "host": ["{{baseUrl}}"], "path": ["separate"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-005 tiny: 200 OR clean 4xx (NOT 5xx)', () => pm.expect(pm.response.code).to.be.below(500));",
+                      "pm.test('TS-005 tiny: 200 or 400', () => pm.expect([200, 400]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-005: Mono 8 kHz",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/mono_8khz.wav"},
+                    {"key": "profile", "value": "modern_pop_polish", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/analyze/deep", "host": ["{{baseUrl}}"], "path": ["analyze", "deep"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-005 mono 8 kHz: enqueue 200', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('TS-005 mono 8 kHz: returns job_id', () => pm.expect(body.job_id).to.match(/^[0-9a-f-]{36}$/));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-005: Mono 96 kHz",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/mono_96khz.wav"},
+                    {"key": "profile", "value": "modern_pop_polish", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/analyze/deep", "host": ["{{baseUrl}}"], "path": ["analyze", "deep"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-005 mono 96 kHz: enqueue 200', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('TS-005 mono 96 kHz: returns job_id', () => pm.expect(body.job_id).to.match(/^[0-9a-f-]{36}$/));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-008: Corrupted WAV Header",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/corrupted.wav"},
+                    {"key": "model", "value": "htdemucs", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/separate", "host": ["{{baseUrl}}"], "path": ["separate"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-008: corrupted WAV is rejected with 400', () => pm.response.to.have.status(400));",
+                      "pm.test('TS-008: detail mentions audio', () => pm.expect(pm.response.json().detail.toLowerCase()).to.match(/audio|format|read|parse/));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Security",
+          "description": "TS-006, TS-007, TS-009, TS-011 - non-audio rejection, oversized, invalid params + filename injection, CORS preflight.",
+          "item": [
+            {
+              "name": "TS-006: Reject PDF on /separate",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/not-audio.pdf"},
+                    {"key": "model", "value": "htdemucs", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/separate", "host": ["{{baseUrl}}"], "path": ["separate"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-006: PDF rejected with 400', () => pm.response.to.have.status(400));",
+                      "pm.test('TS-006: detail mentions audio/format', () => pm.expect(pm.response.json().detail.toLowerCase()).to.match(/audio|format|magic/));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-006: Reject PDF on /analyze/deep",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/not-audio.pdf"},
+                    {"key": "profile", "value": "modern_pop_polish", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/analyze/deep", "host": ["{{baseUrl}}"], "path": ["analyze", "deep"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-006: PDF rejected on /analyze/deep', () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-006: Reject EXE",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/fake.exe"},
+                    {"key": "model", "value": "htdemucs", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/separate", "host": ["{{baseUrl}}"], "path": ["separate"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-006: EXE rejected with 400', () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-006: Reject Spoofed .wav",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/evil-spoofed.wav"},
+                    {"key": "model", "value": "htdemucs", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/separate", "host": ["{{baseUrl}}"], "path": ["separate"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-006: spoofed .wav rejected (magic-byte sniff catches it)', () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-007: Reject Oversized Upload",
+              "description": "Strict 413 assertion. Requires MAX_UPLOAD_BYTES_OVERRIDE=209715200 (200 MB) on the backend container so the 250 MB oversized.bin fixture exceeds the cap. Structural assertion (no /tmp/smart-split file persisted) is delegated to the pytest test_oversized_rejected_without_persisting_tempfile — Postman validates response code + detail only.",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/oversized.bin"},
+                    {"key": "model", "value": "htdemucs", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/separate", "host": ["{{baseUrl}}"], "path": ["separate"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-007: oversized rejected with 413', () => pm.response.to.have.status(413));",
+                      "pm.test('TS-007: detail mentions size limit', () => pm.expect(pm.response.json().detail.toLowerCase()).to.match(/limit|exceed|size|large/));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-009: Reject Invalid Model",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/normal_3s.wav"},
+                    {"key": "model", "value": "BOGUS", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/separate", "host": ["{{baseUrl}}"], "path": ["separate"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-009: BOGUS model rejected with 400', () => pm.response.to.have.status(400));",
+                      "pm.test('TS-009: detail mentions valid models', () => pm.expect(pm.response.json().detail).to.match(/Invalid model|htdemucs/));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-009: Reject Invalid Profile",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": "fixtures/normal_3s.wav"},
+                    {"key": "profile", "value": "BOGUS", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/analyze/deep", "host": ["{{baseUrl}}"], "path": ["analyze", "deep"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-009: BOGUS profile rejected with 400', () => pm.response.to.have.status(400));",
+                      "pm.test('TS-009: detail mentions valid profiles', () => pm.expect(pm.response.json().detail).to.match(/Invalid profile|modern_pop_polish/));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-009: Filename Header Injection Defense",
+              "description": "Upload with a filename containing CRLF + injected header chars. Backend must NOT echo any X-Injected response header.",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": "fixtures/normal_3s.wav",
+                      "fileName": "evil\\r\\nX-Injected: yes\\r\\n.wav"
+                    },
+                    {"key": "model", "value": "htdemucs", "type": "text"}
+                  ]
+                },
+                "url": {"raw": "{{baseUrl}}/separate", "host": ["{{baseUrl}}"], "path": ["separate"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-009: response is < 500 (no server crash on bad filename)', () => pm.expect(pm.response.code).to.be.below(500));",
+                      "pm.test('TS-009: X-Injected header is NOT present in response', () => {",
+                      "  const injected = pm.response.headers.get('X-Injected');",
+                      "  pm.expect(injected, 'response leaked injected header').to.be.null;",
+                      "});",
+                      "pm.test('TS-009: response body does not echo raw CRLF from filename', () => {",
+                      "  const text = pm.response.text() || '';",
+                      "  pm.expect(text).to.not.match(/X-Injected:\\s*yes/i);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-011: CORS Preflight (Disallowed Origin)",
+              "request": {
+                "method": "OPTIONS",
+                "header": [
+                  {"key": "Origin", "value": "https://attacker.example"},
+                  {"key": "Access-Control-Request-Method", "value": "POST"},
+                  {"key": "Access-Control-Request-Headers", "value": "content-type"}
+                ],
+                "url": {"raw": "{{baseUrl}}/separate", "host": ["{{baseUrl}}"], "path": ["separate"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-011: disallowed origin gets no allow-origin header', () => {",
+                      "  const allow = pm.response.headers.get('Access-Control-Allow-Origin');",
+                      "  pm.expect(allow, 'CORS leaked to attacker.example').to.not.eql('https://attacker.example');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "TS-011: CORS Preflight (Allowed Origin)",
+              "request": {
+                "method": "OPTIONS",
+                "header": [
+                  {"key": "Origin", "value": "https://aurialis.yosefgamble.com"},
+                  {"key": "Access-Control-Request-Method", "value": "POST"},
+                  {"key": "Access-Control-Request-Headers", "value": "content-type"}
+                ],
+                "url": {"raw": "{{baseUrl}}/separate", "host": ["{{baseUrl}}"], "path": ["separate"]}
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('TS-011: allowed origin echoes back', () => {",
+                      "  const allow = pm.response.headers.get('Access-Control-Allow-Origin');",
+                      "  pm.expect(allow).to.eql('https://aurialis.yosefgamble.com');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Long Audio (Nightly)",
+      "description": "TS-012 - 10-minute deep-analysis round-trip. Cron-only.",
+      "item": [
+        {
+          "name": "TS-012: Long Audio Enqueue",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "file", "type": "file", "src": "fixtures/long_10min.wav"},
+                {"key": "profile", "value": "modern_pop_polish", "type": "text"}
+              ]
+            },
+            "url": {"raw": "{{baseUrl}}/analyze/deep", "host": ["{{baseUrl}}"], "path": ["analyze", "deep"]}
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('TS-012: enqueue 200', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('longJobId', pm.response.json().job_id);",
+                  "pm.environment.set('longPollCount', '0');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TS-012: Long Poll Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/jobs/{{longJobId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["jobs", "{{longJobId}}", "status"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('TS-012 poll: status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "if (body.status === 'done') {",
+                  "  pm.environment.unset('longPollCount');",
+                  "  pm.execution.setNextRequest('TS-012: Long Get Result');",
+                  "} else if (body.status === 'error') {",
+                  "  pm.test('TS-012: job did not error', () => { throw new Error('Job errored: ' + body.error); });",
+                  "  pm.execution.setNextRequest(null);",
+                  "} else {",
+                  "  const count = parseInt(pm.environment.get('longPollCount') || '0') + 1;",
+                  "  pm.environment.set('longPollCount', String(count));",
+                  "  const max = parseInt(pm.environment.get('longPollMaxIterations') || '120');",
+                  "  if (count >= max) {",
+                  "    pm.test('TS-012: poll did not time out', () => { throw new Error('Poll timeout'); });",
+                  "    pm.execution.setNextRequest(null);",
+                  "  } else {",
+                  "    pm.execution.setNextRequest('TS-012: Long Poll Status');",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TS-012: Long Get Result",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/jobs/{{longJobId}}/result",
+              "host": ["{{baseUrl}}"],
+              "path": ["jobs", "{{longJobId}}", "result"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('TS-012: result 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('TS-012: sections has multiple structural entries', () => pm.expect(body.sections.length).to.be.at.least(4));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Production Smoke",
+      "description": "Read-only post-deploy verification. NEVER triggers separation/analysis on production.",
+      "item": [
+        {
+          "name": "Prod: Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"]}
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Prod: status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Prod: status field is ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level pre-request: nothing yet."
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.response && pm.response.code >= 500) {",
+          "  console.error('Server 5xx on ' + pm.info.requestName + ': ' + pm.response.code + ' (' + pm.response.responseTime + 'ms)');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "description": "Overridden per environment file."
+    }
+  ]
+}

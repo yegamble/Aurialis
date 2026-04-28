@@ -1,6 +1,7 @@
 {
   // Cloudflare Worker that fronts the Aurialis backend (FastAPI + Demucs +
-  // madmom) running in a Cloudflare Container.
+  // madmom) running in a Cloudflare Container, plus the R2 upload control
+  // plane (initiate / complete / abort + presigned PUT URLs).
   //
   // The frontend Worker (root wrangler.jsonc) reads
   // NEXT_PUBLIC_DEEP_ANALYSIS_API_URL — point that at this Worker's URL
@@ -10,6 +11,20 @@
   "main": "src/worker.ts",
   "compatibility_date": "2025-09-27",
   "compatibility_flags": ["nodejs_compat"],
+
+  // Public configuration. Secrets (R2 access keys, Turnstile secret) are set
+  // via `wrangler secret put` — see backend/DEPLOY.md.
+  "vars": {
+    "UPLOADS_BUCKET_NAME": "aurialis-uploads",
+    "RATE_LIMIT_PER_HOUR": "10",
+    "GLOBAL_RATE_LIMIT_PER_HOUR": "1000",
+    "MAX_UPLOAD_BYTES": "1073741824",
+    "CHUNK_SIZE_BYTES": "16777216",
+    "PART_PRESIGN_EXPIRY_SECONDS": "21600",
+    "GET_PRESIGN_EXPIRY_SECONDS": "600",
+    "ALLOWED_ORIGINS": "https://aurialis.yosefgamble.com,http://localhost:3000",
+    "TURNSTILE_SITE_KEY_PUBLIC": "see-NEXT_PUBLIC_TURNSTILE_SITE_KEY-on-frontend"
+  },
 
   // The container image is built from this Dockerfile on every `wrangler
   // deploy`. Cloudflare's build runs in their infrastructure, so the image
@@ -29,20 +44,54 @@
 
   // Containers are addressed via Durable Object stubs — the binding name
   // ("BACKEND") is what the Worker uses to forward requests.
+  // RateLimitDO is per-IP (one DO instance per cf-connecting-ip).
+  // GlobalRateLimitDO is account-wide (single DO instance keyed "global").
   "durable_objects": {
     "bindings": [
       {
         "class_name": "BackendContainer",
         "name": "BACKEND"
+      },
+      {
+        "class_name": "RateLimitDO",
+        "name": "RATE_LIMIT_PER_IP"
+      },
+      {
+        "class_name": "GlobalRateLimitDO",
+        "name": "RATE_LIMIT_GLOBAL"
       }
     ]
   },
 
-  // SQLite-backed Durable Object class for the container — required.
+  // SQLite-backed Durable Object classes. The v1 migration stays as-is for
+  // BackendContainer; v2 adds the rate-limit classes.
   "migrations": [
     {
       "tag": "v1",
       "new_sqlite_classes": ["BackendContainer"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["RateLimitDO", "GlobalRateLimitDO"]
+    }
+  ],
+
+  // R2 bucket binding for the upload control plane. The bucket is provisioned
+  // by backend/scripts/provision-r2.sh.
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "aurialis-uploads"
+    }
+  ],
+
+  // Workers Analytics Engine for the multipart_legacy_calls counter (used
+  // to gate Task 9 of the direct-r2-upload plan — verifies zero legacy
+  // multipart traffic before removing the FormData endpoints).
+  "analytics_engine_datasets": [
+    {
+      "binding": "METRICS",
+      "dataset": "aurialis_metrics"
     }
   ],
 

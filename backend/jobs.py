@@ -5,6 +5,7 @@ Uses a JSON file on disk so state survives container restarts.
 
 import json
 import os
+import re
 import time
 import threading
 from dataclasses import dataclass, field, asdict
@@ -16,12 +17,23 @@ JOB_TTL_SECONDS = 30 * 60  # 30 minutes
 
 _lock = threading.Lock()
 
+# Allowed characters in a stem name. Limits Content-Disposition exposure if a
+# future Demucs model emits exotic stem names. Today's models use only the
+# names below — see separation.MODEL_STEMS.
+_STEM_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
 
 @dataclass
 class StemInfo:
     name: str
     path: str
     ready: bool = False
+
+    def __post_init__(self) -> None:
+        if not _STEM_NAME_RE.match(self.name):
+            raise ValueError(
+                f"Invalid stem name {self.name!r}: must match {_STEM_NAME_RE.pattern}"
+            )
 
 
 @dataclass
@@ -117,8 +129,7 @@ def cleanup_expired() -> int:
     with _lock:
         jobs = _load_jobs()
         expired = [
-            jid for jid, j in jobs.items()
-            if now - j.created_at > JOB_TTL_SECONDS
+            jid for jid, j in jobs.items() if now - j.created_at > JOB_TTL_SECONDS
         ]
         for jid in expired:
             job = jobs.pop(jid)
@@ -127,6 +138,7 @@ def cleanup_expired() -> int:
                 os.remove(job.input_path)
             if job.output_dir and os.path.isdir(job.output_dir):
                 import shutil
+
                 shutil.rmtree(job.output_dir, ignore_errors=True)
             removed += 1
         if removed:

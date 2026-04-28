@@ -26,6 +26,7 @@ from observability import (
     log_phase,
     run_in_span_context,
 )
+from script_generator import generate_script
 
 # Length below which a section is considered "too short" for LUFS measurement.
 _LUFS_MIN_SEC = 0.4
@@ -154,7 +155,33 @@ def _run_deep_analysis(job_id: str, input_path: str, profile: str) -> None:
             log_phase("cancel-observed", job_id, stems_start, error="cancelled")
             return
 
-        # T5 will fill `script` here. For now mark done with the partial result.
+        # Phase 4: script generation (T5).
+        script_start = time.time()
+        get_logger().info(
+            "phase start", extra={"job_id": job_id, "phase": "script"}
+        )
+        with tracer.start_as_current_span("deep_analysis.script") as span:
+            span.set_attribute("job_id", job_id)
+            span.set_attribute("phase", "script")
+            span.set_attribute("profile", profile)
+            try:
+                stem_reports = partial.get("stems") or None
+                script = generate_script(
+                    track_id=job_id,
+                    sample_rate=sr,
+                    duration=float(samples.shape[0]) / float(sr),
+                    sections=partial["sections"],
+                    profile_id=profile,
+                    stem_reports=stem_reports,
+                )
+                partial = {**partial, "script": script}
+                span.set_attribute("script.moves", len(script["moves"]))
+            except (ValueError, FileNotFoundError) as script_err:
+                partial = {**partial, "script_error": str(script_err)}
+                span.set_attribute("script.error", str(script_err))
+        update_job(job_id, progress=95, partial_result=partial)
+        log_phase("script", job_id, script_start)
+
         update_job(job_id, status="done", progress=100)
         log_phase("done", job_id, load_start)
 

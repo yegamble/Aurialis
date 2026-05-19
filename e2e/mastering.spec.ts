@@ -277,7 +277,9 @@ test.describe("Upload flow", () => {
     const chooser = await chooserPromise;
     expect(chooser.isMultiple()).toBe(true);
 
-    await expect(page.getByText("Aurialis")).toBeVisible();
+    // After the Direction A shell landed, "Aurialis" also appears in the
+    // window chrome and sidebar group label. Scope to the UploadScreen heading.
+    await expect(page.getByRole("heading", { name: "Aurialis" })).toBeVisible();
   });
 
   test("uploading a WAV file navigates to mastering and shows file info", async ({

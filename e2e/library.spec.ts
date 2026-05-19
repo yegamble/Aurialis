@@ -165,6 +165,10 @@ test("TS-002b: Don't-ask-again skips dialog on next match", async ({ page }) => 
 
   // Reload upload screen, drop again → no dialog this time.
   await page.goto("/");
+  // After the first round the library has 1 entry, so the shell defaults to
+  // the Library view. Click the sidebar "Import" item to switch back to
+  // upload mode where the file input is mounted.
+  await page.getByRole("navigation").getByRole("button", { name: /Import/i }).click();
   await page.locator('input[type="file"]').waitFor({ state: "attached" });
   await page.evaluate(() => {
     const file = new File(

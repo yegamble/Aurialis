@@ -3,20 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import {
-  ArrowLeft,
-  Play,
-  Pause,
-  SkipBack,
-  Headphones,
-  Sparkles,
-  Download,
-  SendHorizonal,
-  Wand2,
-} from "lucide-react";
+import { Play, Pause, SkipBack } from "lucide-react";
 import { StemUpload } from "@/components/mixer/StemUpload";
 import { StemList } from "@/components/mixer/StemList";
 import { StemTimeline } from "@/components/mixer/StemTimeline";
+import { MixToolbar } from "@/components/mixer/MixToolbar";
+import { WindowChrome } from "@/components/shell/WindowChrome";
 import { SeparationProgressCard } from "@/components/mix/SeparationProgressCard";
 import { useMixEngine } from "@/hooks/useMixEngine";
 import { useMixerStore } from "@/lib/stores/mixer-store";

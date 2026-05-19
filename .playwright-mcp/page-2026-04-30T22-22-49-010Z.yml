@@ -1,0 +1,124 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e44] [cursor=pointer]:
+    - img [ref=e45]
+  - alert [ref=e48]: Aurialis - Professional Audio Mastering
+  - generic [ref=e58]:
+    - banner [ref=e59]:
+      - generic [ref=e60]:
+        - button "Back to upload" [ref=e61]:
+          - img [ref=e62]
+        - generic [ref=e64]:
+          - img [ref=e66]
+          - generic [ref=e68]: Aurialis
+      - generic [ref=e69]:
+        - button "simple" [ref=e70]
+        - button "advanced" [ref=e71]
+        - button "deep" [pressed] [ref=e72]
+    - generic [ref=e73]:
+      - complementary [ref=e74]:
+        - generic [ref=e477]:
+          - generic [ref=e478]:
+            - heading "Deep Mastering" [level=2] [ref=e479]
+            - paragraph [ref=e480]: AI proposes time-varying mastering moves. Choose a profile, click Analyze, then accept / edit / mute individual moves on the timeline.
+          - generic [ref=e481]:
+            - generic [ref=e482]: "Active profile: modern_pop_polish"
+            - generic [ref=e483]:
+              - heading "Engineer Profile" [level=3] [ref=e484]
+              - generic [ref=e485]:
+                - button "Modern Pop Polish Tight low-end, airy top, controlled chorus loudness lift." [pressed] [ref=e486]:
+                  - generic [ref=e487]: Modern Pop Polish
+                  - generic [ref=e488]: Tight low-end, airy top, controlled chorus loudness lift.
+                - button "Hip-Hop Low-End Sub-forward, punchy transients, wide chorus stereo image." [ref=e489]:
+                  - generic [ref=e490]: Hip-Hop Low-End
+                  - generic [ref=e491]: Sub-forward, punchy transients, wide chorus stereo image.
+                - button "Indie Warmth Warm mids, gentle compression, organic tonal balance." [ref=e492]:
+                  - generic [ref=e493]: Indie Warmth
+                  - generic [ref=e494]: Warm mids, gentle compression, organic tonal balance.
+                - button "Metal Wall Aggressive midrange, tight bass, max chorus impact." [ref=e495]:
+                  - generic [ref=e496]: Metal Wall
+                  - generic [ref=e497]: Aggressive midrange, tight bass, max chorus impact.
+                - button "Pop Punk Air Bright top, energetic drums, lifted vocal presence." [ref=e498]:
+                  - generic [ref=e499]: Pop Punk Air
+                  - generic [ref=e500]: Bright top, energetic drums, lifted vocal presence.
+              - button "Apply" [disabled] [ref=e501]
+          - generic [ref=e502]:
+            - button "Analyze" [ref=e503]
+            - 'button "Script: ON (A)" [pressed] [ref=e504]'
+          - paragraph [ref=e505]: "Status: error"
+          - alert [ref=e507]:
+            - paragraph [ref=e508]: "Failed at: Uploading"
+            - paragraph [ref=e509]: Couldn't reach the analysis service
+            - generic [ref=e510]:
+              - button "Retry" [ref=e511]
+              - button "Show details" [ref=e512]
+          - generic [ref=e506]: No active script. Click Analyze to generate one.
+      - main [ref=e167]:
+        - generic [ref=e168]:
+          - generic [ref=e169]:
+            - img [ref=e171]
+            - generic [ref=e175]:
+              - paragraph [ref=e177]: Reflections-1.wav
+              - paragraph [ref=e178]: 7:59 · 44.1 kHz · Stereo
+          - generic [ref=e179]:
+            - paragraph [ref=e180]: "--- LUFS"
+            - paragraph [ref=e181]: "--- dBTP"
+            - paragraph [ref=e182]: "LRA: --- LU"
+            - paragraph [ref=e183]: "Corr: +1.00"
+            - paragraph [ref=e184]: "MB L/M/H: 0.0 / 0.0 / 0.0 dB"
+        - slider "Audio waveform. Click to seek." [ref=e185] [cursor=pointer]
+        - generic [ref=e187]:
+          - button "Click to compare bypass" [ref=e188]:
+            - generic [ref=e189]: A
+            - generic [ref=e190]: Processed
+          - button "Stop and return to beginning" [ref=e191]:
+            - img [ref=e192]
+          - button "Play" [ref=e194]:
+            - img [ref=e195]
+          - generic [ref=e197]: 0:00 / 7:59
+        - generic "Frequency spectrum display" [ref=e198]
+        - generic [ref=e200]:
+          - paragraph [ref=e201]: Export
+          - generic [ref=e202]:
+            - button "Streaming" [ref=e203]
+            - button "CD Quality" [pressed] [ref=e204]
+            - button "Hi-Res" [ref=e205]
+          - generic [ref=e206]:
+            - generic [ref=e207]:
+              - paragraph [ref=e208]: Sample Rate
+              - combobox "Sample Rate" [ref=e209] [cursor=pointer]:
+                - option "44.1 kHz" [selected]
+                - option "48 kHz"
+                - option "96 kHz"
+            - generic [ref=e210]:
+              - paragraph [ref=e211]: Bit Depth
+              - combobox "Bit Depth" [ref=e212] [cursor=pointer]:
+                - option "16-bit" [selected]
+                - option "24-bit"
+                - option "32-bit float"
+            - generic [ref=e213]:
+              - paragraph [ref=e214]: Dither
+              - combobox "Dither" [ref=e215] [cursor=pointer]:
+                - option "None"
+                - option "TPDF" [selected]
+          - button "Export WAV" [ref=e216]:
+            - img [ref=e217]
+            - text: Export WAV
+      - complementary [ref=e220]:
+        - generic [ref=e221]:
+          - generic [ref=e222]:
+            - generic [ref=e223]: Levels
+            - generic [ref=e224]: 0.0LUFS
+          - generic [ref=e225]:
+            - generic [ref=e227]: L
+            - generic [ref=e230]: R
+          - generic [ref=e232]:
+            - generic [ref=e233]:
+              - paragraph [ref=e234]: Target
+              - paragraph [ref=e235]: "-14.0LUFS"
+            - generic [ref=e236]:
+              - paragraph [ref=e237]: True Peak
+              - paragraph [ref=e238]: 0.0dBTP
+            - generic [ref=e239]:
+              - paragraph [ref=e240]: Dynamic Range
+              - paragraph [ref=e241]: 0.0dB
+        - generic [ref=e243]: Goniometer

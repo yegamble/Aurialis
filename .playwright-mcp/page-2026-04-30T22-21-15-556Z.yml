@@ -1,0 +1,249 @@
+- generic [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e44] [cursor=pointer]:
+    - img [ref=e45]
+  - alert [ref=e48]: Aurialis - Professional Audio Mastering
+  - generic [ref=e58]:
+    - banner [ref=e59]:
+      - generic [ref=e60]:
+        - button "Back to upload" [ref=e61]:
+          - img [ref=e62]
+        - generic [ref=e64]:
+          - img [ref=e66]
+          - generic [ref=e68]: Aurialis
+      - generic [ref=e69]:
+        - button "simple" [ref=e70]
+        - button "advanced" [active] [pressed] [ref=e71]
+        - button "deep" [ref=e72]
+    - generic [ref=e73]:
+      - complementary [ref=e74]:
+        - generic [ref=e246]:
+          - generic [ref=e247]:
+            - button "Input" [expanded] [ref=e249]:
+              - generic [ref=e250]: Input
+              - img [ref=e251]
+            - generic [ref=e254]:
+              - generic [ref=e255]: Input Gain
+              - slider "Input Gain" [ref=e259] [cursor=pointer]: "0"
+              - generic [ref=e260]: 0.0 dB
+          - generic [ref=e261]:
+            - generic [ref=e262]:
+              - button "Compressor" [expanded] [ref=e263]:
+                - generic [ref=e264]: Compressor
+                - img [ref=e265]
+              - button "Bypass Compressor" [ref=e267]: Bypass
+            - generic [ref=e268]:
+              - generic [ref=e269]:
+                - generic [ref=e270]: Threshold
+                - slider "Threshold" [ref=e274] [cursor=pointer]: "-19"
+                - generic [ref=e275]: "-19.0 dB"
+              - generic [ref=e276]:
+                - generic [ref=e277]: Ratio
+                - slider "Ratio" [ref=e281] [cursor=pointer]: "2.5"
+                - generic [ref=e282]: 2.5 :1
+              - generic [ref=e283]:
+                - generic [ref=e284]: Attack
+                - slider "Attack" [ref=e288] [cursor=pointer]: "22.5"
+                - generic [ref=e289]: 22.5 ms
+              - generic [ref=e290]:
+                - generic [ref=e291]: Release
+                - slider "Release" [ref=e295] [cursor=pointer]: "250"
+                - generic [ref=e296]: 250 ms
+              - generic [ref=e297]:
+                - generic [ref=e298]: Makeup
+                - slider "Makeup" [ref=e302] [cursor=pointer]: "1.5"
+                - generic [ref=e303]: 1.5 dB
+              - generic [ref=e304]:
+                - generic [ref=e305]: Sidechain HPF
+                - slider "Sidechain HPF" [ref=e309] [cursor=pointer]: "110"
+                - generic [ref=e310]: 110 Hz
+          - generic [ref=e311]:
+            - button "Dynamics Toggles" [expanded] [ref=e313]:
+              - generic [ref=e314]: Dynamics Toggles
+              - img [ref=e315]
+            - generic [ref=e318]:
+              - button "De-Harsh" [ref=e319]
+              - button "Glue Comp" [ref=e320]
+              - button "Auto Release" [ref=e321]
+          - generic [ref=e323]:
+            - button "Multiband" [ref=e324]:
+              - generic [ref=e325]: Multiband
+              - img [ref=e326]
+            - button "Bypass Multiband" [ref=e328]: Bypass
+          - generic [ref=e329]:
+            - button "Tone" [expanded] [ref=e331]:
+              - generic [ref=e332]: Tone
+              - img [ref=e333]
+            - generic [ref=e336]:
+              - button "Add Air" [ref=e337]
+              - button "Tape Warmth" [ref=e338]
+              - button "Cut Mud" [ref=e339]
+          - generic [ref=e340]:
+            - generic [ref=e341]:
+              - button "Parametric EQ" [expanded] [ref=e342]:
+                - generic [ref=e343]: Parametric EQ
+                - img [ref=e344]
+              - button "Bypass EQ" [ref=e346]: Bypass
+            - generic [ref=e348]:
+              - generic [ref=e349]:
+                - generic [ref=e350]:
+                  - button "Band 1 header" [expanded] [ref=e351]:
+                    - img [ref=e352]
+                    - generic [ref=e354]: Band 1
+                    - generic [ref=e355]: 80 Hz · lowShelf · 0.5 dB
+                  - button "Band 1 enable" [pressed] [ref=e356]: "ON"
+                - generic [ref=e357]:
+                  - radiogroup "Band 1 filter type" [ref=e358]:
+                    - radio "Bell" [ref=e359]
+                    - radio "Low Shelf" [checked] [ref=e360]
+                    - radio "High Shelf" [ref=e361]
+                    - radio "High-Pass" [ref=e362]
+                    - radio "Low-Pass" [ref=e363]
+                  - generic [ref=e364]:
+                    - generic [ref=e365]: Frequency
+                    - slider "Frequency" [ref=e369] [cursor=pointer]: "80"
+                    - generic [ref=e370]: 80 Hz
+                  - generic [ref=e371]:
+                    - generic [ref=e372]: Q
+                    - slider "Q" [ref=e376] [cursor=pointer]: "0.71"
+                    - generic [ref=e377]: "0.71"
+                  - generic [ref=e378]:
+                    - generic [ref=e379]: Gain
+                    - slider "Gain" [ref=e383] [cursor=pointer]: "0.5"
+                    - generic [ref=e384]: 0.50 dB
+                  - radiogroup "Band 1 channel mode" [ref=e385]:
+                    - radio "Stereo" [checked] [ref=e386]
+                    - radio "M/S" [ref=e387]
+              - generic [ref=e389]:
+                - button "Band 2 header" [ref=e390]:
+                  - img [ref=e391]
+                  - generic [ref=e393]: Band 2
+                  - generic [ref=e394]: 250 Hz · bell · -0.5 dB
+                - button "Band 2 enable" [pressed] [ref=e395]: "ON"
+              - generic [ref=e397]:
+                - button "Band 3 header" [ref=e398]:
+                  - img [ref=e399]
+                  - generic [ref=e401]: Band 3
+                  - generic [ref=e402]: 1000 Hz · bell · 0.5 dB
+                - button "Band 3 enable" [pressed] [ref=e403]: "ON"
+              - generic [ref=e405]:
+                - button "Band 4 header" [ref=e406]:
+                  - img [ref=e407]
+                  - generic [ref=e409]: Band 4
+                  - generic [ref=e410]: 4000 Hz · bell · 1.0 dB
+                - button "Band 4 enable" [pressed] [ref=e411]: "ON"
+              - generic [ref=e413]:
+                - button "Band 5 header" [ref=e414]:
+                  - img [ref=e415]
+                  - generic [ref=e417]: Band 5
+                  - generic [ref=e418]: 12000 Hz · highShelf · 1.0 dB
+                - button "Band 5 enable" [pressed] [ref=e419]: "ON"
+          - generic [ref=e421]:
+            - button "Saturation" [ref=e422]:
+              - generic [ref=e423]: Saturation
+              - img [ref=e424]
+            - button "Bypass Saturation" [ref=e426]: Bypass
+          - generic [ref=e428]:
+            - button "Stereo" [ref=e429]:
+              - generic [ref=e430]: Stereo
+              - img [ref=e431]
+            - button "Bypass Stereo Width" [ref=e433]: Bypass
+          - generic [ref=e434]:
+            - generic [ref=e435]:
+              - button "Limiter" [expanded] [ref=e436]:
+                - generic [ref=e437]: Limiter
+                - img [ref=e438]
+              - button "Bypass Limiter" [ref=e440]: Bypass
+            - generic [ref=e441]:
+              - generic [ref=e442]:
+                - generic [ref=e443]: Ceiling
+                - slider "Ceiling" [ref=e447] [cursor=pointer]: "-1"
+                - generic [ref=e448]: "-1.0 dBTP"
+              - generic [ref=e449]:
+                - generic [ref=e450]: Limiter Release
+                - slider "Limiter Release" [ref=e454] [cursor=pointer]: "100"
+                - generic [ref=e455]: 100 ms
+          - generic [ref=e456]:
+            - button "Output Target" [expanded] [ref=e458]:
+              - generic [ref=e459]: Output Target
+              - img [ref=e460]
+            - generic [ref=e462]:
+              - generic [ref=e463]:
+                - button "Spotify" [ref=e464]
+                - button "Apple Music" [ref=e465]
+                - button "YouTube" [ref=e466]
+                - button "SoundCloud" [ref=e467]
+                - button "CD" [ref=e468]
+              - generic [ref=e469]:
+                - generic [ref=e470]: Target LUFS
+                - slider "Target LUFS" [ref=e474] [cursor=pointer]: "-14"
+                - generic [ref=e475]: "-14.0 LUFS"
+      - main [ref=e167]:
+        - generic [ref=e168]:
+          - generic [ref=e169]:
+            - img [ref=e171]
+            - generic [ref=e175]:
+              - paragraph [ref=e177]: Reflections-1.wav
+              - paragraph [ref=e178]: 7:59 · 44.1 kHz · Stereo
+          - generic [ref=e179]:
+            - paragraph [ref=e180]: "--- LUFS"
+            - paragraph [ref=e181]: "--- dBTP"
+            - paragraph [ref=e182]: "LRA: --- LU"
+            - paragraph [ref=e183]: "Corr: +1.00"
+            - paragraph [ref=e184]: "MB L/M/H: 0.0 / 0.0 / 0.0 dB"
+        - slider "Audio waveform. Click to seek." [ref=e185] [cursor=pointer]
+        - generic [ref=e187]:
+          - button "Click to compare bypass" [ref=e188]:
+            - generic [ref=e189]: A
+            - generic [ref=e190]: Processed
+          - button "Stop and return to beginning" [ref=e191]:
+            - img [ref=e192]
+          - button "Play" [ref=e194]:
+            - img [ref=e195]
+          - generic [ref=e197]: 0:00 / 7:59
+        - generic "Frequency spectrum display" [ref=e198]
+        - generic [ref=e200]:
+          - paragraph [ref=e201]: Export
+          - generic [ref=e202]:
+            - button "Streaming" [ref=e203]
+            - button "CD Quality" [pressed] [ref=e204]
+            - button "Hi-Res" [ref=e205]
+          - generic [ref=e206]:
+            - generic [ref=e207]:
+              - paragraph [ref=e208]: Sample Rate
+              - combobox "Sample Rate" [ref=e209] [cursor=pointer]:
+                - option "44.1 kHz" [selected]
+                - option "48 kHz"
+                - option "96 kHz"
+            - generic [ref=e210]:
+              - paragraph [ref=e211]: Bit Depth
+              - combobox "Bit Depth" [ref=e212] [cursor=pointer]:
+                - option "16-bit" [selected]
+                - option "24-bit"
+                - option "32-bit float"
+            - generic [ref=e213]:
+              - paragraph [ref=e214]: Dither
+              - combobox "Dither" [ref=e215] [cursor=pointer]:
+                - option "None"
+                - option "TPDF" [selected]
+          - button "Export WAV" [ref=e216]:
+            - img [ref=e217]
+            - text: Export WAV
+      - complementary [ref=e220]:
+        - generic [ref=e221]:
+          - generic [ref=e222]:
+            - generic [ref=e223]: Levels
+            - generic [ref=e224]: 0.0LUFS
+          - generic [ref=e225]:
+            - generic [ref=e227]: L
+            - generic [ref=e230]: R
+          - generic [ref=e232]:
+            - generic [ref=e233]:
+              - paragraph [ref=e234]: Target
+              - paragraph [ref=e235]: "-14.0LUFS"
+            - generic [ref=e236]:
+              - paragraph [ref=e237]: True Peak
+              - paragraph [ref=e238]: 0.0dBTP
+            - generic [ref=e239]:
+              - paragraph [ref=e240]: Dynamic Range
+              - paragraph [ref=e241]: 0.0dB
+        - generic [ref=e243]: Goniometer

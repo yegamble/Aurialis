@@ -1,0 +1,122 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - button "Back to home" [ref=e5]:
+          - img [ref=e6]
+        - generic [ref=e8]:
+          - img [ref=e10]
+          - generic [ref=e12]: Aurialis
+          - generic [ref=e13]: / Mix
+      - generic [ref=e37]:
+        - button "Smart Repair" [pressed] [ref=e38]:
+          - img [ref=e39]
+          - text: Smart Repair
+        - button "Auto Mix" [active] [ref=e42]:
+          - img [ref=e43]
+          - text: Auto Mix
+        - button "Send to Master" [ref=e45]:
+          - img [ref=e46]
+          - text: Send to Master
+        - button "Export Mix" [ref=e48]:
+          - img [ref=e49]
+          - text: Export Mix
+    - generic [ref=e14]:
+      - complementary [ref=e52]:
+        - generic [ref=e54]:
+          - generic [ref=e57]:
+            - paragraph [ref=e58]: Reflections-1.wav
+            - text: drums
+          - generic [ref=e59]:
+            - generic [ref=e60]: Volume
+            - slider "Volume" [ref=e64] [cursor=pointer]: "-0.5"
+            - generic [ref=e65]: "-0.4dB"
+          - generic [ref=e66]:
+            - generic [ref=e67]: Pan
+            - slider "Pan" [ref=e71] [cursor=pointer]: "0"
+            - generic [ref=e72]: "0.0"
+          - generic [ref=e73]:
+            - button "Mute" [ref=e74]: M
+            - button "Solo" [ref=e75]: S
+          - button "EQ" [ref=e76]:
+            - generic [ref=e77]: EQ
+            - img [ref=e126]
+          - generic [ref=e128]:
+            - generic [ref=e129]:
+              - generic [ref=e130]: "80"
+              - slider "80" [ref=e134] [cursor=pointer]: "0.5"
+              - generic [ref=e135]: 0.5dB
+            - generic [ref=e136]:
+              - generic [ref=e137]: "250"
+              - slider "250" [ref=e141] [cursor=pointer]: "0"
+              - generic [ref=e142]: 0.0dB
+            - generic [ref=e143]:
+              - generic [ref=e144]: 1k
+              - slider "1k" [ref=e148] [cursor=pointer]: "-0.5"
+              - generic [ref=e149]: "-0.5dB"
+            - generic [ref=e150]:
+              - generic [ref=e151]: 4k
+              - slider "4k" [ref=e155] [cursor=pointer]: "1"
+              - generic [ref=e156]: 1.0dB
+            - generic [ref=e157]:
+              - generic [ref=e158]: 12k
+              - slider "12k" [ref=e162] [cursor=pointer]: "0.5"
+              - generic [ref=e163]: 0.5dB
+          - button "Compressor" [ref=e80]:
+            - generic [ref=e81]: Compressor
+            - img [ref=e164]
+          - generic [ref=e166]:
+            - generic [ref=e167]:
+              - generic [ref=e168]: Thresh
+              - slider "Thresh" [ref=e172] [cursor=pointer]: "-18"
+              - generic [ref=e173]: "-18dB"
+            - generic [ref=e174]:
+              - generic [ref=e175]: Ratio
+              - slider "Ratio" [ref=e179] [cursor=pointer]: "3"
+              - generic [ref=e180]: 3.0:1
+            - generic [ref=e181]:
+              - generic [ref=e182]: Attack
+              - slider "Attack" [ref=e186] [cursor=pointer]: "5"
+              - generic [ref=e187]: 5.0ms
+            - generic [ref=e188]:
+              - generic [ref=e189]: Release
+              - slider "Release" [ref=e193] [cursor=pointer]: "80"
+              - generic [ref=e194]: 80ms
+            - generic [ref=e195]:
+              - generic [ref=e196]: Makeup
+              - slider "Makeup" [ref=e199] [cursor=pointer]: "0"
+              - generic [ref=e200]: 0.0dB
+          - generic [ref=e84]:
+            - generic [ref=e85]: Drive
+            - slider "Drive" [ref=e88] [cursor=pointer]: "0"
+            - generic [ref=e89]: 0%
+      - main [ref=e15]:
+        - generic [ref=e16]:
+          - button "Upload audio stems. Drop audio files or ZIP here, or click to browse." [ref=e17] [cursor=pointer]:
+            - img [ref=e90]
+            - generic [ref=e93]:
+              - paragraph [ref=e94]: Drop audio files or ZIP here, or click to browse
+              - paragraph [ref=e95]: WAV, MP3, FLAC, OGG, AAC, M4A — or a ZIP containing stems
+          - paragraph [ref=e98]: 1 stems loaded
+        - generic [ref=e99] [cursor=pointer]:
+          - generic [ref=e100]:
+            - generic [ref=e101]: 0:00
+            - generic [ref=e102]: 0:53
+            - generic [ref=e103]: 1:46
+            - generic [ref=e104]: 2:39
+            - generic [ref=e105]: 3:33
+            - generic [ref=e106]: 4:26
+            - generic [ref=e107]: 5:19
+            - generic [ref=e108]: 6:12
+            - generic [ref=e109]: 7:06
+            - generic [ref=e110]: 7:59
+          - generic [ref=e115]: Reflections-1.wav
+        - generic [ref=e118]:
+          - button "Stop and return to beginning" [ref=e119]:
+            - img [ref=e120]
+          - button "Play" [ref=e122]:
+            - img [ref=e123]
+          - generic [ref=e125]: 0:00 / 7:59
+  - button "Open Next.js Dev Tools" [ref=e32] [cursor=pointer]:
+    - img [ref=e33]
+  - alert [ref=e36]

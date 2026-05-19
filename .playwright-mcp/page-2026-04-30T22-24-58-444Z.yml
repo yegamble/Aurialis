@@ -1,0 +1,23 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - button "Back to home" [ref=e5]:
+          - img [ref=e6]
+        - generic [ref=e8]:
+          - img [ref=e10]
+          - generic [ref=e12]: Aurialis
+          - generic [ref=e13]: / Mix
+    - main [ref=e15]:
+      - generic [ref=e25]:
+        - text: Separation backend not available. Run
+        - code [ref=e26]: docker compose up
+        - text: to enable Smart Split. Multi-file and ZIP uploads still work.
+      - button "Upload audio stems. Drop audio files or ZIP here, or click to browse." [ref=e17] [cursor=pointer]:
+        - img [ref=e19]
+        - generic [ref=e22]:
+          - paragraph [ref=e23]: Drop audio files or ZIP here, or click to browse
+          - paragraph [ref=e24]: WAV, MP3, FLAC, OGG, AAC, M4A — or a ZIP containing stems
+  - button "Open Next.js Dev Tools" [ref=e32] [cursor=pointer]:
+    - img [ref=e33]
+  - alert [ref=e36]

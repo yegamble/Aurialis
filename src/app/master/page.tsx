@@ -3,14 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  ArrowLeft,
-  Play,
-  Pause,
-  SkipBack,
-  Headphones,
-  Music,
-} from "lucide-react";
+import { Play, Pause, SkipBack, Music } from "lucide-react";
 import { WaveformDisplay } from "@/components/visualization/WaveformDisplay";
 import { SpectrumDisplay } from "@/components/visualization/SpectrumDisplay";
 import { LevelMeter } from "@/components/visualization/LevelMeter";
@@ -19,6 +12,8 @@ import { SimpleMastering } from "@/components/mastering/SimpleMastering";
 import { AdvancedMastering } from "@/components/mastering/AdvancedMastering";
 import { DeepMastering } from "@/components/mastering/DeepMastering";
 import { ABToggle } from "@/components/mastering/ABToggle";
+import { MasterToolbar, type MasterMode } from "@/components/mastering/MasterToolbar";
+import { WindowChrome } from "@/components/shell/WindowChrome";
 import { ExportPanel } from "@/components/export/ExportPanel";
 import { useAudioStore } from "@/lib/stores/audio-store";
 import { useUIStore } from "@/lib/stores/ui-store";
@@ -334,45 +329,24 @@ export default function MasterPage() {
   const channels = engine.audioBuffer?.numberOfChannels ?? 0;
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
-      <header className="flex items-center justify-between px-5 py-3 border-b border-[rgba(255,255,255,0.06)] bg-[rgba(0,0,0,0.8)] backdrop-blur-xl sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => {
-              stop();
-              router.push("/");
-            }}
-            className="w-8 h-8 rounded-full bg-[rgba(255,255,255,0.06)] flex items-center justify-center hover:bg-[rgba(255,255,255,0.1)] transition-colors"
-            aria-label="Back to upload"
-          >
-            <ArrowLeft className="w-4 h-4 text-[rgba(255,255,255,0.7)]" />
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-b from-[#0a84ff] to-[#0066cc] flex items-center justify-center">
-              <Headphones className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="text-white text-sm">Aurialis</span>
-          </div>
-        </div>
-        <div className="flex bg-[rgba(255,255,255,0.06)] rounded-lg p-0.5">
-          {(["simple", "advanced", "deep"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              data-testid={`mode-toggle-${m}`}
-              className={`px-4 py-1.5 rounded-md text-xs transition-all capitalize ${
-                mode === m
-                  ? "bg-[rgba(255,255,255,0.12)] text-white shadow-sm"
-                  : "text-[rgba(255,255,255,0.4)] hover:text-[rgba(255,255,255,0.6)]"
-              }`}
-              aria-pressed={mode === m}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-        <div className="w-20" />
-      </header>
+    <div className="flex min-h-screen flex-col bg-black">
+      <WindowChrome />
+      <MasterToolbar
+        fileName={file.name}
+        durationLabel={formatTime(duration)}
+        sampleRateLabel={`${(sampleRate / 1000).toFixed(1)} kHz`}
+        channelLabel={
+          channels === 2 ? "Stereo" : channels === 1 ? "Mono" : `${channels}ch`
+        }
+        mode={mode as MasterMode}
+        onModeChange={(next) => setMode(next)}
+        onBack={() => {
+          stop();
+          router.push("/");
+        }}
+      >
+        <LibraryStateBadge />
+      </MasterToolbar>
 
       <div className="flex-1 flex overflow-hidden">
         {isLgViewport && (
@@ -450,27 +424,7 @@ export default function MasterPage() {
         )}
 
         <main className="flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[rgba(255,255,255,0.06)] flex items-center justify-center">
-                <Music className="w-4 h-4 text-[#0a84ff]" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-white text-sm">{file.name}</p>
-                  <LibraryStateBadge />
-                </div>
-                <p className="text-[rgba(255,255,255,0.35)] text-xs">
-                  {formatTime(duration)} &middot;{" "}
-                  {(sampleRate / 1000).toFixed(1)} kHz &middot;{" "}
-                  {channels === 2
-                    ? "Stereo"
-                    : channels === 1
-                      ? "Mono"
-                      : `${channels}ch`}
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center justify-end">
             <div className="text-right">
               <p className="text-[#0a84ff] text-lg tabular-nums">
                 {metering.lufs === -Infinity

@@ -322,7 +322,7 @@ test.describe("Navigation and transport buttons", () => {
     await showAdvanced(page);
     await showSimple(page);
 
-    await page.getByRole("button", { name: /back to upload/i }).click();
+    await page.getByRole("button", { name: /back to library/i }).click();
     await page.waitForURL("**/");
     await expect(
       page.getByRole("button", { name: /upload audio file/i })

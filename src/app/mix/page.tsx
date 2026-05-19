@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Play, Pause, SkipBack } from "lucide-react";
+import { Play, Pause, SkipBack, Sparkles } from "lucide-react";
 import { StemUpload } from "@/components/mixer/StemUpload";
 import { StemList } from "@/components/mixer/StemList";
 import { StemTimeline } from "@/components/mixer/StemTimeline";
@@ -539,73 +539,24 @@ export default function MixPage() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-between px-5 py-3 border-b border-[rgba(255,255,255,0.06)] bg-[rgba(0,0,0,0.8)] backdrop-blur-xl sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => {
-              stop();
-              useMixerStore.getState().reset();
-              router.push("/");
-            }}
-            className="w-8 h-8 rounded-full bg-[rgba(255,255,255,0.06)] flex items-center justify-center hover:bg-[rgba(255,255,255,0.1)] transition-colors"
-            aria-label="Back to home"
-          >
-            <ArrowLeft className="w-4 h-4 text-[rgba(255,255,255,0.7)]" />
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-b from-[#0a84ff] to-[#0066cc] flex items-center justify-center">
-              <Headphones className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="text-white text-sm">Aurialis</span>
-            <span className="text-[rgba(255,255,255,0.3)] text-xs">/ Mix</span>
-          </div>
-        </div>
-
-        {hasStemsLoaded && (
-          <div className="flex items-center gap-2">
-            {/* Smart Repair toggle */}
-            <button
-              onClick={() => setSmartRepairEnabled(!smartRepairEnabled)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                smartRepairEnabled
-                  ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                  : "bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.4)]"
-              }`}
-              aria-pressed={smartRepairEnabled}
-              aria-label="Smart Repair"
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-              Smart Repair
-            </button>
-            <button
-              onClick={handleAutoMix}
-              disabled={isAutoMixing}
-              data-testid="auto-mix-button"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white text-xs transition-colors disabled:opacity-40"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              {autoMixLabel}
-            </button>
-            <button
-              onClick={handleSendToMaster}
-              disabled={isRendering}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0a84ff]/20 text-[#0a84ff] hover:bg-[#0a84ff]/30 text-xs transition-colors disabled:opacity-40"
-            >
-              <SendHorizonal className="w-3.5 h-3.5" />
-              {isRendering ? "Rendering..." : "Send to Master"}
-            </button>
-            <button
-              onClick={handleExportMix}
-              disabled={isRendering}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white text-xs transition-colors disabled:opacity-40"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export Mix
-            </button>
-          </div>
-        )}
-      </header>
+      <WindowChrome />
+      <MixToolbar
+        onBack={() => {
+          stop();
+          useMixerStore.getState().reset();
+          router.push("/");
+        }}
+        hasStemsLoaded={hasStemsLoaded}
+        smartRepairEnabled={smartRepairEnabled}
+        onSmartRepairToggle={() => setSmartRepairEnabled(!smartRepairEnabled)}
+        onAutoMix={handleAutoMix}
+        autoMixDisabled={isAutoMixing}
+        autoMixLabel={autoMixLabel}
+        onSendToMaster={handleSendToMaster}
+        sendDisabled={isRendering}
+        onExportMix={handleExportMix}
+        exportDisabled={isRendering}
+      />
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar: Channel Strips */}

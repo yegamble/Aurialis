@@ -153,8 +153,7 @@ export default function UploadPage() {
         return;
       }
       if (next === "album") {
-        // Phase 4 — placeholder until /album lands.
-        setError("Smart Master Album is coming soon.");
+        router.push("/album");
         return;
       }
       if (next === "library" || next === "upload") {

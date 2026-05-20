@@ -79,6 +79,17 @@ test("Smart Split sidebar item navigates to /mix", async ({ page }) => {
   await page.waitForURL("**/mix", { timeout: 5_000 });
 });
 
+test("Smart Master Album sidebar item navigates to /album", async ({ page }) => {
+  await seedLibraryEntry(page, "album-nav.wav");
+  await page.reload();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: /Smart Master Album/i })
+    .click();
+  await page.waitForURL("**/album", { timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: /Library album/i })).toBeVisible();
+});
+
 test("Import sidebar item switches to upload mode and back", async ({ page }) => {
   await seedLibraryEntry(page, "toggle-upload.wav");
   await page.reload();

@@ -9,6 +9,7 @@ import type { ShellScreen, SidebarTrack } from "@/components/shell/Sidebar";
 import { ResumeOrFreshDialog } from "@/components/library/ResumeOrFreshDialog";
 import { useAudioStore } from "@/lib/stores/audio-store";
 import { useLibraryStore } from "@/lib/stores/library-store";
+import { useSettingsStore } from "@/lib/stores/settings-store";
 import {
   findLibraryEntryForFile,
   openLibraryEntryFromList,
@@ -33,6 +34,8 @@ export default function UploadPage() {
   const [confirmFp, setConfirmFp] = useState<string | null>(null);
   const [screen, setScreen] = useState<LocalScreen>("library");
   const [initialized, setInitialized] = useState(false);
+  const proMode = useSettingsStore((s) => s.proMode);
+  const setProMode = useSettingsStore((s) => s.setProMode);
 
   useEffect(() => {
     if (!hydrated) void hydrate();
@@ -180,6 +183,8 @@ export default function UploadPage() {
         tracks={sidebarTracks}
         activeTrackId={null}
         onSelectTrack={(id) => void handleOpenLibraryEntry(id)}
+        proMode={proMode}
+        onProModeChange={setProMode}
       >
         {screen === "library" ? (
           <LibraryView

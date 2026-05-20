@@ -10,6 +10,8 @@ export interface AppShellProps {
   tracks?: SidebarTrack[];
   activeTrackId?: string | null;
   onSelectTrack?: (id: string) => void;
+  proMode?: boolean;
+  onProModeChange?: (next: boolean) => void;
   title?: string;
   children: ReactNode;
 }
@@ -20,6 +22,8 @@ export function AppShell({
   tracks,
   activeTrackId,
   onSelectTrack,
+  proMode,
+  onProModeChange,
   title,
   children,
 }: AppShellProps): ReactElement {
@@ -36,6 +40,8 @@ export function AppShell({
           tracks={tracks}
           activeTrackId={activeTrackId}
           onSelectTrack={onSelectTrack}
+          proMode={proMode}
+          onProModeChange={onProModeChange}
         />
         <main role="main" className="flex-1 overflow-y-auto">
           {children}

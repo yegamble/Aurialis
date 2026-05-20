@@ -6,6 +6,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { AlbumView, type AlbumTrackRow } from "@/components/album/AlbumView";
 import type { ShellScreen } from "@/components/shell/Sidebar";
 import { useLibraryStore } from "@/lib/stores/library-store";
+import { useSettingsStore } from "@/lib/stores/settings-store";
 import { openLibraryEntryFromList } from "@/lib/storage/library-resume";
 
 const DEFAULT_TARGET_LUFS = -14;
@@ -16,6 +17,8 @@ export default function AlbumPage(): React.ReactElement {
   const entries = useLibraryStore((s) => s.entries);
   const hydrate = useLibraryStore((s) => s.hydrate);
   const hydrated = useLibraryStore((s) => s.hydrated);
+  const proMode = useSettingsStore((s) => s.proMode);
+  const setProMode = useSettingsStore((s) => s.setProMode);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -81,7 +84,12 @@ export default function AlbumPage(): React.ReactElement {
 
   return (
     <>
-      <AppShell activeScreen="album" onSelect={handleSelect}>
+      <AppShell
+        activeScreen="album"
+        onSelect={handleSelect}
+        proMode={proMode}
+        onProModeChange={setProMode}
+      >
         <AlbumView
           title={albumTitle}
           artist={albumArtist}

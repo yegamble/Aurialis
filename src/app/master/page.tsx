@@ -17,6 +17,7 @@ import { WindowChrome } from "@/components/shell/WindowChrome";
 import { ExportPanel } from "@/components/export/ExportPanel";
 import { useAudioStore } from "@/lib/stores/audio-store";
 import { useUIStore } from "@/lib/stores/ui-store";
+import { useSettingsStore } from "@/lib/stores/settings-store";
 import { useDeepStore } from "@/lib/stores/deep-store";
 import { useLibraryStore } from "@/lib/stores/library-store";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
@@ -75,6 +76,7 @@ export default function MasterPage() {
   const router = useRouter();
   const file = useAudioStore((s) => s.file);
   const { mode, setMode } = useUIStore();
+  const proMode = useSettingsStore((s) => s.proMode);
   const isLgViewport = useIsLgViewport();
 
   // Real audio engine
@@ -585,7 +587,10 @@ export default function MasterPage() {
           )}
         </main>
 
-        <aside className="w-64 border-l border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(255,255,255,0.02)] p-4 shrink-0 hidden xl:block space-y-4">
+        <aside
+          data-testid="master-right-rail"
+          className="w-64 border-l border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(255,255,255,0.02)] p-4 shrink-0 hidden xl:block space-y-4"
+        >
           <LevelMeter
             leftLevel={peakLevels.left}
             rightLevel={peakLevels.right}
@@ -594,10 +599,14 @@ export default function MasterPage() {
             dynamicRange={metering.dynamicRange}
             target={params.targetLufs}
           />
-          <Goniometer
-            left={engine.leftAnalyserNode}
-            right={engine.rightAnalyserNode}
-          />
+          {proMode ? (
+            <div data-testid="master-goniometer-slot">
+              <Goniometer
+                left={engine.leftAnalyserNode}
+                right={engine.rightAnalyserNode}
+              />
+            </div>
+          ) : null}
         </aside>
       </div>
     </div>

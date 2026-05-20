@@ -16,6 +16,8 @@ export interface SidebarProps {
   tracks?: SidebarTrack[];
   activeTrackId?: string | null;
   onSelectTrack?: (id: string) => void;
+  proMode?: boolean;
+  onProModeChange?: (next: boolean) => void;
 }
 
 interface NavSpec {
@@ -37,7 +39,10 @@ export function Sidebar({
   tracks,
   activeTrackId,
   onSelectTrack,
+  proMode,
+  onProModeChange,
 }: SidebarProps): ReactElement {
+  const showProToggle = proMode !== undefined && onProModeChange !== undefined;
   return (
     <nav
       aria-label="Primary"
@@ -74,6 +79,39 @@ export function Sidebar({
       ) : null}
 
       <div className="flex-1" />
+
+      {showProToggle ? (
+        <div className="border-t border-[rgba(255,255,255,0.06)] px-3 py-3">
+          <button
+            type="button"
+            data-testid="pro-mode-toggle"
+            onClick={() => onProModeChange!(!proMode)}
+            aria-pressed={proMode}
+            className={
+              "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[12px] " +
+              (proMode
+                ? "bg-[rgba(10,132,255,0.18)] text-[#0a84ff]"
+                : "text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.05)]")
+            }
+          >
+            <span>Pro Mode</span>
+            <span
+              aria-hidden
+              className={
+                "relative inline-block h-[18px] w-[30px] rounded-full transition-colors " +
+                (proMode ? "bg-[#0a84ff]" : "bg-[rgba(255,255,255,0.16)]")
+              }
+            >
+              <span
+                className={
+                  "absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-all " +
+                  (proMode ? "left-[14px]" : "left-[2px]")
+                }
+              />
+            </span>
+          </button>
+        </div>
+      ) : null}
     </nav>
   );
 }

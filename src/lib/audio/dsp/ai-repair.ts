@@ -11,8 +11,8 @@
  *   the filter excess `(filteredSide - side)`, which keeps out-of-band
  *   energy untouched.
  *
- * T11 will fill in the harmonic exciter using the `_exciter*` state slots
- * declared here (kept as no-ops so T10's filename/API doesn't change).
+ * The harmonic exciter (T11) is implemented in `applyAiRepairExciter` and runs
+ * after the widener inside `applyAiRepair`, sharing the same `amount` and state.
  */
 
 import { BiquadFilter, peakingCoeffs } from "./biquad";

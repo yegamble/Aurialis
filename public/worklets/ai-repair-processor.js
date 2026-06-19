@@ -1,13 +1,14 @@
 /**
  * AiRepairProcessor — AudioWorklet
- * M/S widener for restoring stereo width on AI-generated narrow guitars.
+ * M/S widener + harmonic exciter for restoring stereo width and presence on
+ * AI-generated narrow guitars.
  *
  * Mirrors src/lib/audio/dsp/ai-repair.ts one-to-one. Single `amount`
- * parameter (0-100%) controls the side-band boost; the exciter slot is a
- * no-op stub today and is filled in by T11.
+ * parameter (0-100%) drives both the side-band boost (widener) and the
+ * bandpass → soft-clip → wet-mix exciter in process().
  *
  * Default state: amount = 0 → bit-exact passthrough (no filter state
- * updates). Only when amount > 0 does the side-channel biquad run.
+ * updates). Only when amount > 0 do the widener/exciter biquads run.
  */
 
 // @@INLINE_BEGIN: envelope-scheduler

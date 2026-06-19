@@ -12,6 +12,7 @@ import {
 } from "./dsp/compressor";
 import { applySaturation, drivePctToFactor } from "./dsp/saturation";
 import { processTruePeakLimiter, dbToLin } from "./dsp/limiter";
+import { applyAiRepair, makeAiRepairState } from "./dsp/ai-repair";
 import {
   MultibandCompressorDSP,
   type BandParams,
@@ -129,6 +130,14 @@ export function applyProcessingPipeline(
     }
   }
 
+  // 2b. AI Repair (M/S widener + harmonic exciter) — sits between Saturation
+  // and Stereo Width to mirror the real-time chain (chain.ts). Driven by the
+  // deep script's `master.aiRepair.amount` envelope; aiRepairAmount defaults to
+  // 0 (bit-exact bypass) so non-deep renders are unaffected.
+  if (params.aiRepairAmount > 0 && channels.length >= 2) {
+    applyAiRepair(channels[0], channels[1], params.aiRepairAmount, makeAiRepairState(sr));
+  }
+
   // 3. Stereo Width (M/S processing, only for stereo)
   if (params.stereoWidthEnabled > 0 && channels.length >= 2) {
     const needsWidth = params.stereoWidth !== 100 || params.midGain !== 0 || params.sideGain !== 0;
@@ -196,6 +205,10 @@ function applyProcessingPipelineWithScript(
   // Multiband DSP — preserves splitter + per-band env state across calls.
   const multibandDsp = new MultibandCompressorDSP(sr);
 
+  // AI Repair state — biquad filter memory persists across blocks so the
+  // per-block slices compose identically to a single whole-buffer call.
+  const aiRepairState = makeAiRepairState(sr);
+
   for (let b = 0; b < numBlocks; b++) {
     const start = b * blockSize;
     const end = Math.min(start + blockSize, numSamples);
@@ -248,6 +261,18 @@ function applyProcessingPipelineWithScript(
           ch[i] = Math.tanh(driveFactor * ch[i]!) / norm;
         }
       }
+    }
+
+    // 2b. AI Repair — between Saturation and Stereo Width (mirrors chain.ts).
+    // Driven by the resolved `master.aiRepair.amount` envelope; aiRepairState
+    // preserves filter memory across blocks. amount = 0 is bit-exact bypass.
+    if (p.aiRepairAmount > 0 && numChannels >= 2) {
+      applyAiRepair(
+        channels[0]!.subarray(start, end),
+        channels[1]!.subarray(start, end),
+        p.aiRepairAmount,
+        aiRepairState,
+      );
     }
 
     // 3. Stereo width — stateless per sample.

@@ -134,6 +134,13 @@ export interface AudioParams {
    * Tube/Tape/Transformer each impart distinct harmonic character.
    */
   satMode: SaturationMode;
+  /**
+   * AI Repair amount (0–100). M/S widener + harmonic exciter that restores
+   * width/presence on AI-generated narrow material; 0 = bit-exact bypass.
+   * Driven by the deep-mastering `master.aiRepair.amount` envelope. In the
+   * real-time chain the stage sits between Saturation and StereoWidth.
+   */
+  aiRepairAmount: number;
   stereoWidth: number;
   bassMonoFreq: number;
   midGain: number;

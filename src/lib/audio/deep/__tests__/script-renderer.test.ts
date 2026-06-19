@@ -84,8 +84,12 @@ describe("script-renderer", () => {
       const out = applyMoveOverride(DEFAULT_PARAMS, "master.saturation.drive", 30);
       expect(out.satDrive).toBe(30);
     });
-    it("returns the same object reference for unsupported MoveParam", () => {
+    it("maps master.aiRepair.amount to aiRepairAmount", () => {
       const out = applyMoveOverride(DEFAULT_PARAMS, "master.aiRepair.amount", 50);
+      expect(out.aiRepairAmount).toBe(50);
+    });
+    it("returns the same object reference for unsupported MoveParam", () => {
+      const out = applyMoveOverride(DEFAULT_PARAMS, "master.inputGain", 3);
       expect(out).toBe(DEFAULT_PARAMS);
     });
   });
@@ -174,7 +178,8 @@ describe("script-renderer", () => {
         makeMove({ id: "d", param: "master.saturation.drive" }),
       ]);
       const out = offlineSupportedMoves(script);
-      expect(out.map((m) => m.id)).toEqual(["a", "d"]);
+      // master.compressor.attack (c) has no offline override; everything else does.
+      expect(out.map((m) => m.id)).toEqual(["a", "b", "d"]);
     });
   });
 });

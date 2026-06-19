@@ -74,6 +74,7 @@ export const DEFAULT_PARAMS: AudioParams = {
 
   satDrive: 0,
   satMode: "clean",
+  aiRepairAmount: 0,
   stereoWidth: 100,
   bassMonoFreq: 200,
   midGain: 0,

@@ -469,8 +469,8 @@ export class ProcessingChain {
   /**
    * Apply a deep-mode envelope to the node that owns the given MoveParam.
    * Returns true if a node accepted the envelope, false if the param has no
-   * scheduling target yet (e.g., master.aiRepair.amount before T10/T11, or
-   * compressor attack/release for which no envelope path exists).
+   * scheduling target (e.g., compressor attack/release, for which no envelope
+   * path exists).
    *
    * Empty `points` clears the envelope and reverts to the last static value.
    */

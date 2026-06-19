@@ -2,8 +2,8 @@
  * AiRepairNode — AudioWorkletNode wrapper for `public/worklets/ai-repair-processor.js`.
  *
  * Restores stereo width on AI-generated narrow guitars (e.g., Suno output)
- * via an M/S widener. Single `amount` parameter (0–100 %); 0 = bit-exact
- * bypass. T11 fills in the harmonic exciter inside the same node + worklet.
+ * via an M/S widener plus a harmonic exciter. Single `amount` parameter
+ * (0–100 %); 0 = bit-exact bypass.
  */
 
 export class AiRepairNode {

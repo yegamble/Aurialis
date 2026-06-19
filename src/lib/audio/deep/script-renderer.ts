@@ -55,8 +55,8 @@ export function envelopeValueAt(
 
 /**
  * Apply one Move's resolved value as an `AudioParams` field override.
- * Unsupported MoveParams (master.aiRepair.amount before T10 / T11,
- * inputGain, compressor attack/release) are silent no-ops.
+ * Unsupported MoveParams (inputGain, compressor attack/release) are silent
+ * no-ops.
  */
 export function applyMoveOverride(
   params: AudioParams,
@@ -84,8 +84,9 @@ export function applyMoveOverride(
       return { ...params, eq4k: value };
     case "master.eq.band5.gain":
       return { ...params, eq12k: value };
-    // No offline override defined for: inputGain, compressor.{attack,release},
-    // master.aiRepair.amount (added in T10/T11).
+    case "master.aiRepair.amount":
+      return { ...params, aiRepairAmount: value };
+    // No offline override defined for: inputGain, compressor.{attack,release}.
     default:
       return params;
   }
@@ -133,6 +134,7 @@ function isOfflineSupported(param: MoveParam): boolean {
     case "master.eq.band3.gain":
     case "master.eq.band4.gain":
     case "master.eq.band5.gain":
+    case "master.aiRepair.amount":
       return true;
     default:
       return false;

@@ -163,7 +163,11 @@ describe("useMixEngine.autoMix — stage emits", () => {
     ]);
 
     await act(async () => {
-      await expect(result.current.autoMix()).rejects.toThrow(/corrupt buffer/);
+      // The thrown error must identify the failing stem (not just the raw
+      // cause) so the standalone Auto-Mix button can surface it in the UI.
+      await expect(result.current.autoMix()).rejects.toThrow(
+        /Failed analyzing bad\.wav: corrupt buffer/
+      );
     });
 
     const runId = useMixerStore.getState().autoMixRunId!;

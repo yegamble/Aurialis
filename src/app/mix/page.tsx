@@ -344,7 +344,15 @@ export default function MixPage() {
   };
 
   const handleAutoMix = async () => {
-    await autoMix();
+    setLoadError(null);
+    try {
+      await autoMix();
+    } catch (e) {
+      // Standalone Auto-Mix button: surface mid-loop stem failures in the UI
+      // instead of leaving an unhandled rejection. autoMix() throws an error
+      // already prefixed with the failing stem ("Failed analyzing <name>: …").
+      setLoadError(e instanceof Error ? e.message : "Auto-mix failed");
+    }
   };
 
   const handleSplitFurther = useCallback(

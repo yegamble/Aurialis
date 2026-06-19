@@ -11,7 +11,7 @@ import {
   makeAttackReleaseCoeffs,
 } from "./dsp/compressor";
 import { applySaturation, drivePctToFactor } from "./dsp/saturation";
-import { processLimiter, dbToLin, LookaheadBuffer } from "./dsp/limiter";
+import { processTruePeakLimiter, dbToLin } from "./dsp/limiter";
 import {
   MultibandCompressorDSP,
   type BandParams,
@@ -137,7 +137,10 @@ export function applyProcessingPipeline(
     }
   }
 
-  // 4. Limiter
+  // 4. Limiter — true-peak (inter-sample) limiting so the exported buffer holds
+  // the ceiling as a true-peak value, matching the real-time limiter worklet
+  // (which oversamples 4× to catch ISPs). A sample-peak limiter here would let
+  // inter-sample peaks through and fail streaming-platform true-peak QC.
   if (params.limiterEnabled > 0) {
     const ceilingLin = dbToLin(params.ceiling);
     const limiterReleaseSamples = Math.round((params.limiterRelease / 1000) * sr);
@@ -146,7 +149,7 @@ export function applyProcessingPipeline(
       : 0.9999;
     const lookaheadSamples = Math.round(0.0015 * sr); // ~1.5ms lookahead
     for (let c = 0; c < channels.length; c++) {
-      const limited = processLimiter(channels[c], ceilingLin, lookaheadSamples, 0.001, releaseCoeff);
+      const limited = processTruePeakLimiter(channels[c], ceilingLin, lookaheadSamples, 0.001, releaseCoeff);
       channels[c].set(limited);
     }
   }
@@ -156,10 +159,11 @@ export function applyProcessingPipeline(
  * Per-block, state-preserving variant of `applyProcessingPipeline` used when
  * a deep mastering script is active. Each 128-sample block resolves
  * `AudioParams` from the script's envelopes at block-start time, then runs
- * compressor / multiband / saturation / stereo-width / limiter on that slice
- * with the resolved params. State (compressor envelope, multiband per-band
- * envs, limiter lookahead + currentGain) persists across blocks so the
- * output is bit-aligned with what the real-time worklet chain would produce.
+ * compressor / multiband / saturation / stereo-width on that slice with the
+ * resolved params. State (compressor envelope, multiband per-band envs)
+ * persists across blocks so the output is bit-aligned with what the real-time
+ * worklet chain would produce. The limiter runs once over the finished buffer
+ * after the block loop (its ceiling/release are not envelope-targets).
  *
  * EQ (`parametricEq`) is intentionally not envelope-routed here — T9b moves
  * EQ to a pure-DSP block-aware path; until then we fall back to applying EQ
@@ -191,25 +195,6 @@ function applyProcessingPipelineWithScript(
 
   // Multiband DSP — preserves splitter + per-band env state across calls.
   const multibandDsp = new MultibandCompressorDSP(sr);
-
-  // Limiter state per channel.
-  const limLookahead = Math.round(0.0015 * sr);
-  const limAttackCoeff = 0.001;
-  const limBuffers: LookaheadBuffer[] = [];
-  const limGains: number[] = [];
-  for (let c = 0; c < numChannels; c++) {
-    limBuffers.push(new LookaheadBuffer(limLookahead));
-    limGains.push(1.0);
-  }
-  // Pre-fill lookahead buffers with the first lookaheadSize-1 samples so the
-  // streaming limiter matches the whole-buffer processLimiter at block 0.
-  for (let c = 0; c < numChannels; c++) {
-    const ch = channels[c]!;
-    const fillN = Math.min(limLookahead - 1, ch.length);
-    for (let i = 0; i < fillN; i++) {
-      limBuffers[c]!.push(ch[i]!);
-    }
-  }
 
   for (let b = 0; b < numBlocks; b++) {
     const start = b * blockSize;
@@ -273,27 +258,29 @@ function applyProcessingPipelineWithScript(
         processStereoWidthBlock(channels[0]!, channels[1]!, start, end, p);
       }
     }
+  }
 
-    // 4. Limiter — streaming with persistent lookahead + gain state.
-    if (p.limiterEnabled > 0) {
-      const ceilingLin = dbToLin(p.ceiling);
-      const limReleaseSamples = Math.round((p.limiterRelease / 1000) * sr);
-      const limReleaseCoeff =
-        limReleaseSamples > 0 ? Math.exp(-1 / limReleaseSamples) : 0.9999;
-      for (let c = 0; c < numChannels; c++) {
-        limGains[c] = processLimiterStreamingBlock(
-          channels[c]!,
-          start,
-          end,
-          numSamples,
-          ceilingLin,
-          limLookahead,
-          limAttackCoeff,
-          limReleaseCoeff,
-          limBuffers[c]!,
-          limGains[c]!,
-        );
-      }
+  // 4. Limiter — applied once over the fully-processed buffer. The limiter
+  // ceiling/release are not envelope-targets (see MOVE_PARAMS in
+  // types/deep-mastering), so a single whole-buffer true-peak pass is
+  // equivalent to the worklet's continuous limiting and keeps the exported
+  // buffer under the true-peak ceiling (the per-block streaming limiter this
+  // replaces only caught sample peaks).
+  if (baseParams.limiterEnabled > 0) {
+    const ceilingLin = dbToLin(baseParams.ceiling);
+    const limReleaseSamples = Math.round((baseParams.limiterRelease / 1000) * sr);
+    const releaseCoeff =
+      limReleaseSamples > 0 ? Math.exp(-1 / limReleaseSamples) : 0.9999;
+    const lookaheadSamples = Math.round(0.0015 * sr);
+    for (let c = 0; c < numChannels; c++) {
+      const limited = processTruePeakLimiter(
+        channels[c]!,
+        ceilingLin,
+        lookaheadSamples,
+        0.001,
+        releaseCoeff,
+      );
+      channels[c]!.set(limited);
     }
   }
 }
@@ -407,42 +394,6 @@ function processStereoWidthBlock(
     left[i] = midOut + sideOut;
     right[i] = midOut - sideOut;
   }
-}
-
-/**
- * Streaming limiter: processes a [start, end) slice in place using a
- * persistent `LookaheadBuffer` + `currentGain`. Returns the updated
- * `currentGain` so the next block's call continues smoothly.
- *
- * `total` is the full input length so the lookahead can read past the slice
- * end (until the global tail).
- */
-function processLimiterStreamingBlock(
-  buffer: Float32Array,
-  start: number,
-  end: number,
-  total: number,
-  ceiling: number,
-  lookaheadSamples: number,
-  attackCoeff: number,
-  releaseCoeff: number,
-  state: LookaheadBuffer,
-  currentGain: number,
-): number {
-  let g = currentGain;
-  for (let i = start; i < end; i++) {
-    const lookAheadIdx = i + lookaheadSamples - 1;
-    state.push(lookAheadIdx < total ? buffer[lookAheadIdx]! : 0);
-    const peakInWindow = state.peakInWindow();
-    const targetGain = peakInWindow <= ceiling ? 1.0 : ceiling / peakInWindow;
-    if (targetGain < g) {
-      g = attackCoeff * g + (1 - attackCoeff) * targetGain;
-    } else {
-      g = releaseCoeff * g + (1 - releaseCoeff) * targetGain;
-    }
-    buffer[i] = buffer[i]! * g;
-  }
-  return g;
 }
 
 /**

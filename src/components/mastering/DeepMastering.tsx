@@ -26,6 +26,14 @@ import {
 import { emitStage, emitErrorTrace, newRunId } from "@/lib/analysis-stage/emitter";
 import { useAnalysisStageStore } from "@/lib/stores/analysis-stage-store";
 import type { ProfileId } from "@/types/deep-mastering";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EngineerProfilePicker } from "./EngineerProfilePicker";
 import { DeepTimeline } from "./DeepTimeline";
 import { DeepProgressCard } from "./DeepProgressCard";
@@ -217,26 +225,47 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
     void runAnalyze(current);
   }, [runAnalyze, setError]);
 
-  const handleApplyProfile = useCallback(
+  // Controlled state for the profile-switch discard guard. When the user
+  // tries to switch profiles with unsaved edits, we stage the pending profile
+  // and dirty-count here to drive a Radix confirmation dialog (replaces the
+  // legacy window.confirm).
+  const [pendingProfile, setPendingProfile] = useState<ProfileId | null>(null);
+  const [dirtyCount, setDirtyCount] = useState(0);
+
+  const switchProfile = useCallback(
     (next: ProfileId) => {
-      // Profile-switch dirty guard. If any move has been edited, ask before
-      // discarding edits — implemented via window.confirm to keep the
-      // dependency surface small.
-      const current = useDeepStore.getState();
-      const dirtyCount = current.script?.moves.filter((m) => m.edited).length ?? 0;
-      if (dirtyCount > 0) {
-        const ok = typeof window !== "undefined" && typeof window.confirm === "function"
-          ? window.confirm(
-              `Switching to "${next}" will discard your edits to ${dirtyCount} move${dirtyCount === 1 ? "" : "s"}. Continue?`,
-            )
-          : true;
-        if (!ok) return;
-      }
       setProfile(next);
       void runAnalyze(next);
     },
     [setProfile, runAnalyze],
   );
+
+  const handleApplyProfile = useCallback(
+    (next: ProfileId) => {
+      // Profile-switch dirty guard. If any move has been edited, open a
+      // confirmation dialog before discarding edits; otherwise switch now.
+      const current = useDeepStore.getState();
+      const count = current.script?.moves.filter((m) => m.edited).length ?? 0;
+      if (count > 0) {
+        setDirtyCount(count);
+        setPendingProfile(next);
+        return;
+      }
+      switchProfile(next);
+    },
+    [switchProfile],
+  );
+
+  const handleConfirmSwitch = useCallback(() => {
+    const next = pendingProfile;
+    setPendingProfile(null);
+    if (next) switchProfile(next);
+  }, [pendingProfile, switchProfile]);
+
+  const handleCancelSwitch = useCallback(() => {
+    // Keep the current script/profile unchanged — no re-analyze.
+    setPendingProfile(null);
+  }, []);
 
   if (!isLg) {
     return (
@@ -338,6 +367,48 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
       />
 
       <DeepTimeline script={script} />
+
+      <Dialog
+        open={pendingProfile !== null}
+        onOpenChange={(open) => {
+          // Esc, overlay click, or the X all dismiss → treat as Cancel.
+          if (!open) handleCancelSwitch();
+        }}
+      >
+        <DialogContent
+          data-testid="profile-switch-confirm-dialog"
+          className="bg-[#0a0a0a] border-[rgba(255,255,255,0.08)]"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-white">Discard your edits?</DialogTitle>
+            <DialogDescription>
+              <span className="text-[rgba(255,255,255,0.7)]">
+                Switching to &quot;{pendingProfile}&quot; will discard your edits
+                to {dirtyCount} move{dirtyCount === 1 ? "" : "s"}. Continue?
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <button
+              type="button"
+              data-testid="profile-switch-cancel-button"
+              onClick={handleCancelSwitch}
+              className="flex-1 px-4 py-2 rounded-md text-sm bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.1)] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-testid="profile-switch-confirm-button"
+              onClick={handleConfirmSwitch}
+              className="flex-1 px-4 py-2 rounded-md text-sm bg-[#0a84ff] text-white hover:bg-[#0066cc] transition-colors"
+            >
+              Discard &amp; switch
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

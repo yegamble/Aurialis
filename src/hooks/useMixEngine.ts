@@ -163,7 +163,6 @@ export function useMixEngine() {
         return {
           id: `stem-${Date.now()}-${i}`,
           name: s.name,
-          file: new File([], s.name), // placeholder
           audioBuffer: s.buffer,
           waveformPeaks: s.waveformPeaks,
           classification: "other",

@@ -246,17 +246,12 @@ export default function MixPage() {
           }
         }
 
-        // Create File objects and load via existing stem loader path
-        const files = stemBuffers.map(
-          (s) => new File([], s.name, { type: "audio/wav" })
-        );
         // Load directly using the engine's loadStems-like flow
         const { generateWaveformPeaks } = await import("@/lib/audio/stem-loader");
         const { DEFAULT_CHANNEL_PARAMS, STEM_COLORS } = await import("@/types/mixer");
         const stemTracks = stemBuffers.map((s, i) => ({
           id: `stem-${Date.now()}-${i}`,
           name: s.name,
-          file: files[i],
           audioBuffer: s.buffer,
           waveformPeaks: generateWaveformPeaks(s.buffer),
           classification: s.name.replace(".wav", "") as import("@/types/mixer").StemClassification,
@@ -422,7 +417,6 @@ export default function MixPage() {
           const track = {
             id: `stem-${Date.now()}-sub-${s.name}`,
             name: `Other → ${s.name}.wav`,
-            file: new File([], `${s.name}.wav`),
             audioBuffer: audioBuf,
             waveformPeaks: generateWaveformPeaks(audioBuf),
             classification: s.name as import("@/types/mixer").StemClassification,

@@ -8,7 +8,6 @@ function makeStem(overrides: Partial<StemTrack> = {}): StemTrack {
   return {
     id: `stem-${Math.random().toString(36).slice(2, 8)}`,
     name: "test.wav",
-    file: new File([""], "test.wav"),
     audioBuffer: null,
     waveformPeaks: [],
     classification: "other",

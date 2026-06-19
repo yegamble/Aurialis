@@ -72,7 +72,6 @@ export const DEFAULT_CHANNEL_PARAMS: StemChannelParams = {
 export interface StemTrack {
   id: string;
   name: string;
-  file: File;
   audioBuffer: AudioBuffer | null;
   waveformPeaks: number[];
   classification: StemClassification;

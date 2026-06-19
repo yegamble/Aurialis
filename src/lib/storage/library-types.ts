@@ -27,6 +27,13 @@ export interface LibraryEntry {
   lastModified: number;
   mimeType: string;
   durationSec: number | null;
+  /**
+   * Measured integrated loudness (LUFS) from the last analysis, or null/absent
+   * if the track has never been analyzed. Populated from
+   * `analyzeAudio().integratedLufs` during the master flow; the Smart Master
+   * Album uses it for real per-track loudness-consistency deltas.
+   */
+  measuredLufs?: number | null;
   createdAt: number;
   lastOpenedAt: number;
   /** False when OPFS unavailable — entry has metadata + script + settings only. */

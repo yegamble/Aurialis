@@ -206,6 +206,25 @@ describe("useLibraryStore", () => {
     });
   });
 
+  describe("updateMeasuredLufs", () => {
+    it("persists the measured integrated LUFS onto the entry", async () => {
+      const { useLibraryStore } = await import("../library-store");
+      await useLibraryStore.getState().hydrate();
+      const file = fileWith("song.wav", 5, 1000, new Uint8Array([1, 2, 3, 4, 5]));
+      await useLibraryStore.getState().addEntry(file, {
+        audioBlob: new Blob([new Uint8Array([1, 2, 3, 4, 5])], { type: "audio/wav" }),
+      });
+      const fp = useLibraryStore.getState().entries[0]!.fingerprint;
+
+      await useLibraryStore.getState().updateMeasuredLufs(fp, -9.3);
+
+      expect(
+        useLibraryStore.getState().entries.find((e) => e.fingerprint === fp)!
+          .measuredLufs,
+      ).toBe(-9.3);
+    });
+  });
+
   describe("addEntry", () => {
     it("adds a new entry for an unknown file", async () => {
       const { useLibraryStore } = await import("../library-store");

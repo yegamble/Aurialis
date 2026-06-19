@@ -109,6 +109,7 @@ export default function MasterPage() {
   const suppressLibraryAutoUpdate = useDeepStore((s) => s.suppressLibraryAutoUpdate);
   const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
   const updateLibrarySettings = useLibraryStore((s) => s.updateSettings);
+  const updateMeasuredLufs = useLibraryStore((s) => s.updateMeasuredLufs);
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
@@ -257,6 +258,11 @@ export default function MasterPage() {
     setAutoMasterStatus({ kind: "analyzing" });
     try {
       const analysis = await analyzeAudio(audioBuffer, { runId });
+      // Persist the measured integrated loudness so the Smart Master Album can
+      // show real per-track loudness deltas (not the configured target).
+      if (activeFingerprint && Number.isFinite(analysis.integratedLufs)) {
+        void updateMeasuredLufs(activeFingerprint, analysis.integratedLufs);
+      }
       const result = computeAutoMasterParams(analysis);
       const resetToggles = { ...INITIAL_TOGGLES };
       setGenre(result.genre);

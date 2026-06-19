@@ -66,6 +66,7 @@ export interface LibraryState {
   openEntry: (fingerprint: string) => Promise<LibraryEntry | null>;
   removeEntry: (fingerprint: string) => Promise<void>;
   updateScript: (fingerprint: string, script: LibraryEntry["script"]) => Promise<void>;
+  updateMeasuredLufs: (fingerprint: string, measuredLufs: number) => Promise<void>;
   updateSettings: (fingerprint: string, settings: PersistedSettings) => void;
   flushPendingWrites: () => Promise<void>;
   setPreference: <K extends keyof LibraryPreferences>(key: K, value: LibraryPreferences[K]) => Promise<void>;
@@ -261,6 +262,16 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     const entry = get().entries.find((e) => e.fingerprint === fingerprint);
     if (!entry) return;
     const updated: LibraryEntry = { ...entry, script };
+    await putEntry(updated);
+    set((s) => ({
+      entries: s.entries.map((e) => (e.fingerprint === fingerprint ? updated : e)),
+    }));
+  },
+
+  updateMeasuredLufs: async (fingerprint, measuredLufs): Promise<void> => {
+    const entry = get().entries.find((e) => e.fingerprint === fingerprint);
+    if (!entry) return;
+    const updated: LibraryEntry = { ...entry, measuredLufs };
     await putEntry(updated);
     set((s) => ({
       entries: s.entries.map((e) => (e.fingerprint === fingerprint ? updated : e)),

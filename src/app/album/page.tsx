@@ -7,10 +7,12 @@ import { AlbumView, type AlbumTrackRow } from "@/components/album/AlbumView";
 import type { ShellScreen } from "@/components/shell/Sidebar";
 import { useLibraryStore } from "@/lib/stores/library-store";
 import { useSettingsStore } from "@/lib/stores/settings-store";
+import {
+  useAlbumStore,
+  libraryEntriesToAlbumRows,
+  computeAlbumTargetLufs,
+} from "@/lib/stores/album-store";
 import { openLibraryEntryFromList } from "@/lib/storage/library-resume";
-
-const DEFAULT_TARGET_LUFS = -14;
-const STRIP_EXT = /\.[^.]+$/;
 
 export default function AlbumPage(): React.ReactElement {
   const router = useRouter();
@@ -19,34 +21,25 @@ export default function AlbumPage(): React.ReactElement {
   const hydrated = useLibraryStore((s) => s.hydrated);
   const proMode = useSettingsStore((s) => s.proMode);
   const setProMode = useSettingsStore((s) => s.setProMode);
+  const targetLufsOverride = useAlbumStore((s) => s.targetLufsOverride);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hydrated) void hydrate();
   }, [hydrate, hydrated]);
 
+  // Per-track rows use the *measured* integrated LUFS (from the master flow);
+  // unanalyzed tracks surface lufs = null. The album target is the average of
+  // the configured per-track targets, so deltas reflect real loudness drift.
   const tracks = useMemo<AlbumTrackRow[]>(
-    () =>
-      entries.map((e) => ({
-        id: e.fingerprint,
-        title: e.fileName.replace(STRIP_EXT, ""),
-        // Phase 4 UI shell: use the entry's targetLufs as a stand-in for the
-        // measured LUFS. The actual measurement requires re-analyzing the
-        // audio, which lands with the backend integration in a follow-up.
-        lufs: e.settings?.params.targetLufs ?? null,
-        durationSec: e.durationSec,
-      })),
+    () => libraryEntriesToAlbumRows(entries),
     [entries],
   );
 
-  const targetLufs = useMemo(() => {
-    const withLufs = tracks.filter((t) => t.lufs !== null) as Array<
-      AlbumTrackRow & { lufs: number }
-    >;
-    if (withLufs.length === 0) return DEFAULT_TARGET_LUFS;
-    const sum = withLufs.reduce((s, t) => s + t.lufs, 0);
-    return sum / withLufs.length;
-  }, [tracks]);
+  const targetLufs = useMemo(
+    () => computeAlbumTargetLufs(entries, targetLufsOverride),
+    [entries, targetLufsOverride],
+  );
 
   const albumTitle = "Library album";
   const albumArtist = entries.length === 0 ? "Add tracks to begin" : "Your tracks";

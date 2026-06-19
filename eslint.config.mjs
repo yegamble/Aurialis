@@ -6,6 +6,10 @@ const config = [
   {
     ignores: [
       ".next/**",
+      ".open-next/**",
+      "out/**",
+      "node_modules/**",
+      "backend/**",
       "public/worklets/**",
       "coverage/**",
       ".worktrees/**",

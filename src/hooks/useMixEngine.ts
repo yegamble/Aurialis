@@ -36,13 +36,12 @@ export function useMixEngine() {
   const snapshotRef = useRef<MixEngineSnapshot>({ ...defaultSnapshot });
   const listenersRef = useRef(new Set<() => void>());
 
-  // Create a fresh engine if none exists or if the previous one was disposed
-  /* eslint-disable react-hooks/refs -- intentional lazy init pattern for StrictMode */
+  // Create a fresh engine if none exists or if the previous one was disposed.
+  // Intentional lazy-init-from-ref pattern that is safe under React StrictMode.
   if (!engineRef.current || engineRef.current.isDisposed) {
     engineRef.current = new MixEngine();
   }
   const engine = engineRef.current;
-  /* eslint-enable react-hooks/refs */
 
   const subscribe = useCallback((listener: () => void) => {
     listenersRef.current.add(listener);
@@ -94,7 +93,7 @@ export function useMixEngine() {
       engine.off("statechange", onStateChange);
       engine.off("timeupdate", onTimeUpdate);
     };
-    // eslint-disable-next-line react-hooks/refs -- engine is a stable local derived from ref init above
+    // `engine` is a stable local derived from the ref init above.
   }, [engine, updateSnapshot]);
 
   // Dispose on unmount

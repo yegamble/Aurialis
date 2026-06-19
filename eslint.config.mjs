@@ -13,6 +13,7 @@ const config = [
       "public/worklets/**",
       "coverage/**",
       ".worktrees/**",
+      ".claude/worktrees/**",
     ],
   },
 ];

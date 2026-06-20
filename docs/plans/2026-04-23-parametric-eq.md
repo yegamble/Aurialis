@@ -1,5 +1,17 @@
 # Parametric EQ (P3) Implementation Plan
 
+> **Post-audit note (2026-06-19):** Task 7 / TS-006 called for a golden-snapshot
+> test asserting the rnb/classical/podcast presets render bit-equivalent (≤1e-4)
+> to the **pre-P3 BiquadFilterNode** chain. That equivalence is intentionally NOT
+> enforced: P3 deliberately replaced the linked-L/R `BiquadFilterNode` behavior
+> with a custom per-band M/S kernel, so pre-P3 bit-equivalence is not a goal and a
+> golden fixture would be misleading. Regression confidence instead rests on the
+> existing parity tests — the DSP↔worklet parity (Task 4, <1e-7) and the
+> renderer↔DSP-reference parity (`renderer-parametric-eq.test.ts`, "numerically
+> equivalent to the DSP reference EQ path"). The genre-preset render check is a
+> finite/non-silent smoke test, not a golden comparison. No `__fixtures__/*.bin`
+> golden is required.
+
 Created: 2026-04-23
 Author: yegamble@gmail.com
 Status: VERIFIED

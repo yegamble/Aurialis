@@ -200,6 +200,13 @@ describe("renderOffline — parametric EQ", () => {
     expect(maxDiff).toBeLessThan(5e-4);
   });
 
+  // NOTE: the parametric-eq plan's Task 7 / TS-006 originally called for a
+  // golden-snapshot comparison against the pre-P3 BiquadFilterNode chain. That
+  // is intentionally NOT enforced — P3 replaced the linked-L/R Biquad behavior
+  // with a custom per-band M/S kernel, so pre-P3 bit-equivalence is not a goal.
+  // Regression confidence rests on the DSP↔worklet parity test and the
+  // renderer↔DSP-reference parity test above ("numerically equivalent to the
+  // DSP reference EQ path"). This block is a finite/non-silent smoke check.
   it.each([
     "rnb" as const,
     "classical" as const,

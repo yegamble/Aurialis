@@ -48,7 +48,7 @@ describe("processTruePeakLimiter", () => {
     const measuredTp = detectTruePeakDbTp(outTail);
 
     // True-peak limiter must hold the ceiling within 0.5 dB
-    expect(measuredTp).toBeLessThanOrEqual(ceilingDb + 0.5);
+    expect(measuredTp).toBeLessThanOrEqual(ceilingDb + 0.3);
   });
 
   it("sample-peak limiter exceeds the TP ceiling on the same ISP-hot signal (proves upgrade matters)", () => {
@@ -110,7 +110,7 @@ describe("processTruePeakLimiter sample-rate parameterization", () => {
       );
       const skip = 500;
       const tp = detectTruePeakDbTp(output.subarray(skip));
-      expect(tp).toBeLessThanOrEqual(ceilingDb + 0.5);
+      expect(tp).toBeLessThanOrEqual(ceilingDb + 0.3);
     }
   );
 });

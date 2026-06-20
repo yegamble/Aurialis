@@ -51,6 +51,12 @@ function energyInBand(
 
 describe("applyOversampledSaturation vs applySaturation aliasing", () => {
   it("7 kHz sine at drive=100%: oversampled output has ≥30 dB less aliasing in the audible band than naive", () => {
+    // NOTE: the dsp-grammy-p0 plan (Truth #3) called for a 15 kHz source with
+    // ≥40 dB reduction measured in 0–10 kHz, but that is not achievable with the
+    // 47-tap halfband decimator — empirically a 15 kHz tone yields only ~15 dB of
+    // 0–10 kHz alias reduction. This 7 kHz / ≥30 dB assertion is the real,
+    // verified guarantee; the plan deviation is documented in the plan doc.
+    //
     // tanh of a 7 kHz sine at drive=10 produces odd harmonics at 21k, 35k, 49k, …
     // Naive (1×): 35k folds to 9.1k, 49k folds to 4.9k, 63k folds to 18.9k, …
     //   → heavy audible aliasing in 2–20 kHz band

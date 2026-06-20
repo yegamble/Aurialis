@@ -1,5 +1,15 @@
 # Grammy-Tier DSP P2 Upgrade Implementation Plan
 
+> **Post-audit note (2026-06-19):** This plan's headline guarantee — "multiband
+> ships bypassed-by-default across all 9 genre presets so output is
+> byte-equivalent until a user opts in" — was **intentionally superseded** by the
+> later `dsp-p4-triage` / "Phase 4a" plan (commit `ae1ca78`), which curated
+> `multibandEnabled: 1` on pop/rock/hiphop/electronic/rnb/podcast and
+> re-baselined the regression hashes (`preset-regression-multiband.test.ts`
+> splits `MB_ENGAGING_GENRES` (6) vs `MB_PRESERVING_GENRES` (3)). The presets are
+> a deliberate, separately-verified product decision — do NOT revert them; treat
+> the byte-equivalence statements below as historical.
+
 Created: 2026-04-23
 Author: yegamble@gmail.com
 Status: VERIFIED

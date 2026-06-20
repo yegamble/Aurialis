@@ -1,5 +1,18 @@
 # Grammy-Tier DSP P0 Upgrade Implementation Plan
 
+> **Post-audit reconciliation (2026-06-19):**
+> - **Task 4 S4 (renderer true-peak)** — closed: the offline WAV renderer now
+>   applies true-peak limiting on both paths (commit `40d0bb8`), so exports hold
+>   the −1 dBTP ceiling. The limiter-truepeak test tolerance was tightened to the
+>   spec'd 0.3 dB (commit `b51e78f`).
+> - **Truth #3 (saturation alias / HF preservation) — accepted deviations:** the
+>   "15 kHz source / ≥40 dB alias reduction in 0–10 kHz" target is NOT achievable
+>   with the 47-tap halfband decimator (empirically ~15 dB); the real, verified
+>   guarantee is ≥30 dB at 7 kHz. Likewise the "18 kHz within 1 dB" HF-preservation
+>   target measures ≈1.6 dB (the halfband transition shoulder). Both are accepted
+>   deviations — the realistic checks live in `saturation-alias.test.ts`.
+> - **Task 6 (metering true-peak test)** — still TODO (tracked in `ralph/fix_plan.md`).
+
 Created: 2026-04-22
 Author: yegamble@gmail.com
 Status: COMPLETE

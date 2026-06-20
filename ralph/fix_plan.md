@@ -6,9 +6,10 @@ Each task is one atomic commit. Tick `[x]` only when its "Done when" holds and
 the green gate (`tsc` + `lint` + `test`) passes.
 
 Baseline at start: tsc clean, lint exit 0 (after task 1), 1408 unit tests green.
-**Progress: 12 of 18 tasks done. Remaining: #5 (rest of DSP tests), #9, #10
-(redesign shell), #12–16 (R2 cluster).** All work on branch
-`fix/incomplete-work-audit`; gate green at every commit (now 1428 unit tests).
+**Progress: 13 of 18 tasks done. Remaining: #9, #10 (redesign shell — need
+browser layout verification), #12–16 (R2 cluster — needs a Turnstile site key).**
+All work on branch `fix/incomplete-work-audit`; gate green at every commit
+(now 1442 unit tests).
 
 ## Correctness / export quality
 
@@ -24,17 +25,14 @@ Baseline at start: tsc clean, lint exit 0 (after task 1), 1408 unit tests green.
   tightened 0.5→0.3 dB (passes). The plan's 15 kHz / ≥40 dB 0–10 kHz saturation
   alias target is NOT achievable (measured ~15 dB) — kept the real 7 kHz/≥30 dB
   check + documented the deviation. — b51e78f
-- [~] **Add the remaining DSP test files the plans marked done.**
-  DONE (commit e9128b3): `metering-truepeak.test.ts` (accuracy within 0.2 dB —
-  the plan's 0.1 dB isn't achievable with 4× oversampling, documented; mono,
-  44.1/48/96 k, perf) and the parametric-EQ golden decision (no fixture — P3
-  replaced the EQ kernel, so pre-P3 bit-equivalence is intentionally not enforced;
-  plan amended). STILL TODO (both need transcribing worklet internals into the
-  test, like `parametric-eq-parity.test.ts` does):
-  `compressor-auto-release-integration.test.ts` (worklet-level, pink noise vs a
-  frozen P0 reference) and extending `saturation-alias.test.ts` to all 4 modes
-  (clean/tube/tape/transformer ≥25 dB — the oversampled per-mode path lives only
-  in `saturation-processor.js`, not in pure DSP). [p1 T1/T3]
+- [x] **Add the remaining DSP test files the plans marked done.** All four
+  sub-parts done: `metering-truepeak.test.ts` (e9128b3); parametric-EQ golden
+  decided as a plan amendment (e9128b3); `saturation-alias.test.ts` extended to
+  all 4 modes ≥25 dB via Oversampler4x + the per-mode shapers (81f3b9c);
+  `compressor-auto-release-integration.test.ts` — 10 s pink noise, autoRelease=0
+  bit-equivalent to frozen P0 ≤1e-9 + pumping + transient (35d60d9). Documented
+  honestly where plan targets exceeded the implementation (true-peak 0.1 dB,
+  saturation 40 dB/18 kHz).
 
 ## App / UX correctness
 

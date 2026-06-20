@@ -6,10 +6,14 @@ Each task is one atomic commit. Tick `[x]` only when its "Done when" holds and
 the green gate (`tsc` + `lint` + `test`) passes.
 
 Baseline at start: tsc clean, lint exit 0 (after task 1), 1408 unit tests green.
-**Progress: 13 of 18 tasks done. Remaining: #9, #10 (redesign shell — need
-browser layout verification), #12–16 (R2 cluster — needs a Turnstile site key).**
-All work on branch `fix/incomplete-work-audit`; gate green at every commit
-(now 1442 unit tests).
+**Progress: 14 of 18 tasks done. Remaining: #9, #10 (redesign shell — need
+browser layout verification); the R2 rewire/Turnstile/E2E (#13/#14/#16) — need
+a running-app + deployed-Worker verification pass since they replace a working
+upload path; and backend R2 pytest + legacy removal (#15, sequence after the
+frontend cutover). The R2 client itself (#12) is done.** All work on branch
+`fix/incomplete-work-audit`; gate green at every commit (now 1445 unit tests).
+Turnstile site key is already in wrangler.jsonc (`0x4AAAAAADFNPdaK9423tgxr`);
+the Worker secret `TURNSTILE_SECRET` is set via `wrangler secret put` (backend).
 
 ## Correctness / export quality
 
@@ -61,14 +65,18 @@ Full spec in `docs/plans/2026-04-28-direct-r2-upload.md`. Backend JSON endpoints
 legacy multipart path is still live, so nothing is broken today — this is
 unfinished, not breaking).
 
-- [ ] **`src/lib/api/r2-upload.ts` chunked client + unit test.**
-  `uploadFileToR2(file, turnstileToken, baseUrl, opts)`: `/upload/initiate` →
-  parallel 16 MB part PUTs (concurrency 4, 3-retry backoff, ETag capture) →
-  `/upload/complete`; abort on failure; returns `{key}`. [Task 4]
-- [ ] **`errors.ts` + rewire deep-analysis/separation to JSON `{key}`.**
-  Extract shared `BackendError`; switch `startDeepAnalysis`/`startSeparation`
-  from FormData to `uploadFileToR2` + JSON POST `{key,profile}`/`{key,model}`;
-  add `turnstileToken` params; drop the bespoke `SeparationError`. [Task 5]
+- [x] **`src/lib/api/r2-upload.ts` chunked client + unit test.** (c02f72c)
+  `uploadFileToR2(file, turnstileToken, baseUrl, opts)` matching the Worker
+  contract exactly; + shared `src/lib/api/errors.ts` `BackendError`. [Task 4]
+- [ ] **Rewire deep-analysis/separation to JSON `{key}` + Turnstile token.**
+  ⚠️ SEQUENCING/RISK: this REPLACES the currently-working multipart path, so do
+  it WITH #14 (token source) and verify a real upload succeeds against the
+  deployed Worker (Turnstile secret set) BEFORE shipping. Switch
+  `startDeepAnalysis(file,profile,token,signal?)` / `startSeparation(file,model,
+  token,signal?)` to `uploadFileToR2` + JSON POST `{key,profile}`/`{key,model}`;
+  thread the token from `useTurnstileToken` through callers (mix/page.tsx:191,378;
+  DeepMastering.tsx:139); add `deep-analysis-r2.test.ts`; optionally fold
+  `SeparationError` into the shared `BackendError`. [Task 5]
 - [blocked] **`TurnstileGate` + wire entry points.** Needs a Cloudflare Turnstile
   **site key** (`NEXT_PUBLIC_TURNSTILE_SITE_KEY`) + Worker **secret**. Build the
   component to gracefully no-op when the key is absent so dev still works. [Task 6]

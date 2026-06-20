@@ -24,15 +24,17 @@ Baseline at start: tsc clean, lint exit 0 (after task 1), 1408 unit tests green.
   tightened 0.5→0.3 dB (passes). The plan's 15 kHz / ≥40 dB 0–10 kHz saturation
   alias target is NOT achievable (measured ~15 dB) — kept the real 7 kHz/≥30 dB
   check + documented the deviation. — b51e78f
-- [ ] **Add the remaining DSP test files the plans marked done.**
-  Still TODO: `metering-truepeak.test.ts` (ISP <0.1 dB, mono, 44.1/48/96 k, perf
-  — NOTE: an audit verified the metering worklet's halfband taps are bit-identical
-  to `oversampling.ts`, so a transcription test stays coefficient-synced);
-  `compressor-auto-release-integration.test.ts` (worklet-level, pink noise vs
-  frozen P0); extend `saturation-alias.test.ts` to all 4 modes (≥25 dB); decide
-  parametric-EQ golden snapshot vs amend plan (P3 replaced the EQ kernel, so
-  pre-P3 bit-equivalence is likely NOT achievable → amend plan). [p0 T6, p1 T1/T3,
-  eq T7/TS-006]
+- [~] **Add the remaining DSP test files the plans marked done.**
+  DONE (commit e9128b3): `metering-truepeak.test.ts` (accuracy within 0.2 dB —
+  the plan's 0.1 dB isn't achievable with 4× oversampling, documented; mono,
+  44.1/48/96 k, perf) and the parametric-EQ golden decision (no fixture — P3
+  replaced the EQ kernel, so pre-P3 bit-equivalence is intentionally not enforced;
+  plan amended). STILL TODO (both need transcribing worklet internals into the
+  test, like `parametric-eq-parity.test.ts` does):
+  `compressor-auto-release-integration.test.ts` (worklet-level, pink noise vs a
+  frozen P0 reference) and extending `saturation-alias.test.ts` to all 4 modes
+  (clean/tube/tape/transformer ≥25 dB — the oversampled per-mode path lives only
+  in `saturation-processor.js`, not in pure DSP). [p1 T1/T3]
 
 ## App / UX correctness
 

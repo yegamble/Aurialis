@@ -4,8 +4,58 @@ import {
   applyOversampledSaturation,
   drivePctToFactor,
 } from "../saturation";
+import { Oversampler4x } from "../oversampling";
+import {
+  applyCleanSaturation,
+  applyTubeSaturation,
+  applyTapeShaper,
+  applyTransformerShaper,
+} from "../sat-modes";
 
 const SR = 44100;
+
+type SampleShaper = (x: number) => number;
+
+/** Pick a per-sample nonlinear shaper for a saturation mode at a given drive. */
+function modeShaper(mode: string, driveFactor: number): SampleShaper {
+  const norm = Math.tanh(driveFactor);
+  switch (mode) {
+    case "tube":
+      return (x) => applyTubeSaturation(x, driveFactor, norm);
+    case "tape":
+      return (x) => applyTapeShaper(x, driveFactor);
+    case "transformer":
+      return (x) => applyTransformerShaper(x, driveFactor);
+    default:
+      return (x) => applyCleanSaturation(x, driveFactor, norm);
+  }
+}
+
+/** Naive 1× waveshaping of `input` through `shaper`. */
+function naiveShape(input: Float32Array, shaper: SampleShaper): Float32Array {
+  const out = new Float32Array(input.length);
+  for (let i = 0; i < input.length; i++) out[i] = shaper(input[i]!);
+  return out;
+}
+
+/** 4×-oversampled waveshaping — mirrors the saturation worklet's per-mode path. */
+function oversampledShape(
+  input: Float32Array,
+  shaper: SampleShaper,
+): Float32Array {
+  const os = new Oversampler4x();
+  const out = new Float32Array(input.length);
+  for (let i = 0; i < input.length; i++) {
+    const up = os.upsample(input[i]!);
+    out[i] = os.downsample(
+      shaper(up[0]!),
+      shaper(up[1]!),
+      shaper(up[2]!),
+      shaper(up[3]!),
+    );
+  }
+  return out;
+}
 
 function generateSine(
   freq: number,
@@ -149,4 +199,43 @@ describe("applyOversampledSaturation at 48k", () => {
       10 * Math.log10(aliasNaive / Math.max(aliasOs, 1e-20));
     expect(reductionDb).toBeGreaterThan(25);
   });
+});
+
+describe("per-mode alias rejection (clean/tube/tape/transformer)", () => {
+  // dsp-grammy-p1 Task 3 / Truth #5: every saturation mode stays alias-free.
+  // Each mode's nonlinear shaper is run 4×-oversampled (matching the saturation
+  // worklet's per-mode path: upsample → shape 4 samples → decimate) vs the naive
+  // 1× shaper, measuring in-band alias reduction with the 7 kHz methodology above
+  // (fundamental + 3rd-harmonic bands excluded). The linear pre-filters (tape HF
+  // shelf, transformer mid peak) are omitted — they apply equally to both paths
+  // and don't change the alias-reduction ratio.
+  it.each(["clean", "tube", "tape", "transformer"])(
+    "%s: 7 kHz at drive=100%% — oversampled has >=25 dB less in-band aliasing than naive",
+    (mode) => {
+      const freq = 7000;
+      const input = generateSine(freq, SR, 0.3, 0.6);
+      const driveFactor = drivePctToFactor(100);
+      const shaper = modeShaper(mode, driveFactor);
+
+      const outNaive = naiveShape(input, shaper);
+      const outOs = oversampledShape(input, shaper);
+
+      const skip = 200;
+      const aliasBand = [
+        { lo: 500, hi: 6400 },
+        { lo: 7600, hi: 13500 },
+        { lo: 14500, hi: 19500 },
+      ];
+      let aliasNaive = 0;
+      let aliasOs = 0;
+      for (const { lo, hi } of aliasBand) {
+        const a = energyInBand(outNaive.subarray(skip), lo, hi, 200, SR);
+        const b = energyInBand(outOs.subarray(skip), lo, hi, 200, SR);
+        aliasNaive += a * a;
+        aliasOs += b * b;
+      }
+      const reductionDb = 10 * Math.log10(aliasNaive / Math.max(aliasOs, 1e-20));
+      expect(reductionDb).toBeGreaterThan(25);
+    },
+  );
 });

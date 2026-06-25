@@ -12,6 +12,7 @@ import { WindowChrome } from "@/components/shell/WindowChrome";
 import { SeparationProgressCard } from "@/components/mix/SeparationProgressCard";
 import { useMixEngine } from "@/hooks/useMixEngine";
 import { useMixerStore } from "@/lib/stores/mixer-store";
+import { useTurnstileToken } from "@/components/security/TurnstileGate";
 import {
   startSeparation,
   downloadStem,
@@ -93,6 +94,7 @@ export default function MixPage() {
   const [showModelSelect, setShowModelSelect] = useState(false);
   const [pendingSingleFile, setPendingSingleFile] = useState<File | null>(null);
   const [smartRepairEnabled, setSmartRepairEnabled] = useState(true);
+  const { tokenRef, gate: turnstileGate } = useTurnstileToken();
   const [backendAvailable, setBackendAvailable] = useState<boolean | null>(null);
 
   // Tick separationNow once per second while a run is active so the elapsed
@@ -188,7 +190,12 @@ export default function MixPage() {
 
       let jobId = "";
       try {
-        const startResult = await startSeparation(file, model, ctl.signal);
+        const startResult = await startSeparation(
+          file,
+          model,
+          tokenRef.current,
+          ctl.signal
+        );
         jobId = startResult.jobId;
 
         const stageEmitter = makeSeparationStageEmitter(runId);
@@ -378,6 +385,7 @@ export default function MixPage() {
         const startResult = await startSeparation(
           file,
           "htdemucs_6s",
+          tokenRef.current,
           ctl.signal
         );
         jobId = startResult.jobId;
@@ -541,6 +549,7 @@ export default function MixPage() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
+      {turnstileGate}
       <WindowChrome />
       <MixToolbar
         onBack={() => {

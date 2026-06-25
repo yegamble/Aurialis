@@ -3,6 +3,8 @@
  * Communicates with the self-hosted Demucs Docker service.
  */
 
+import { uploadFileToR2 } from "./r2-upload";
+
 export const SEPARATION_API_URL =
   process.env.NEXT_PUBLIC_SEPARATION_API_URL ?? "http://localhost:8000";
 
@@ -95,20 +97,35 @@ function buildSeparationError(
 export async function startSeparation(
   file: File,
   model: string,
+  turnstileToken?: string,
   signal?: AbortSignal
 ): Promise<SeparationStartResult> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("model", model);
   const url = `${SEPARATION_API_URL}/separate`;
+
+  // When a Turnstile token is available, upload directly to R2 and hand the
+  // backend just the object key (no request-size ceiling). Otherwise fall back
+  // to the legacy multipart path, which the backend still accepts.
+  let init: RequestInit;
+  if (turnstileToken) {
+    const { key } = await uploadFileToR2(file, turnstileToken, SEPARATION_API_URL, {
+      signal,
+    });
+    init = {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key, model }),
+      signal,
+    };
+  } else {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("model", model);
+    init = { method: "POST", body: formData, signal };
+  }
 
   let response: Response;
   try {
-    response = await fetch(url, {
-      method: "POST",
-      body: formData,
-      signal,
-    });
+    response = await fetch(url, init);
   } catch (e) {
     throw buildSeparationError({
       message: "Couldn't reach the separation service",

@@ -5,6 +5,7 @@
  */
 
 import type { MasteringScript, ProfileId } from "@/types/deep-mastering";
+import { uploadFileToR2 } from "./r2-upload";
 
 export const DEEP_ANALYSIS_API_URL =
   process.env.NEXT_PUBLIC_DEEP_ANALYSIS_API_URL ??
@@ -151,18 +152,35 @@ async function fetchOrThrow(
 export async function startDeepAnalysis(
   file: File,
   profile: ProfileId,
+  turnstileToken?: string,
   signal?: AbortSignal
 ): Promise<DeepStartResult> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("profile", profile);
+  // R2 path when a Turnstile token is available (browser → R2, then JSON {key});
+  // otherwise the legacy multipart path the backend still accepts.
+  let init: RequestInit;
+  if (turnstileToken) {
+    const { key } = await uploadFileToR2(file, turnstileToken, DEEP_ANALYSIS_API_URL, {
+      signal,
+    });
+    init = {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key, profile }),
+      signal,
+    };
+  } else {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("profile", profile);
+    init = { method: "POST", body: formData, signal };
+  }
 
   const response = await fetchOrThrow(
     {
       url: `${DEEP_ANALYSIS_API_URL}/analyze/deep`,
       errorPrefix: "Deep analysis failed",
     },
-    { method: "POST", body: formData, signal }
+    init
   );
   const data = (await response.json()) as StartResponse;
   return { jobId: data.job_id, status: data.status };

@@ -17,6 +17,7 @@ import {
   startDeepAnalysis,
   type DeepErrorDetails,
 } from "@/lib/api/deep-analysis";
+import { useTurnstileToken } from "@/components/security/TurnstileGate";
 import { pollUntilDone } from "@/lib/api/deep-analysis-polling";
 import {
   computeDeepStageView,
@@ -83,6 +84,7 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
   const cancellingRef = useRef(false);
   const activeJobIdRef = useRef<string | null>(null);
   const lastProfileRef = useRef<ProfileId>(profile);
+  const { tokenRef, gate: turnstileGate } = useTurnstileToken();
 
   // Drive an "elapsed" tick from `now` so we don't have to setState directly
   // in the effect body. `now` only advances while a job is active.
@@ -139,6 +141,7 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
         const { jobId } = await startDeepAnalysis(
           audioFile,
           profileId,
+          tokenRef.current,
           ctl.signal
         );
         activeJobIdRef.current = jobId;
@@ -286,6 +289,7 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
       data-testid="deep-mastering-panel"
       className="flex flex-col gap-4 text-[rgba(255,255,255,0.85)]"
     >
+      {turnstileGate}
       <header className="flex flex-col gap-1">
         <h2 className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.5)]">
           Deep Mastering

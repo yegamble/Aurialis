@@ -23,6 +23,7 @@ type LocalScreen = Extract<ShellScreen, "library" | "upload">;
 export default function UploadPage() {
   const router = useRouter();
   const entries = useLibraryStore((s) => s.entries);
+  const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
   const removeEntry = useLibraryStore((s) => s.removeEntry);
   const hydrate = useLibraryStore((s) => s.hydrate);
   const hydrated = useLibraryStore((s) => s.hydrated);
@@ -181,7 +182,7 @@ export default function UploadPage() {
         activeScreen={screen}
         onSelect={handleSidebarSelect}
         tracks={sidebarTracks}
-        activeTrackId={null}
+        activeTrackId={activeFingerprint}
         onSelectTrack={(id) => void handleOpenLibraryEntry(id)}
         proMode={proMode}
         onProModeChange={setProMode}

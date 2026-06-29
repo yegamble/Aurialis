@@ -176,6 +176,15 @@ const LibraryRow = memo(function LibraryRow({
             Analyzed
           </span>
         ) : null}
+        {!entry.audioPersisted ? (
+          <span
+            data-testid="reupload-badge"
+            title="The audio for this track isn't stored on this device — re-upload the file to play it."
+            className="shrink-0 text-[10px] uppercase tracking-wider text-[rgba(255,196,84,0.9)]"
+          >
+            Re-upload audio to play
+          </span>
+        ) : null}
       </button>
       <button
         type="button"

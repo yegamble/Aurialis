@@ -70,6 +70,24 @@ describe("LibraryView", () => {
     expect(screen.getAllByTestId("library-row")).toHaveLength(2);
   });
 
+  it("marks audio-less entries with a 'Re-upload audio to play' badge", () => {
+    const persisted = makeEntry({ fingerprint: "fp-p", audioPersisted: true });
+    const audioLess = makeEntry({ fingerprint: "fp-x", audioPersisted: false });
+    render(
+      <LibraryView
+        entries={[persisted, audioLess]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    const badges = screen.getAllByTestId("reupload-badge");
+    expect(badges).toHaveLength(1);
+    expect(badges[0]).toHaveTextContent(/Re-upload audio to play/i);
+    // The row with persisted audio must NOT carry the badge.
+    const persistedRow = document.querySelector('[data-fingerprint="fp-p"]')!;
+    expect(within(persistedRow as HTMLElement).queryByTestId("reupload-badge")).toBeNull();
+  });
+
   it("filters to analyzed entries when 'Analyzed' is selected", () => {
     render(
       <LibraryView

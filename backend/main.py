@@ -13,6 +13,7 @@ Entry points for /analyze/deep and /separate dispatch by Content-Type:
   traffic before deletion.
 """
 
+import contextlib
 import logging
 import os
 import tempfile
@@ -309,26 +310,26 @@ def _register_routes(app: FastAPI) -> None:
     app.add_api_route("/jobs/{job_id}", _cancel_job, methods=["DELETE"])
 
 
-def _register_lifecycle(app: FastAPI) -> None:
-    @app.on_event("startup")
-    async def _startup_cleanup():
-        removed = cleanup_expired()
-        if removed:
-            print(f"Cleaned up {removed} expired job(s)")
+@contextlib.asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # Startup: drop expired jobs left over from a previous run.
+    removed = cleanup_expired()
+    if removed:
+        print(f"Cleaned up {removed} expired job(s)")
 
-    @app.on_event("shutdown")
-    async def _shutdown_otel():
-        """Flush + shut down the OTel tracer provider so spans aren't dropped
-        on container restart. Cheap no-op if telemetry wasn't initialized."""
-        try:
-            from opentelemetry import trace
+    yield
 
-            provider = trace.get_tracer_provider()
-            shutdown = getattr(provider, "shutdown", None)
-            if callable(shutdown):
-                shutdown()
-        except Exception:
-            pass
+    # Shutdown: flush + shut down the OTel tracer provider so spans aren't
+    # dropped on container restart. Cheap no-op if telemetry wasn't initialized.
+    try:
+        from opentelemetry import trace
+
+        provider = trace.get_tracer_provider()
+        shutdown = getattr(provider, "shutdown", None)
+        if callable(shutdown):
+            shutdown()
+    except Exception:
+        pass
 
 
 def create_app(*, telemetry: bool = True) -> FastAPI:
@@ -338,6 +339,7 @@ def create_app(*, telemetry: bool = True) -> FastAPI:
         title="Smart Split API",
         description="Self-hosted Demucs stem separation service",
         version="1.0.0",
+        lifespan=_lifespan,
     )
 
     if telemetry:
@@ -357,7 +359,6 @@ def create_app(*, telemetry: bool = True) -> FastAPI:
     )
 
     _register_routes(app)
-    _register_lifecycle(app)
     return app
 
 

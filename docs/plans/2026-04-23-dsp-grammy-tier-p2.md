@@ -34,7 +34,7 @@ Type: Feature
    - `lr4LowpassCoeffs(fc, fs)` / `lr4HighpassCoeffs(fc, fs)` — each returns a pair of cascaded Butterworth biquads (LR4 = Butterworth² at the same fc).
    - `class LR4Crossover` holding two biquad states; `process(sample) → {low, high}`.
    - `class ThreeWaySplitter` built from two LR4 crossovers: splits input into `{low, mid, high}` with summation-flat magnitude response when bands are unity-passed.
-   - Summation identity when bands are unity: `low + mid + high === input` (within float epsilon). Verified by unit test.
+   - Summation when bands are unity is **magnitude-flat with an all-pass phase response** (the standard LR4 property), NOT sample-level bit-exact: `|low + mid + high|` matches `|input|` across frequency, but `low + mid + high` is a phase-shifted (all-pass) version of `input`, not `input` itself. The low band is phase-compensated through an all-pass equivalent at the upper crossover so all three bands share one phase response. Verified by a magnitude-flatness unit test.
 
 2. **Multiband compressor DSP core** — new `src/lib/audio/dsp/multiband.ts` exporting:
    - `BandParams` interface: `{ enabled, threshold, ratio, attack, release, makeup, mode: 'stereo'|'ms', msBalance }`.
@@ -64,7 +64,7 @@ Type: Feature
    - New `BandRow` component lives inline in `AdvancedMastering.tsx` (same file, same style as `SatModePills` and `Section`). Keeps AdvancedMastering a self-contained panel.
 
 8. **Tests** (Vitest unit + Playwright E2E):
-   - `src/lib/audio/dsp/__tests__/crossover.test.ts` — LR4 magnitude at fc = −6 dB, summation flatness (low+mid+high = input ± 1e-6), impulse response stability.
+   - `src/lib/audio/dsp/__tests__/crossover.test.ts` — LR4 magnitude at fc = −6 dB, summation **magnitude**-flatness (`|low+mid+high| ≈ |input|`, all-pass phase), impulse response stability.
    - `src/lib/audio/dsp/__tests__/multiband.test.ts` — band isolation (low-band threshold change affects 80 Hz sine GR but leaves 1 kHz / 8 kHz sines unchanged within rounding), `msBalance` behavior (positive balance → lower GR on M channel, higher on S channel for a known stereo signal), solo mutes other bands.
    - `src/lib/audio/dsp/__tests__/multiband-parity.test.ts` — worklet ↔ TS reference parity harness (same pattern as `halfband-parity.test.ts`: port the worklet formulas as a mock class, run same input through both, assert sample-level equivalence within 1e-6).
    - `src/lib/audio/nodes/__tests__/multiband-compressor.test.ts` — mock AudioContext; verify param setters call `port.postMessage` with correct keys/values.
@@ -173,7 +173,7 @@ Type: Feature
 | Risk | Likelihood | Impact | Mitigation |
 | ---- | ---------- | ------ | ---------- |
 | Multiband worklet introduces CPU spikes on low-end devices | Medium | High | Default `multibandEnabled = 0` → node is created but processes only a bypass path (input → output copy) when disabled. Add an `_enabled` flag gating the hot loop identical to P0 compressor's `_enabled`. The worklet loop short-circuits via `output[c].set(input[c])` when disabled. |
-| LR4 summation drifts from flatness under extreme crossover overlap or numerical noise | Low | Medium | Unit test asserts `(low+mid+high) - input < 1e-6` across a sweep of crossover frequencies (80 Hz → 4 kHz) and inputs (impulse, white noise, DC). UI clamps enforce `mbCrossMidHigh ≥ mbCrossLowMid + 50 Hz` so band regions never overlap. |
+| LR4 summation drifts from magnitude flatness under extreme crossover overlap or numerical noise | Low | Medium | Unit test asserts the summed magnitude `|low+mid+high|` stays within a small dB tolerance of `|input|` across a sweep of crossover frequencies (80 Hz → 4 kHz) and inputs (impulse, white noise, DC). (Phase is all-pass, so sample-level equality is not expected.) UI clamps enforce `mbCrossMidHigh ≥ mbCrossLowMid + 50 Hz` so band regions never overlap. |
 | Worklet ↔ TS-reference drift (formulas fall out of sync over edits) | Medium | Medium | Dedicated parity test (`multiband-parity.test.ts`) runs both implementations on identical input and asserts sample-level equivalence within 1e-6. Inline `IN SYNC WITH` comments on every duplicated formula. Failure mode: CI red on drift, before merge. |
 | M/S decode introduces phase error when mixed with stereo-mode bands | Low | High | M/S encode/decode is a unitary matrix transform (`[[1,1],[1,-1]]*0.5` then `[[1,1],[1,-1]]`). Applied+inverted within a single band's sample step, it is mathematically identity. Unit test: send identical L and R, put one band in M/S with `msBalance=0`; assert `L === R` at the output. |
 | `msBalance` creates audible thump at balance=0→nonzero transitions | Low | Medium | Biasing is applied to `threshold`, which feeds the gain computer — no discontinuous jump in gain reduction; the envelope follower smooths transitions inherently. Test: automate `msBalance` from 0 → 0.5 over 100 ms and assert output RMS is monotonic (no clicks). |
@@ -190,7 +190,7 @@ Type: Feature
 
 1. With `multibandEnabled=0` (default), rendering any genre preset through the full chain produces output bit-identical to pre-P2 for the same input. (Supported by: Task 5 integration test + genre-preset hash test in Task 9.)
 2. With `multibandEnabled=1` and the low band configured to aggressive compression (threshold −40 dB, ratio ∞), an 80 Hz sine is attenuated while a 1 kHz and 8 kHz sine pass unchanged within ±0.1 dB. (Supported by: Task 3 band-isolation test + TS-002 E2E.)
-3. The LR4 crossover sums bit-flat: for any input signal x, `splitThreeWay(x).low + .mid + .high = x` within 1e-6. (Supported by: Task 2 summation-flatness test.)
+3. The LR4 crossover sums **magnitude-flat (all-pass phase)**: for any input x, `|splitThreeWay(x).low + .mid + .high|` matches `|x|` across frequency (not sample-level `= x`, which LR4 cannot give). (Supported by: Task 2 magnitude-flatness test.)
 4. With a band in M/S mode and `msBalance=−1`, a mono signal's M channel sees more gain reduction than the same band in stereo mode would produce, while a pure-S stereo signal sees less. (Supported by: Task 3 M/S balance test.)
 5. The new `Multiband` section is visible in the `AdvancedMastering` panel, the master toggle enables the stage, and the three band rows can be expanded/collapsed independently. (Supported by: TS-001 E2E passes end-to-end.)
 6. Worklet ↔ TS reference produces sample-level equivalent output for a deterministic input. (Supported by: Task 4 parity test.)
@@ -389,8 +389,8 @@ All Playwright E2E scenarios in `e2e/multiband.spec.ts` are written but not exec
 - [ ] All tests pass
 - [ ] No diagnostics errors
 - [ ] Magnitude test: at fc, LR4 LP and HP both measure −6 dB (LR4 is −6 at crossover, not −3 like 2nd-order Butterworth)
-- [ ] Summation test: for an impulse input, `low[n] + mid[n] + high[n] === input[n]` within 1e-6 for the first 512 samples
-- [ ] Summation test: for 48 kHz white noise (10000 samples), summation error RMS < 1e-6
+- [ ] Summation magnitude test: across a frequency sweep, the summed-band magnitude `|low+mid+high|` stays within a small dB tolerance of `|input|` (all-pass phase means sample-level equality is NOT expected)
+- [ ] Summation test: for 48 kHz white noise (10000 samples), the summed-magnitude deviation from input magnitude stays flat within tolerance
 - [ ] Sweep test: verified across fc in {80, 200, 500, 1000, 2000, 3500} Hz at fs=48 kHz
 
 **Verify:**

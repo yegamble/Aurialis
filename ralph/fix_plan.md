@@ -1,97 +1,111 @@
 # Aurialis — Incomplete Work Backlog (Ralph fix_plan)
 
-Generated 2026-06-19 from a full audit of all 26 plan docs + 5 codebase scans
-(81-agent workflow, every gap adversarially verified). Ordered by priority.
-Each task is one atomic commit. Tick `[x]` only when its "Done when" holds and
-the green gate (`tsc` + `lint` + `test`) passes.
+Originally generated 2026-06-19 (81-agent audit of 26 plan docs + 5 codebase
+scans). **Re-audited 2026-06-29** (fresh 100-agent workflow re-scan; 34 gaps
+adversarially verified) after a partial R2 rewire (`e9390df`) landed the tree
+red. Ordered by priority. Each task = one atomic commit; tick `[x]` only when
+its "Done when" holds and the green gate (`tsc` + `lint` + `test`, plus backend
+`pytest` for server changes) passes.
 
-Baseline at start: tsc clean, lint exit 0 (after task 1), 1408 unit tests green.
-**Progress: 14 of 18 tasks done. Remaining: #9, #10 (redesign shell — need
-browser layout verification); the R2 rewire/Turnstile/E2E (#13/#14/#16) — need
-a running-app + deployed-Worker verification pass since they replace a working
-upload path; and backend R2 pytest + legacy removal (#15, sequence after the
-frontend cutover). The R2 client itself (#12) is done.** All work on branch
-`fix/incomplete-work-audit`; gate green at every commit (now 1445 unit tests).
-Turnstile site key is already in wrangler.jsonc (`0x4AAAAAADFNPdaK9423tgxr`);
-the Worker secret `TURNSTILE_SECRET` is set via `wrangler secret put` (backend).
+**Status (2026-06-29): tree GREEN — `tsc` 0, `lint` 0, 1453 unit tests, 92
+backend tests.** All work on branch `fix/incomplete-work-audit`.
+Turnstile site key is in wrangler.jsonc (`0x4AAAAAADFNPdaK9423tgxr`); the Worker
+secret `TURNSTILE_SECRET` is set via `wrangler secret put`.
 
-## Correctness / export quality
+---
 
-- [x] **Lint: ignore generated dirs so `pnpm lint` exits 0.** — 7e0ff0a
-- [x] **True-peak limiter in the offline WAV renderer.** Both render paths now
-  use the validated `processTruePeakLimiter`; ISP-hot export held within 0.5 dB
-  of −1 dBTP (was +1.15 dBTP). — 40d0bb8
-- [x] **AI-repair in the offline render (export == preview).** `applyAiRepair`
-  wired between Saturation and StereoWidth in both paths via a new
-  `aiRepairAmount` AudioParam surfaced by the script-renderer; amount 0 = bypass.
-  Stale "T11 no-op" comments fixed. — 81801b0
-- [~] **Tighten relaxed DSP test tolerances to plan spec.** Limiter true-peak
-  tightened 0.5→0.3 dB (passes). The plan's 15 kHz / ≥40 dB 0–10 kHz saturation
-  alias target is NOT achievable (measured ~15 dB) — kept the real 7 kHz/≥30 dB
-  check + documented the deviation. — b51e78f
-- [x] **Add the remaining DSP test files the plans marked done.** All four
-  sub-parts done: `metering-truepeak.test.ts` (e9128b3); parametric-EQ golden
-  decided as a plan amendment (e9128b3); `saturation-alias.test.ts` extended to
-  all 4 modes ≥25 dB via Oversampler4x + the per-mode shapers (81f3b9c);
-  `compressor-auto-release-integration.test.ts` — 10 s pink noise, autoRelease=0
-  bit-equivalent to frozen P0 ≤1e-9 + pumping + transient (35d60d9). Documented
-  honestly where plan targets exceeded the implementation (true-peak 0.1 dB,
-  saturation 40 dB/18 kHz).
+## ✅ Done in the 2026-06-29 re-audit pass
 
-## App / UX correctness
+- [x] **Green the gate: complete the `tokenRef` wiring.** `e9390df` left `tokenRef`
+  out of 3 useCallback deps (React-Compiler error) + the DeepMastering tests
+  asserted a stale 3-arg call. — 7a562fb
+- [x] **Persist audio to OPFS on analyze (export-of-feature was broken).**
+  `persistScriptToLibrary` called `addEntry(file,{script})` with no `audioBlob`,
+  so every real library entry was audio-less and re-opening it errored. — 0efdc4e
+- [x] **Delete dead `LibraryList` component** (superseded by LibraryView). — d603048
+- [x] **Remove dead `mixer-store.originalMixBuffer` field.** — 4b590b6
+- [x] **Remove redundant dead `library-store.setActiveFingerprint` setter.** — 6e2c13e
+- [x] **Auto-Mix failure message includes the stem index (TS-008).** — bb8ff77
+- [x] **Auto-Mix progress shows "stem N of M" not "stem N/M" (TS-007).** — 09852d8
+- [x] **Highlight the active track in the home Sidebar** (was hardcoded null). — 368311b
+- [x] **Export applies the active deep mastering script (export == preview).** — d7d9ee5
+- [x] **Export applies multiband to MONO buffers** (worklet does; renderer skipped). — ae825a5
+- [x] **Enforce multiband crossover ordering at the node layer** (was UI-only). — e5d87f7
+- [x] **Backend: lifespan handler instead of deprecated `@app.on_event`.** — cc7f3b1
+- [x] **Badge audio-less library entries "Re-upload audio to play".** — 42ef9c0
 
-- [x] **Album: measured LUFS instead of `targetLufs` stand-in.** Added
-  `measuredLufs` to LibraryEntry, captured from `analyzeAudio().integratedLufs`
-  in the master flow; `useAlbumStore` derives rows from real measured loudness. — b3e55b7
-- [x] **Surface standalone Auto-Mix failures in the UI.** — 848e494
-- [x] **Remove the vestigial `StemTrack.file` placeholder.** — 45f5972
+## ✅ Done earlier (2026-06-19 pass) — see git history
+Lint generated-dir ignore (7e0ff0a); true-peak limiter offline (40d0bb8);
+AI-repair offline (81801b0); DSP tolerances (b51e78f); DSP test files
+(e9128b3/81f3b9c/35d60d9); album measured LUFS (b3e55b7); surface Auto-Mix
+failure (848e494); StemTrack.file removed (45f5972, but see remnant below);
+r2-upload.ts client (c02f72c); Radix profile-switch guard (c81492e).
 
-## Redesign Direction A — complete the unified shell  (REMAINING)
+---
 
-- [ ] **Extract `MasterScreen` component + wire `BigReadout`.**
-  Move the inline mode-switch (`src/app/master/page.tsx` ~356-424) into
-  `components/mastering/MasterScreen.tsx` (mode prop) + RTL test; replace the
-  hand-inlined readout block (~430-491) with `BigReadout` (currently dead code —
-  only its test references it). [Phase 2]
-- [ ] **`StemsView` + `ExportView` + unified Sidebar on /master & /mix.**
-  Build the two shells; add `AppShell`/`Sidebar` to /master and /mix so all
-  routes share the unified shell (only / and /album have it today). RTL +
-  Playwright. Preserve E2E `data-testid`s. [Phase 3]
+## ▢ Remaining — autonomous (finishable + verifiable with tests alone)
 
-## R2 direct upload — complete fully (incl. Turnstile)  (REMAINING)
+Ordered high→low value. Each is one atomic commit; green gate at every commit.
 
-Full spec in `docs/plans/2026-04-28-direct-r2-upload.md`. Backend JSON endpoints
-+ Worker already exist; the frontend still uses multipart FormData (the backend
-legacy multipart path is still live, so nothing is broken today — this is
-unfinished, not breaking).
+- [ ] **Wire `BigReadout` into the master readout block.** It's a tested
+  primitive that's currently dead code (only its own test references it). Replace
+  the hand-inlined LUFS-I / dBTP / LRA / Corr / MB-GR `<p>` blocks in
+  `src/app/master/page.tsx` (~lines 435-491) with `BigReadout` instances; map
+  Corr/GR to its warn coloring. Done when: BigReadout is rendered + master-page
+  RTL test covers it. *(Flagged 4× in the audit: #5/#9/#12/#31.)*
+- [ ] **Per-track duration (`durationSec`) is never computed.** Always `null`, so
+  the library/album rows show byte size instead of duration. Add `durationSec` to
+  `AddEntryOptions`, source it from the decoded buffer in `persistScriptToLibrary`
+  (audio-store), write it in `addEntry`. Done when: a persisted entry has a real
+  durationSec + store test.
+- [ ] **`checkPhaseCoherence` is implemented but never invoked.** Wire it into the
+  Smart-Repair flow in `src/app/mix/page.tsx` after the per-stem repair loop and
+  surface the result. Done when: called on repaired stems + test.
+- [ ] **Stereo sub-split DSP (`stereo-split.ts`) is never wired into the mixer.**
+  Add a "Split L/R" control gated on `hasPannedContent`. Done when: control splits
+  a panned stem + test.
+- [ ] **Pro Mode shows no denser spectrum** (only the Goniometer half landed). Add
+  a `pro` density prop to `SpectrumDisplay`, drive from `proMode`. Done when: pro
+  density visibly differs + test.
+- [ ] **Backend `test_r2_download.py`.** Cover `download_to_tempfile()` with
+  `httpx.MockTransport` (no respx needed): happy path, magic-byte/header reject,
+  oversize 413, malicious-stream abort, network 502. [direct-R2 Task 3]
+- [ ] **Numerical multiband worklet↔TS parity test.** `multiband-parity.test.ts`
+  is regex source-inspection; add a `vm`-loaded numerical equivalence section
+  modeled on `parametric-eq-parity.test.ts`.
+- [ ] **`window.__deepDebug.envelopeAt(param, t)` verification hook** (plan calls
+  for it; not implemented). Add to the stateful engine.
+- [ ] **Doc-only: reword the "bit-flat summation" claim.** The implementation is
+  magnitude-flat all-pass, not sample-level bit-flat. Reword the 5 plan locations
+  (no code change). [#1]
+- [ ] **Remove the `StemTrack.file` remnant.** `45f5972` missed dead
+  `file: new File(...)` assignments in 5 `makeStem` helpers/literals
+  (mixer.test.ts, useMixEngine helpers). Done when: removed + green.
 
-- [x] **`src/lib/api/r2-upload.ts` chunked client + unit test.** (c02f72c)
-  `uploadFileToR2(file, turnstileToken, baseUrl, opts)` matching the Worker
-  contract exactly; + shared `src/lib/api/errors.ts` `BackendError`. [Task 4]
-- [ ] **Rewire deep-analysis/separation to JSON `{key}` + Turnstile token.**
-  ⚠️ SEQUENCING/RISK: this REPLACES the currently-working multipart path, so do
-  it WITH #14 (token source) and verify a real upload succeeds against the
-  deployed Worker (Turnstile secret set) BEFORE shipping. Switch
-  `startDeepAnalysis(file,profile,token,signal?)` / `startSeparation(file,model,
-  token,signal?)` to `uploadFileToR2` + JSON POST `{key,profile}`/`{key,model}`;
-  thread the token from `useTurnstileToken` through callers (mix/page.tsx:191,378;
-  DeepMastering.tsx:139); add `deep-analysis-r2.test.ts`; optionally fold
-  `SeparationError` into the shared `BackendError`. [Task 5]
-- [blocked] **`TurnstileGate` + wire entry points.** Needs a Cloudflare Turnstile
-  **site key** (`NEXT_PUBLIC_TURNSTILE_SITE_KEY`) + Worker **secret**. Build the
-  component to gracefully no-op when the key is absent so dev still works. [Task 6]
-- [ ] **Backend pytest suites + remove legacy multipart.**
-  `test_r2_download.py` (magic-byte/header rejection within 64 KB/1 MB, oversize
-  413, malicious-stream abort <1 MB, network 502) + `test_main_json_endpoints.py`
-  (respx-mocked R2 GET, single-fetch). Task 9: remove legacy multipart (or 410)
-  + `test_legacy_multipart_returns_410`. [Tasks 3/8/9]
-- [ ] **Frontend Vitest + Playwright E2E for the R2 path.** `e2e/r2-upload.spec.ts`
-  (TS-001/002/003/004/007/008) mocking initiate/complete; update existing specs
-  to the JSON flow. [Task 8]
+### Redesign Direction A — unified shell (cohesive batch; all touch master/mix layout)
+- [ ] **Extract `MasterScreen` component** (mode prop) from the inline mode-switch
+  in `src/app/master/page.tsx`. RTL test. [Phase 2]
+- [ ] **Build `StemsView`** wrapping the inline /mix layout. RTL test. [Phase 3]
+- [ ] **Build `ExportView`** wrapping/restyling `ExportPanel`. RTL test. [Phase 3]
+- [ ] **Add `AppShell`/`Sidebar` to /master & /mix** so all routes share the shell
+  (only / and /album have it). Preserve E2E `data-testid`s. [Phase 3, fix_plan #10]
+- [ ] **Make the Pro Mode toggle reachable on /master & /mix** (read today, no
+  control). Depends on the Sidebar task above. [#21]
 
-## Polish & docs
+## ▢ Remaining — needs a decision or live infra (NOT autonomous)
 
-- [x] **Profile-switch dirty guard: Radix dialog instead of `window.confirm`.** — c81492e
-- [~] **Docs housekeeping + plan-status reconciliation.** In progress: fix_plan
-  synced; genre plan closed; p2 byte-equivalence + p0 saturation deviation notes;
-  airpods plan fleshed out; plan statuses bumped.
+- [decision] **AI-Repair moves can never be emitted — guitar gate vs 4-stem
+  Demucs mismatch.** `deep_analysis._separate_stems` uses 4-stem htdemucs but the
+  recommender gates on a "guitar" stem that only htdemucs_6s produces. Two valid
+  fixes with different perf/quality tradeoffs: **(a)** switch to `htdemucs_6s`
+  (slower, 6 stems) or **(b)** broaden the classification gate to the 4-stem set.
+  → **needs your call.** [#33]
+- [infra] **Finish + ship the R2 cutover.** The rewire is ~70% done (both API
+  clients use `uploadFileToR2` with multipart fallback; `TurnstileGate`/
+  `useTurnstileToken` built). Remaining: **mount the gate** (it's destructured but
+  never rendered, so tokens never flow in prod); `test_main_json_endpoints.py`
+  (needs `respx` — not installed in the venv, or rewrite with `MockTransport`);
+  `e2e/r2-upload.spec.ts` + migrate existing specs; remove legacy multipart; then
+  **verify a real upload against the deployed Worker** (Turnstile secret set).
+  → replaces a currently-working path; do behind a deploy + your go-ahead.
+  [direct-R2 Tasks 5/6/8/9; #27/#28/#34]

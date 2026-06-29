@@ -215,7 +215,12 @@ def _separate_stems(input_path: str) -> list[tuple[str, np.ndarray, int]]:
     except ImportError as e:
         raise ImportError(f"Demucs/torch not available: {e}") from e
 
-    model = get_model("htdemucs")
+    # htdemucs_6s (6 stems) instead of htdemucs (4 stems): the AI-Repair
+    # recommender gates some moves on a "guitar"-classified stem, which the
+    # 4-stem model can never produce (guitar bleeds into "other"), so those
+    # moves could never fire. The 6-stem model adds discrete guitar + piano
+    # stems at the cost of slower separation.
+    model = get_model("htdemucs_6s")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
@@ -232,7 +237,7 @@ def _separate_stems(input_path: str) -> list[tuple[str, np.ndarray, int]]:
         sources = apply_model(model, wav, device=device)
 
     sources = sources.squeeze(0).cpu().numpy()  # (n_sources, channels, samples)
-    stem_names = ["drums", "bass", "other", "vocals"]
+    stem_names = ["drums", "bass", "other", "vocals", "guitar", "piano"]
     out: list[tuple[str, np.ndarray, int]] = []
     for i, name in enumerate(stem_names):
         if i >= sources.shape[0]:

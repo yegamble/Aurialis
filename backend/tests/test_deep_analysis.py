@@ -236,3 +236,43 @@ def test_run_deep_analysis_includes_stem_reports_when_demucs_succeeds(
             "spectralCollapseScore",
             "bandCorrelations",
         } <= r.keys()
+
+
+def test_separate_stems_uses_6stem_model_so_guitar_exists(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """_separate_stems must request htdemucs_6s and map a discrete 'guitar' (and
+    'piano') stem — without them the AI-Repair recommender's guitar-gated moves
+    can never fire. Demucs is mocked so no real separation runs."""
+    import soundfile as sf
+    import torch
+
+    sr = 44100
+    wav_path = tmp_path / "tiny.wav"
+    sf.write(str(wav_path), np.zeros((sr // 10, 2), dtype="float32"), sr)
+
+    captured: dict[str, str] = {}
+
+    class _FakeModel:
+        samplerate = sr
+
+        def to(self, _device: object) -> "_FakeModel":
+            return self
+
+    def _fake_get_model(name: str) -> _FakeModel:
+        captured["name"] = name
+        return _FakeModel()
+
+    def _fake_apply_model(_model: object, _wav: object, device: object = None) -> object:
+        # (batch, sources, channels, samples) — 6 sources for htdemucs_6s.
+        return torch.zeros(1, 6, 2, sr // 10)
+
+    monkeypatch.setattr("demucs.pretrained.get_model", _fake_get_model)
+    monkeypatch.setattr("demucs.apply.apply_model", _fake_apply_model)
+
+    out = deep_analysis._separate_stems(str(wav_path))
+
+    assert captured["name"] == "htdemucs_6s"
+    names = [name for (name, _samples, _sr) in out]
+    assert names == ["drums", "bass", "other", "vocals", "guitar", "piano"]
+    assert "guitar" in names

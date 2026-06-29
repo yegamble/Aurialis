@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactElement, ReactNode } from "react";
-import { WindowChrome } from "./WindowChrome";
 import { Sidebar, type ShellScreen, type SidebarTrack } from "./Sidebar";
 
 export interface AppShellProps {
@@ -12,7 +11,6 @@ export interface AppShellProps {
   onSelectTrack?: (id: string) => void;
   proMode?: boolean;
   onProModeChange?: (next: boolean) => void;
-  title?: string;
   children: ReactNode;
 }
 
@@ -24,7 +22,6 @@ export function AppShell({
   onSelectTrack,
   proMode,
   onProModeChange,
-  title,
   children,
 }: AppShellProps): ReactElement {
   return (
@@ -32,7 +29,6 @@ export function AppShell({
       data-testid="app-shell"
       className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground"
     >
-      <WindowChrome title={title} />
       <div className="flex min-h-0 flex-1">
         <Sidebar
           activeScreen={activeScreen}

@@ -8,7 +8,6 @@ import { StemUpload } from "@/components/mixer/StemUpload";
 import { StemList } from "@/components/mixer/StemList";
 import { StemTimeline } from "@/components/mixer/StemTimeline";
 import { MixToolbar } from "@/components/mixer/MixToolbar";
-import { WindowChrome } from "@/components/shell/WindowChrome";
 import { SeparationProgressCard } from "@/components/mix/SeparationProgressCard";
 import { useMixEngine } from "@/hooks/useMixEngine";
 import { useMixerStore } from "@/lib/stores/mixer-store";
@@ -545,7 +544,6 @@ export default function MixPage() {
   return (
     <div className="min-h-screen bg-black flex flex-col">
       {turnstileGate}
-      <WindowChrome />
       <MixToolbar
         onBack={() => {
           stop();

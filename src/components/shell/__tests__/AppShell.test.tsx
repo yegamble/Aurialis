@@ -3,13 +3,12 @@ import { render, screen } from "@testing-library/react";
 import { AppShell } from "../AppShell";
 
 describe("AppShell", () => {
-  it("renders window chrome, sidebar nav, and main content", () => {
+  it("renders sidebar nav and main content", () => {
     render(
       <AppShell activeScreen="library" onSelect={vi.fn()}>
         <p data-testid="child-content">hello</p>
       </AppShell>,
     );
-    expect(screen.getByTestId("window-chrome-title")).toBeInTheDocument();
     expect(screen.getByRole("navigation")).toBeInTheDocument();
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getByTestId("child-content")).toBeInTheDocument();

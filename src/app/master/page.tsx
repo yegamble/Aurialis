@@ -13,7 +13,6 @@ import { AdvancedMastering } from "@/components/mastering/AdvancedMastering";
 import { DeepMastering } from "@/components/mastering/DeepMastering";
 import { ABToggle } from "@/components/mastering/ABToggle";
 import { MasterToolbar, type MasterMode } from "@/components/mastering/MasterToolbar";
-import { WindowChrome } from "@/components/shell/WindowChrome";
 import { ExportPanel } from "@/components/export/ExportPanel";
 import { useAudioStore } from "@/lib/stores/audio-store";
 import { useUIStore } from "@/lib/stores/ui-store";
@@ -340,7 +339,6 @@ export default function MasterPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-black">
-      <WindowChrome />
       <MasterToolbar
         fileName={file.name}
         durationLabel={formatTime(duration)}

@@ -48,9 +48,8 @@ test.beforeEach(async ({ page }) => {
   await page.locator('input[type="file"]').waitFor({ state: "attached" });
 });
 
-test("shell renders window chrome, sidebar, and the four nav items", async ({ page }) => {
+test("shell renders the sidebar and the four nav items", async ({ page }) => {
   await expect(page.getByTestId("app-shell")).toBeVisible();
-  await expect(page.getByTestId("window-chrome-title")).toHaveText("Aurialis");
   const nav = page.getByRole("navigation");
   await expect(nav).toBeVisible();
   await expect(nav.getByRole("button", { name: /Library/i })).toBeVisible();

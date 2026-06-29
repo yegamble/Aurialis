@@ -20,7 +20,6 @@ export interface MixerState {
   /** Active analysis-stage harness runId for the current/last auto-mix run. */
   autoMixRunId: string | null;
   selectedStemId: string | null;
-  originalMixBuffer: AudioBuffer | null;
 
   addStems: (newStems: StemTrack[]) => void;
   removeStem: (id: string) => void;
@@ -56,7 +55,6 @@ export const useMixerStore = create<MixerState>((set) => ({
   isAutoMixing: false,
   autoMixRunId: null,
   selectedStemId: null,
-  originalMixBuffer: null,
 
   addStems: (newStems) =>
     set((state) => {
@@ -129,6 +127,5 @@ export const useMixerStore = create<MixerState>((set) => ({
       isAutoMixing: false,
       autoMixRunId: null,
       selectedStemId: null,
-      originalMixBuffer: null,
     }),
 }));

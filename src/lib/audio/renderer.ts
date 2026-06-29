@@ -116,8 +116,9 @@ export function applyProcessingPipeline(
   }
 
   // 1b. Multiband compressor (skipped when multibandEnabled === 0 for
-  // bit-equivalent output vs. pre-P2 renders)
-  if (params.multibandEnabled > 0 && channels.length >= 2) {
+  // bit-equivalent output vs. pre-P2 renders). Mono is processed too — the
+  // real-time worklet applies multiband to mono, so export must match.
+  if (params.multibandEnabled > 0 && channels.length >= 1) {
     applyMultiband(channels, params, sr);
   }
 
@@ -247,7 +248,7 @@ function applyProcessingPipelineWithScript(
 
     // 1b. Multiband — preserves state across calls; each block uses the
     // currently-resolved per-band params.
-    if (p.multibandEnabled > 0 && numChannels >= 2) {
+    if (p.multibandEnabled > 0 && numChannels >= 1) {
       processMultibandBlock(multibandDsp, channels, start, end, p, sr);
     }
 
@@ -370,8 +371,11 @@ function processMultibandBlock(
   params: AudioParams,
   _sr: number,
 ): void {
+  const isMono = channels.length < 2;
   const left = channels[0]!.subarray(start, end);
-  const right = channels[1]!.subarray(start, end);
+  const right = isMono
+    ? channels[0]!.subarray(start, end)
+    : channels[1]!.subarray(start, end);
   const outL = new Float32Array(end - start);
   const outR = new Float32Array(end - start);
 
@@ -395,7 +399,7 @@ function processMultibandBlock(
     { left: outL, right: outR },
   );
   channels[0]!.set(outL, start);
-  channels[1]!.set(outR, start);
+  if (!isMono) channels[1]!.set(outR, start);
 }
 
 /** Stereo-width on a [start, end) slice. */
@@ -503,18 +507,22 @@ function applyCompressor(
 
 /**
  * Apply multiband compression inline — mirrors the multiband worklet.
- * Processes stereo pair in place using `MultibandCompressorDSP` (the canonical
- * pure-TS reference shared with the worklet).
+ * Processes the stereo pair in place using `MultibandCompressorDSP` (the
+ * canonical pure-TS reference shared with the worklet).
  *
- * Mono buffers are ignored by the caller — the multiband stage requires L and R.
+ * Mono is supported and processed, exactly like the real-time worklet (which
+ * feeds input[0] as both L and R when numChannels === 1): the single channel is
+ * used for both sides and only the L result is written back. Skipping mono here
+ * would make an exported mono WAV diverge from live preview. Exported for test.
  */
-function applyMultiband(
+export function applyMultiband(
   channels: Float32Array[],
   params: AudioParams,
   sampleRate: number
 ): void {
+  const isMono = channels.length < 2;
   const left = channels[0];
-  const right = channels[1];
+  const right = isMono ? channels[0] : channels[1];
   const dsp = new MultibandCompressorDSP(sampleRate);
   const outL = new Float32Array(left.length);
   const outR = new Float32Array(right.length);
@@ -539,7 +547,7 @@ function applyMultiband(
     { left: outL, right: outR }
   );
   left.set(outL);
-  right.set(outR);
+  if (!isMono) right.set(outR);
 }
 
 /**

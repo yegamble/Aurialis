@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_PARAMS } from "../presets";
+import { applyMultiband } from "../renderer";
 import {
   MultibandCompressorDSP,
   type BandParams,
@@ -118,5 +119,53 @@ describe("renderer-multiband — offline parity behavior", () => {
     const outRms = Math.sqrt(outSq / (n - start));
     expect(outRms).toBeLessThan(inRms);
     expect(20 * Math.log10(outRms / inRms)).toBeLessThan(-3);
+  });
+});
+
+describe("renderer-multiband — mono export parity", () => {
+  const fs = 48000;
+  const n = 8192;
+  // Aggressive low band so processing is clearly non-identity.
+  const params = {
+    ...DEFAULT_PARAMS,
+    multibandEnabled: 1,
+    mbLowEnabled: 1,
+    mbLowThreshold: -40,
+    mbLowRatio: 10,
+    mbLowAttack: 1, // ms (band() divides by 1000)
+    mbLowRelease: 50,
+  };
+
+  function lowSine(): Float32Array {
+    const buf = new Float32Array(n);
+    for (let i = 0; i < n; i++) buf[i] = 0.6 * Math.sin((2 * Math.PI * 60 * i) / fs);
+    return buf;
+  }
+
+  it("applies multiband to a MONO buffer instead of skipping it", () => {
+    const mono = lowSine();
+    const before = Float32Array.from(mono);
+    applyMultiband([mono], params, fs);
+    let changed = false;
+    for (let i = 0; i < n; i++) {
+      if (mono[i] !== before[i]) {
+        changed = true;
+        break;
+      }
+    }
+    expect(changed).toBe(true);
+  });
+
+  it("mono result equals the L channel of the duplicated-stereo render (worklet parity)", () => {
+    const mono = lowSine();
+    applyMultiband([mono], params, fs);
+
+    const l = lowSine();
+    const r = lowSine();
+    applyMultiband([l, r], params, fs);
+
+    for (let i = 0; i < n; i++) {
+      expect(mono[i]).toBeCloseTo(l[i]!, 10);
+    }
   });
 });

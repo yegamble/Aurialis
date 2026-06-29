@@ -33,6 +33,12 @@ secret `TURNSTILE_SECRET` is set via `wrangler secret put`.
 - [x] **Enforce multiband crossover ordering at the node layer** (was UI-only). — e5d87f7
 - [x] **Backend: lifespan handler instead of deprecated `@app.on_event`.** — cc7f3b1
 - [x] **Badge audio-less library entries "Re-upload audio to play".** — 42ef9c0
+- [x] **AI-Repair: separate with htdemucs_6s so guitar-gated moves can fire.**
+  Per maintainer decision (accepts slower separation for correct guitar repair). — e842bbd
+- [x] **Capture per-track duration (`durationSec`)** from the decoded buffer so
+  library/album rows show time, not byte size. — 3809436
+- [x] **Backend `test_r2_download.py`** — magic-byte/size/header validation paths
+  via httpx.MockTransport (happy/400/400/413/502/502/no-orphan). — d2b45c5
 
 ## ✅ Done earlier (2026-06-19 pass) — see git history
 Lint generated-dir ignore (7e0ff0a); true-peak limiter offline (40d0bb8);
@@ -53,11 +59,6 @@ Ordered high→low value. Each is one atomic commit; green gate at every commit.
   `src/app/master/page.tsx` (~lines 435-491) with `BigReadout` instances; map
   Corr/GR to its warn coloring. Done when: BigReadout is rendered + master-page
   RTL test covers it. *(Flagged 4× in the audit: #5/#9/#12/#31.)*
-- [ ] **Per-track duration (`durationSec`) is never computed.** Always `null`, so
-  the library/album rows show byte size instead of duration. Add `durationSec` to
-  `AddEntryOptions`, source it from the decoded buffer in `persistScriptToLibrary`
-  (audio-store), write it in `addEntry`. Done when: a persisted entry has a real
-  durationSec + store test.
 - [ ] **`checkPhaseCoherence` is implemented but never invoked.** Wire it into the
   Smart-Repair flow in `src/app/mix/page.tsx` after the per-stem repair loop and
   surface the result. Done when: called on repaired stems + test.
@@ -67,9 +68,6 @@ Ordered high→low value. Each is one atomic commit; green gate at every commit.
 - [ ] **Pro Mode shows no denser spectrum** (only the Goniometer half landed). Add
   a `pro` density prop to `SpectrumDisplay`, drive from `proMode`. Done when: pro
   density visibly differs + test.
-- [ ] **Backend `test_r2_download.py`.** Cover `download_to_tempfile()` with
-  `httpx.MockTransport` (no respx needed): happy path, magic-byte/header reject,
-  oversize 413, malicious-stream abort, network 502. [direct-R2 Task 3]
 - [ ] **Numerical multiband worklet↔TS parity test.** `multiband-parity.test.ts`
   is regex source-inspection; add a `vm`-loaded numerical equivalence section
   modeled on `parametric-eq-parity.test.ts`.
@@ -94,12 +92,6 @@ Ordered high→low value. Each is one atomic commit; green gate at every commit.
 
 ## ▢ Remaining — needs a decision or live infra (NOT autonomous)
 
-- [decision] **AI-Repair moves can never be emitted — guitar gate vs 4-stem
-  Demucs mismatch.** `deep_analysis._separate_stems` uses 4-stem htdemucs but the
-  recommender gates on a "guitar" stem that only htdemucs_6s produces. Two valid
-  fixes with different perf/quality tradeoffs: **(a)** switch to `htdemucs_6s`
-  (slower, 6 stems) or **(b)** broaden the classification gate to the 4-stem set.
-  → **needs your call.** [#33]
 - [infra] **Finish + ship the R2 cutover.** The rewire is ~70% done (both API
   clients use `uploadFileToR2` with multipart fallback; `TurnstileGate`/
   `useTurnstileToken` built). Remaining: **mount the gate** (it's destructured but

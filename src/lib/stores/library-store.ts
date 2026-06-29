@@ -45,6 +45,8 @@ export interface AddEntryOptions {
   audioBlob?: Blob;
   script?: LibraryEntry["script"];
   settings?: LibraryEntry["settings"];
+  /** Track duration in seconds (from the decoded buffer) for the library row. */
+  durationSec?: number;
   /** Override system clock for deterministic tests / explicit LRU positioning. */
   lastOpenedAt?: number;
 }
@@ -173,6 +175,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           ...existing,
           script: opts.script ?? existing.script,
           settings: opts.settings ?? existing.settings,
+          // Backfill duration for entries created before it was captured.
+          durationSec: opts.durationSec ?? existing.durationSec,
           lastOpenedAt: now,
         }
       : {
@@ -182,7 +186,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           fileSize: file.size,
           lastModified: file.lastModified,
           mimeType: file.type || "application/octet-stream",
-          durationSec: null,
+          durationSec: opts.durationSec ?? null,
           createdAt: now,
           lastOpenedAt: now,
           audioPersisted,

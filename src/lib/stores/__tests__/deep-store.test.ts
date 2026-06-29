@@ -159,6 +159,22 @@ describe("deepStore — library persistence side-effect", () => {
     expect(entries[0]!.script).not.toBeNull();
   });
 
+  it("persists the decoded duration from the audio store", async () => {
+    const file = new File([new Uint8Array([1, 2, 3, 4, 5])], "song.wav", {
+      type: "audio/wav",
+      lastModified: 1700000000000,
+    });
+    useAudioStore.getState().setFile(file);
+    useAudioStore.getState().setDuration(123.5);
+
+    useDeepStore.getState().setScript(buildScript());
+    await new Promise((r) => setTimeout(r, 50));
+
+    const entries = useLibraryStore.getState().entries;
+    expect(entries.length).toBe(1);
+    expect(entries[0]!.durationSec).toBeCloseTo(123.5);
+  });
+
   it("setScript(null) does not write to library", async () => {
     const file = new File([new Uint8Array([1, 2, 3, 4, 5])], "song.wav", {
       type: "audio/wav",

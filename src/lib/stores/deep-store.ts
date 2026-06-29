@@ -175,14 +175,19 @@ export const useDeepStore = create<DeepState>((set, get) => ({
  */
 async function persistScriptToLibrary(script: MasteringScript): Promise<void> {
   try {
-    const file = useAudioStore.getState().file;
+    const { file, duration } = useAudioStore.getState();
     if (!file) return;
     const lib = useLibraryStore.getState();
     if (!lib.hydrated) return;
     // Persist the audio bytes too (a File is a Blob), so re-opening this entry
     // from the library reloads the song via OPFS instead of erroring with
     // "please re-upload". Without `audioBlob` the entry is metadata-only.
-    await lib.addEntry(file, { script, audioBlob: file });
+    // Capture the decoded duration so the library row shows time, not bytes.
+    await lib.addEntry(file, {
+      script,
+      audioBlob: file,
+      durationSec: duration > 0 ? duration : undefined,
+    });
   } catch (err) {
     console.error("[deep-store] failed to persist script to library", err);
   }

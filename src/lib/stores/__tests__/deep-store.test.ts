@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import "fake-indexeddb/auto";
 import { useDeepStore } from "../deep-store";
 import { useAudioStore } from "../audio-store";
@@ -221,6 +221,128 @@ describe("deepStore — library persistence side-effect", () => {
     await new Promise((r) => setTimeout(r, 50));
 
     expect(useLibraryStore.getState().entries.length).toBe(0);
+  });
+});
+
+// Regression guard for the "persist deep analysis" headline goal: a freshly
+// analyzed track must keep its audio so re-opening it from the library loads
+// the song instead of erroring with "please re-upload". This requires OPFS to
+// be available AND the persist side-effect to actually pass the audio bytes.
+describe("deepStore — persists audio to OPFS so a library entry reloads without re-upload", () => {
+  // Minimal in-memory OPFS shim (mirrors library-store.test.ts).
+  class MemoryFileHandle {
+    constructor(public name: string, private bytes: ArrayBuffer = new ArrayBuffer(0)) {}
+    async getFile(): Promise<File> {
+      return new File([this.bytes], this.name, { type: "audio/wav" });
+    }
+    async createWritable() {
+      let buf: ArrayBuffer = new ArrayBuffer(0);
+      return {
+        write: async (data: BufferSource | Blob) => {
+          if (data instanceof Blob) buf = await data.arrayBuffer();
+          else if (data instanceof ArrayBuffer) buf = data;
+          else {
+            const view = data as ArrayBufferView;
+            buf = view.buffer.slice(
+              view.byteOffset,
+              view.byteOffset + view.byteLength,
+            ) as ArrayBuffer;
+          }
+        },
+        close: async () => {
+          this.bytes = buf;
+        },
+      };
+    }
+  }
+  class MemoryDirHandle {
+    files = new Map<string, MemoryFileHandle>();
+    dirs = new Map<string, MemoryDirHandle>();
+    constructor(public name = "") {}
+    async getDirectoryHandle(name: string, opts?: { create?: boolean }): Promise<MemoryDirHandle> {
+      let dir = this.dirs.get(name);
+      if (!dir) {
+        if (!opts?.create) {
+          const err = new Error(`NotFoundError: ${name}`);
+          err.name = "NotFoundError";
+          throw err;
+        }
+        dir = new MemoryDirHandle(name);
+        this.dirs.set(name, dir);
+      }
+      return dir;
+    }
+    async getFileHandle(name: string, opts?: { create?: boolean }): Promise<MemoryFileHandle> {
+      let file = this.files.get(name);
+      if (!file) {
+        if (!opts?.create) {
+          const err = new Error(`NotFoundError: ${name}`);
+          err.name = "NotFoundError";
+          throw err;
+        }
+        file = new MemoryFileHandle(name);
+        this.files.set(name, file);
+      }
+      return file;
+    }
+    async removeEntry(name: string): Promise<void> {
+      this.files.delete(name);
+    }
+    async *entries(): AsyncIterableIterator<[string, MemoryFileHandle | MemoryDirHandle]> {
+      for (const [k, v] of this.files) yield [k, v];
+      for (const [k, v] of this.dirs) yield [k, v];
+    }
+  }
+
+  let origStorage: PropertyDescriptor | undefined;
+
+  beforeEach(async () => {
+    origStorage = Object.getOwnPropertyDescriptor(globalThis.navigator, "storage");
+    const opfsRoot = new MemoryDirHandle();
+    Object.defineProperty(globalThis.navigator, "storage", {
+      configurable: true,
+      value: { getDirectory: async () => opfsRoot },
+    });
+
+    useDeepStore.getState().reset();
+    useAudioStore.getState().reset();
+    const { createStore, clear } = await import("idb-keyval");
+    await clear(createStore("aurialis-library-entries-v1", "kv"));
+    await clear(createStore("aurialis-library-prefs-v1", "kv"));
+    await useLibraryStore.getState().hydrate();
+  });
+
+  afterEach(() => {
+    if (origStorage) {
+      Object.defineProperty(globalThis.navigator, "storage", origStorage);
+    } else {
+      delete (globalThis.navigator as { storage?: unknown }).storage;
+    }
+  });
+
+  it("setScript with a file present writes the audio to OPFS and reloads it", async () => {
+    const bytes = new Uint8Array([10, 20, 30, 40, 50, 60, 70, 80]);
+    const file = new File([bytes], "song.wav", {
+      type: "audio/wav",
+      lastModified: 1700000000000,
+    });
+    useAudioStore.getState().setFile(file);
+
+    useDeepStore.getState().setScript(buildScript());
+    // Fire-and-forget persist; flush microtasks so addEntry + OPFS write resolve.
+    await new Promise((r) => setTimeout(r, 50));
+
+    const entries = useLibraryStore.getState().entries;
+    expect(entries.length).toBe(1);
+    // The headline guarantee: audio was persisted, not just metadata.
+    expect(entries[0]!.audioPersisted).toBe(true);
+
+    const { getAudioFile } = await import("@/lib/storage/library-storage");
+    const reloaded = await getAudioFile(entries[0]!.fingerprint);
+    expect(reloaded).not.toBeNull();
+    expect(reloaded!.name).toBe("song.wav");
+    const reloadedBytes = new Uint8Array(await reloaded!.arrayBuffer());
+    expect(Array.from(reloadedBytes)).toEqual(Array.from(bytes));
   });
 });
 

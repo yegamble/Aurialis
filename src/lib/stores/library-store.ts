@@ -70,7 +70,6 @@ export interface LibraryState {
   updateSettings: (fingerprint: string, settings: PersistedSettings) => void;
   flushPendingWrites: () => Promise<void>;
   setPreference: <K extends keyof LibraryPreferences>(key: K, value: LibraryPreferences[K]) => Promise<void>;
-  setActiveFingerprint: (fp: string | null) => void;
 }
 
 const DEFAULT_PREFERENCES: LibraryPreferences = {
@@ -298,8 +297,6 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     await storageSetPreference(key, value);
     set((s) => ({ preferences: { ...s.preferences, [key]: value } }));
   },
-
-  setActiveFingerprint: (fp) => set({ activeFingerprint: fp }),
 }));
 
 async function flushOne(fingerprint: string): Promise<void> {

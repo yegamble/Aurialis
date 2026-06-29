@@ -33,6 +33,7 @@ import {
 } from "@/lib/analysis-stage/emitter";
 import { useAnalysisStageStore } from "@/lib/stores/analysis-stage-store";
 import { exportWav } from "@/lib/audio/export";
+import { buildExportOptions } from "@/lib/audio/export-options";
 import type { ExportSettings } from "@/components/export/ExportPanel";
 import type { ToggleName, AudioParams } from "@/types/mastering";
 import {
@@ -226,11 +227,12 @@ export default function MasterPage() {
     if (!audioBuffer || isExporting) return;
     setIsExporting(true);
     try {
-      await exportWav(audioBuffer, params, {
-        sampleRate: settings.sampleRate,
-        bitDepth: settings.bitDepth,
-        dither: settings.dither,
-      });
+      const { script, scriptActive } = useDeepStore.getState();
+      await exportWav(
+        audioBuffer,
+        params,
+        buildExportOptions(settings, { script, scriptActive }),
+      );
     } finally {
       setIsExporting(false);
     }

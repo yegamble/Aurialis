@@ -12,6 +12,7 @@ import { WindowChrome } from "@/components/shell/WindowChrome";
 import { SeparationProgressCard } from "@/components/mix/SeparationProgressCard";
 import { useMixEngine } from "@/hooks/useMixEngine";
 import { useMixerStore } from "@/lib/stores/mixer-store";
+import { formatAutoMixStageLabel } from "@/lib/mix/auto-mix-label";
 import { useTurnstileToken } from "@/components/security/TurnstileGate";
 import {
   startSeparation,
@@ -51,13 +52,7 @@ export default function MixPage() {
   );
   const autoMixActiveStage = autoMixRun?.activeStage ?? null;
   const autoMixLabel = isAutoMixing
-    ? autoMixActiveStage && autoMixActiveStage.startsWith("stem-")
-      ? `Analyzing ${autoMixActiveStage.replace("stem-", "stem ")}`
-      : autoMixActiveStage === "generate-mix"
-        ? "Generating mix…"
-        : autoMixActiveStage === "apply"
-          ? "Applying mix…"
-          : "Analyzing…"
+    ? formatAutoMixStageLabel(autoMixActiveStage)
     : "Auto Mix";
 
   const {

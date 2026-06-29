@@ -176,7 +176,8 @@ describe("DeepMastering (T17 — profile-switch discard guard)", () => {
       expect(startDeepAnalysis).toHaveBeenCalledWith(
         expect.any(File),
         "metal_wall",
-        expect.anything(),
+        expect.anything(), // turnstile token ("" when no site key → multipart fallback)
+        expect.anything(), // abort signal
       ),
     );
   });
@@ -197,7 +198,8 @@ describe("DeepMastering (T17 — profile-switch discard guard)", () => {
       expect(startDeepAnalysis).toHaveBeenCalledWith(
         expect.any(File),
         "metal_wall",
-        expect.anything(),
+        expect.anything(), // turnstile token ("" when no site key → multipart fallback)
+        expect.anything(), // abort signal
       ),
     );
   });

@@ -193,6 +193,7 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
     },
     [
       audioFile,
+      tokenRef,
       setStatus,
       setSubStatus,
       setProgress,

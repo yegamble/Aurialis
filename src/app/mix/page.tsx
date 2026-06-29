@@ -314,7 +314,7 @@ export default function MixPage() {
         setIsSeparating(false);
       }
     },
-    [engine, autoMix, smartRepairEnabled]
+    [engine, autoMix, smartRepairEnabled, tokenRef]
   );
 
   const handleStemsLoaded = async (files: File[]) => {
@@ -480,7 +480,7 @@ export default function MixPage() {
         setIsSeparating(false);
       }
     },
-    [stems, backendAvailable, engine]
+    [stems, backendAvailable, engine, tokenRef]
   );
 
   const handleSendToMaster = async () => {

@@ -39,6 +39,9 @@ secret `TURNSTILE_SECRET` is set via `wrangler secret put`.
   library/album rows show time, not byte size. — 3809436
 - [x] **Backend `test_r2_download.py`** — magic-byte/size/header validation paths
   via httpx.MockTransport (happy/400/400/413/502/502/no-orphan). — d2b45c5
+- [x] **Remove dead `StemTrack.file` test remnants** (5 makeStem helpers). — de106bc
+- [x] **Correct the LR4 "bit-flat summation" plan claim** to magnitude-flat
+  all-pass (code + test were already correct; the plan overclaimed). — 9248995
 
 ## ✅ Done earlier (2026-06-19 pass) — see git history
 Lint generated-dir ignore (7e0ff0a); true-peak limiter offline (40d0bb8);
@@ -73,13 +76,6 @@ Ordered high→low value. Each is one atomic commit; green gate at every commit.
   modeled on `parametric-eq-parity.test.ts`.
 - [ ] **`window.__deepDebug.envelopeAt(param, t)` verification hook** (plan calls
   for it; not implemented). Add to the stateful engine.
-- [ ] **Doc-only: reword the "bit-flat summation" claim.** The implementation is
-  magnitude-flat all-pass, not sample-level bit-flat. Reword the 5 plan locations
-  (no code change). [#1]
-- [ ] **Remove the `StemTrack.file` remnant.** `45f5972` missed dead
-  `file: new File(...)` assignments in 5 `makeStem` helpers/literals
-  (mixer.test.ts, useMixEngine helpers). Done when: removed + green.
-
 ### Redesign Direction A — unified shell (cohesive batch; all touch master/mix layout)
 - [ ] **Extract `MasterScreen` component** (mode prop) from the inline mode-switch
   in `src/app/master/page.tsx`. RTL test. [Phase 2]

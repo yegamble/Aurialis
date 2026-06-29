@@ -20,7 +20,6 @@ function makeStem(name: string, id: string): StemTrack {
   return {
     id,
     name,
-    file: new File([""], name),
     audioBuffer: buffer,
     waveformPeaks: [0, 0, 0],
     classification: "other",

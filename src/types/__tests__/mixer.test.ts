@@ -77,7 +77,6 @@ describe("mixer types", () => {
       const track: StemTrack = {
         id: "stem-1",
         name: "vocals.wav",
-        file: new File([""], "vocals.wav"),
         audioBuffer: null,
         waveformPeaks: [],
         classification: "vocals",

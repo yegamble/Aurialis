@@ -352,9 +352,10 @@ export function useMixEngine() {
       // Re-throw with the stem identity baked into the message so callers
       // (e.g. the standalone Auto-Mix button) can surface a useful error
       // instead of an opaque cause. Original error preserved as `cause`.
-      throw new Error(`Failed analyzing ${currentStemName}: ${message}`, {
-        cause: e,
-      });
+      throw new Error(
+        `Failed analyzing stem ${currentStemIndex + 1}: ${currentStemName}: ${message}`,
+        { cause: e }
+      );
     } finally {
       useMixerStore.getState().setIsAutoMixing(false);
     }

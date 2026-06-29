@@ -166,7 +166,7 @@ describe("useMixEngine.autoMix — stage emits", () => {
       // The thrown error must identify the failing stem (not just the raw
       // cause) so the standalone Auto-Mix button can surface it in the UI.
       await expect(result.current.autoMix()).rejects.toThrow(
-        /Failed analyzing bad\.wav: corrupt buffer/
+        /Failed analyzing stem 2: bad\.wav: corrupt buffer/
       );
     });
 

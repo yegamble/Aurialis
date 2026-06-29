@@ -17,10 +17,19 @@ export interface MultibandGainReduction {
   high: number;
 }
 
+/** Minimum separation (Hz) the node enforces between the two crossovers. */
+const MIN_BAND_HZ = 50;
+
 export class MultibandCompressorNode {
   private readonly _ctx: AudioContext;
   private _node: AudioWorkletNode | null = null;
   private readonly _output: GainNode;
+
+  // Last-set crossover frequencies (defaults match DEFAULT_PARAMS). Tracked so
+  // the node can enforce low|mid < mid|high even if a caller (or a future UI
+  // without its own clamp) sends out-of-order values — defense in depth.
+  private _crossLowMid = 200;
+  private _crossMidHigh = 2000;
 
   onGainReduction: ((gr: MultibandGainReduction) => void) | null = null;
 
@@ -65,14 +74,18 @@ export class MultibandCompressorNode {
     this._node?.port.postMessage({ param: "multibandEnabled", value: on });
   }
 
-  /** Low|Mid crossover frequency (Hz). */
+  /** Low|Mid crossover frequency (Hz). Clamped to stay below Mid|High. */
   setCrossLowMid(hz: number): void {
-    this._node?.port.postMessage({ param: "mbCrossLowMid", value: hz });
+    const clamped = Math.min(hz, this._crossMidHigh - MIN_BAND_HZ);
+    this._crossLowMid = clamped;
+    this._node?.port.postMessage({ param: "mbCrossLowMid", value: clamped });
   }
 
-  /** Mid|High crossover frequency (Hz). */
+  /** Mid|High crossover frequency (Hz). Clamped to stay above Low|Mid. */
   setCrossMidHigh(hz: number): void {
-    this._node?.port.postMessage({ param: "mbCrossMidHigh", value: hz });
+    const clamped = Math.max(hz, this._crossLowMid + MIN_BAND_HZ);
+    this._crossMidHigh = clamped;
+    this._node?.port.postMessage({ param: "mbCrossMidHigh", value: clamped });
   }
 
   setBandEnabled(band: BandName, on: number): void {

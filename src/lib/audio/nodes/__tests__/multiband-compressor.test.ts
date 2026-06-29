@@ -50,6 +50,27 @@ describe("MultibandCompressorNode", () => {
     });
   });
 
+  it("clamps crossovers so low|mid stays at least 50 Hz below mid|high", async () => {
+    const node = new MultibandCompressorNode(ctx);
+    await node.init();
+    const inner = (node as unknown as { _node: AudioWorkletNode })._node;
+
+    // low|mid cannot exceed mid|high - 50 (default mid|high = 2000)
+    node.setCrossLowMid(5000);
+    expect(inner.port.postMessage).toHaveBeenCalledWith({
+      param: "mbCrossLowMid",
+      value: 1950,
+    });
+
+    // mid|high cannot drop below low|mid + 50
+    node.setCrossLowMid(800);
+    node.setCrossMidHigh(500);
+    expect(inner.port.postMessage).toHaveBeenCalledWith({
+      param: "mbCrossMidHigh",
+      value: 850,
+    });
+  });
+
   it.each<BandName>(["low", "mid", "high"])(
     "per-band setters post correctly-prefixed params for band %s",
     async (band) => {

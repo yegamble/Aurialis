@@ -12,6 +12,7 @@ import { SimpleMastering } from "@/components/mastering/SimpleMastering";
 import { AdvancedMastering } from "@/components/mastering/AdvancedMastering";
 import { DeepMastering } from "@/components/mastering/DeepMastering";
 import { BigReadout } from "@/components/mastering/BigReadout";
+import { Sidebar, type ShellScreen } from "@/components/shell/Sidebar";
 import { ABToggle } from "@/components/mastering/ABToggle";
 import { MasterToolbar, type MasterMode } from "@/components/mastering/MasterToolbar";
 import { ExportPanel } from "@/components/export/ExportPanel";
@@ -66,6 +67,7 @@ export default function MasterPage() {
   const file = useAudioStore((s) => s.file);
   const { mode, setMode } = useUIStore();
   const proMode = useSettingsStore((s) => s.proMode);
+  const setProMode = useSettingsStore((s) => s.setProMode);
   const isLgViewport = useIsLgViewport();
 
   // Real audio engine
@@ -326,8 +328,25 @@ export default function MasterPage() {
   const sampleRate = engine.sampleRate;
   const channels = engine.audioBuffer?.numberOfChannels ?? 0;
 
+  const handleSidebarSelect = (next: ShellScreen) => {
+    if (next === "master") return;
+    stop();
+    if (next === "stems") router.push("/mix");
+    else if (next === "album") router.push("/album");
+    else router.push("/");
+  };
+
   return (
-    <div className="flex min-h-screen flex-col bg-black">
+    <div className="flex h-screen overflow-hidden bg-black">
+      {isLgViewport && (
+        <Sidebar
+          activeScreen="master"
+          onSelect={handleSidebarSelect}
+          proMode={proMode}
+          onProModeChange={setProMode}
+        />
+      )}
+      <div className="flex min-h-0 flex-1 flex-col">
       <MasterToolbar
         fileName={file.name}
         durationLabel={formatTime(duration)}
@@ -586,6 +605,7 @@ export default function MasterPage() {
             </div>
           ) : null}
         </aside>
+      </div>
       </div>
     </div>
   );

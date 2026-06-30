@@ -13,6 +13,9 @@ import { useMixEngine } from "@/hooks/useMixEngine";
 import { useMixerStore } from "@/lib/stores/mixer-store";
 import { formatAutoMixStageLabel } from "@/lib/mix/auto-mix-label";
 import { useTurnstileToken } from "@/components/security/TurnstileGate";
+import { Sidebar, type ShellScreen } from "@/components/shell/Sidebar";
+import { useSettingsStore } from "@/lib/stores/settings-store";
+import { useIsLgViewport } from "@/hooks/use-is-lg-viewport";
 import {
   startSeparation,
   downloadStem,
@@ -42,6 +45,9 @@ function formatTime(s: number): string {
 
 export default function MixPage() {
   const router = useRouter();
+  const proMode = useSettingsStore((s) => s.proMode);
+  const setProMode = useSettingsStore((s) => s.setProMode);
+  const isLgViewport = useIsLgViewport();
   const stems = useMixerStore((s) => s.stems);
   const isAutoMixing = useMixerStore((s) => s.isAutoMixing);
   const autoMixRunId = useMixerStore((s) => s.autoMixRunId);
@@ -541,9 +547,24 @@ export default function MixPage() {
 
   const hasStemsLoaded = stems.length > 0;
 
+  const handleSidebarSelect = (next: ShellScreen) => {
+    if (next === "stems") return;
+    if (next === "album") router.push("/album");
+    else router.push("/");
+  };
+
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div className="flex h-screen overflow-hidden bg-black">
       {turnstileGate}
+      {isLgViewport && (
+        <Sidebar
+          activeScreen="stems"
+          onSelect={handleSidebarSelect}
+          proMode={proMode}
+          onProModeChange={setProMode}
+        />
+      )}
+      <div className="flex min-h-0 flex-1 flex-col">
       <MixToolbar
         onBack={() => {
           stop();
@@ -730,6 +751,7 @@ export default function MixPage() {
             </>
           )}
         </main>
+      </div>
       </div>
     </div>
   );

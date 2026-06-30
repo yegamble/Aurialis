@@ -15,7 +15,7 @@ import { BigReadout } from "@/components/mastering/BigReadout";
 import { Sidebar, type ShellScreen } from "@/components/shell/Sidebar";
 import { ABToggle } from "@/components/mastering/ABToggle";
 import { MasterToolbar, type MasterMode } from "@/components/mastering/MasterToolbar";
-import { ExportPanel } from "@/components/export/ExportPanel";
+import { ExportView } from "@/components/export/ExportView";
 import { useAudioStore } from "@/lib/stores/audio-store";
 import { useUIStore } from "@/lib/stores/ui-store";
 import { useSettingsStore } from "@/lib/stores/settings-store";
@@ -524,7 +524,16 @@ export default function MasterPage() {
           </div>
 
           <SpectrumDisplay data={spectrumData} />
-          <ExportPanel onExport={handleExport} isExporting={isExporting} />
+          <ExportView
+            onExport={handleExport}
+            isExporting={isExporting}
+            lufs={metering.lufs}
+            truePeak={metering.truePeak}
+            lra={metering.lra}
+            lraReady={metering.lraReady}
+            dynamicRange={metering.dynamicRange}
+            durationSec={duration}
+          />
 
           {!isLgViewport && (
             <details className="group">

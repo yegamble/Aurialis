@@ -4,7 +4,21 @@ import { ProcessingChain } from "./chain";
 import { AudioBypass } from "./bypass";
 import type { AudioParams } from "@/lib/stores/audio-store";
 import type { MasteringScript, Move } from "@/types/deep-mastering";
-import { applyMove, applyScript, clearScript } from "./deep/script-engine";
+import {
+  applyMove,
+  applyScript,
+  clearScript,
+  computeContextOffset,
+  interpolateEnvelope,
+  translateEnvelope,
+} from "./deep/script-engine";
+
+/** Shape of the `window.__deepDebug` verification hook (deep-mastering tests). */
+interface DeepDebugWindow extends Window {
+  __deepDebug?: {
+    envelopeAt: (param: string, contextTime: number) => number | null;
+  };
+}
 
 type EventCallback = (data?: unknown) => void;
 
@@ -326,6 +340,7 @@ export class AudioEngine {
 
   async dispose(): Promise<void> {
     this._disposed = true;
+    this._registerDebugHook(false);
     this.stop();
     this.stopRaf();
 
@@ -398,6 +413,35 @@ export class AudioEngine {
     }
     this._script = script;
     this._emitScriptOnPlay();
+    this._registerDebugHook(script !== null);
+  }
+
+  /**
+   * Verification hook: the scheduled envelope value for `param` at a given
+   * AudioContext time, computed from the active script using the current
+   * play-start offset (`_startTime - _startOffset`). Returns null when the
+   * script is inactive or no unmuted move targets `param`. Exposed at
+   * `window.__deepDebug.envelopeAt` for deep-mastering E2E/manual verification.
+   */
+  envelopeAt(param: string, contextTime: number): number | null {
+    if (!this._script || !this._scriptActive) return null;
+    const move = this._script.moves.find((m) => m.param === param && !m.muted);
+    if (!move) return null;
+    const offset = computeContextOffset(this._startTime, this._startOffset);
+    const translated = translateEnvelope(move.envelope, offset);
+    return interpolateEnvelope(translated, contextTime);
+  }
+
+  private _registerDebugHook(active: boolean): void {
+    if (typeof window === "undefined") return;
+    const w = window as DeepDebugWindow;
+    if (active) {
+      w.__deepDebug = {
+        envelopeAt: (param, contextTime) => this.envelopeAt(param, contextTime),
+      };
+    } else if (w.__deepDebug) {
+      delete w.__deepDebug;
+    }
   }
 
   /**

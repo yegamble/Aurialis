@@ -4,6 +4,7 @@ import {
   applyScript,
   clearScript,
   computeContextOffset,
+  interpolateEnvelope,
   translateEnvelope,
 } from "../script-engine";
 import type { ProcessingChain } from "../../chain";
@@ -159,5 +160,39 @@ describe("script-engine", () => {
         "master.saturation.drive"
       );
     });
+  });
+});
+
+describe("interpolateEnvelope", () => {
+  const env: [number, number][] = [
+    [0, -24],
+    [10, -18],
+    [20, -12],
+  ];
+
+  it("returns null for an empty envelope", () => {
+    expect(interpolateEnvelope([], 5)).toBeNull();
+  });
+
+  it("returns exact values at the breakpoints", () => {
+    expect(interpolateEnvelope(env, 0)).toBe(-24);
+    expect(interpolateEnvelope(env, 10)).toBe(-18);
+    expect(interpolateEnvelope(env, 20)).toBe(-12);
+  });
+
+  it("linearly interpolates between breakpoints", () => {
+    expect(interpolateEnvelope(env, 5)).toBeCloseTo(-21, 10); // midpoint of -24..-18
+    expect(interpolateEnvelope(env, 15)).toBeCloseTo(-15, 10); // midpoint of -18..-12
+    expect(interpolateEnvelope(env, 2.5)).toBeCloseTo(-22.5, 10);
+  });
+
+  it("clamps to the first / last value outside the range", () => {
+    expect(interpolateEnvelope(env, -5)).toBe(-24);
+    expect(interpolateEnvelope(env, 100)).toBe(-12);
+  });
+
+  it("handles a single-point envelope", () => {
+    expect(interpolateEnvelope([[3, 7]], 0)).toBe(7);
+    expect(interpolateEnvelope([[3, 7]], 99)).toBe(7);
   });
 });

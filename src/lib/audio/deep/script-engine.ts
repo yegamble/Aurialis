@@ -44,6 +44,32 @@ export function translateEnvelope(
 }
 
 /**
+ * Linear-interpolate an envelope (points sorted ascending by time) at time `t`.
+ * Clamps to the first / last point's value outside the envelope's range.
+ * Returns null for an empty envelope. Pure — used by the engine's
+ * `envelopeAt` verification hook.
+ */
+export function interpolateEnvelope(
+  envelope: ReadonlyArray<EnvelopePoint>,
+  t: number
+): number | null {
+  const n = envelope.length;
+  if (n === 0) return null;
+  if (t <= envelope[0]![0]) return envelope[0]![1];
+  if (t >= envelope[n - 1]![0]) return envelope[n - 1]![1];
+  for (let i = 1; i < n; i++) {
+    const a = envelope[i - 1]!;
+    const b = envelope[i]!;
+    if (t <= b[0]) {
+      const span = b[0] - a[0];
+      if (span <= 0) return b[1];
+      return a[1] + ((t - a[0]) / span) * (b[1] - a[1]);
+    }
+  }
+  return envelope[n - 1]![1];
+}
+
+/**
  * Apply a single Move's envelope. Honors `move.muted` (translates to a clear
  * so the worklet falls back to the last static value). Returns true when a
  * node accepted the envelope, false when the param has no scheduling target.

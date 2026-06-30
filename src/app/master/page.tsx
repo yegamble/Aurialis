@@ -347,7 +347,10 @@ export default function MasterPage() {
 
       <div className="flex-1 flex overflow-hidden">
         {isLgViewport && (
-          <aside className="w-80 border-r border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(255,255,255,0.02)] p-4 shrink-0">
+          <aside className="order-3 w-80 border-l border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(20,20,22,0.6)] p-4 shrink-0">
+            <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.5)]">
+              Controls
+            </div>
             <AnimatePresence mode="wait">
               {mode === "simple" ? (
                 <motion.div
@@ -420,7 +423,7 @@ export default function MasterPage() {
           </aside>
         )}
 
-        <main className="flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
+        <main className="order-1 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
           {/* Top readouts row — design Direction A: 5-col metering grid */}
           <div
             className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5"
@@ -564,7 +567,7 @@ export default function MasterPage() {
 
         <aside
           data-testid="master-right-rail"
-          className="w-64 border-l border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(255,255,255,0.02)] p-4 shrink-0 hidden xl:block space-y-4"
+          className="order-2 w-64 border-l border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(255,255,255,0.02)] p-4 shrink-0 hidden xl:block space-y-4"
         >
           <LevelMeter
             leftLevel={peakLevels.left}

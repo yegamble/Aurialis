@@ -296,19 +296,18 @@ test.describe("Navigation and transport buttons", () => {
     await uploadAndNavigate(page);
   });
 
-  test("P1-TS-003: LRA and Corr readouts are visible on the transport bar", async ({
+  test("P1-TS-003: LRA and Corr readouts are visible in the metering grid", async ({
     page,
   }) => {
-    // Initial state: LRA/Corr labels visible with placeholders or values
-    const lraReadout = page.getByText(/^LRA:/);
-    const corrReadout = page.getByText(/^Corr:/);
-    await expect(lraReadout).toBeVisible();
-    await expect(corrReadout).toBeVisible();
-
-    // LRA should show `---` before playback (lraReady=false)
-    await expect(lraReadout).toContainText(/LRA:\s*(---|\d)/);
-    // Corr shows `+1.00` default (identical mono channels at rest)
-    await expect(corrReadout).toContainText(/Corr:\s*[+-][01]\.\d{2}/);
+    // Direction A redesign: metering shows as a 5-col BigReadout grid
+    // (LUFS-I / dBTP / LRA / DR / CORR) at the top of the master workspace.
+    const readouts = page.getByTestId("master-readouts");
+    await expect(readouts).toBeVisible();
+    await expect(readouts).toContainText("LRA");
+    await expect(readouts).toContainText("CORR");
+    // CORR shows `+1.00` default (identical mono channels at rest); LRA may be
+    // an em-dash placeholder before playback.
+    await expect(readouts).toContainText(/[+-][01]\.\d{2}/);
   });
 
   test("mode buttons toggle panels and back button returns to upload", async ({

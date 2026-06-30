@@ -11,6 +11,7 @@ import { Goniometer } from "@/components/visualization/Goniometer";
 import { SimpleMastering } from "@/components/mastering/SimpleMastering";
 import { AdvancedMastering } from "@/components/mastering/AdvancedMastering";
 import { DeepMastering } from "@/components/mastering/DeepMastering";
+import { BigReadout } from "@/components/mastering/BigReadout";
 import { ABToggle } from "@/components/mastering/ABToggle";
 import { MasterToolbar, type MasterMode } from "@/components/mastering/MasterToolbar";
 import { ExportPanel } from "@/components/export/ExportPanel";
@@ -58,18 +59,6 @@ function formatTime(s: number): string {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, "0")}`;
-}
-
-function formatMbGr(db: number): string {
-  if (!Number.isFinite(db) || db === 0) return "0.0";
-  return db.toFixed(1);
-}
-
-function mbGrColorClass(db: number): string {
-  const g = -db;
-  if (g >= 6) return "text-red-400";
-  if (g >= 3) return "text-amber-400";
-  return "";
 }
 
 export default function MasterPage() {
@@ -432,69 +421,49 @@ export default function MasterPage() {
         )}
 
         <main className="flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
-          <div className="flex items-center justify-end">
-            <div className="text-right">
-              <p className="text-[#0a84ff] text-lg tabular-nums">
-                {metering.lufs === -Infinity
-                  ? "---"
-                  : metering.lufs.toFixed(1)}{" "}
-                <span className="text-xs text-[rgba(255,255,255,0.4)]">
-                  LUFS
-                </span>
-              </p>
-              <p className="text-[rgba(255,255,255,0.35)] text-xs">
-                {metering.truePeak === -Infinity
-                  ? "---"
-                  : metering.truePeak.toFixed(1)}{" "}
-                dBTP
-              </p>
-              <p className="text-[rgba(255,255,255,0.35)] text-xs tabular-nums">
-                LRA:{" "}
-                {metering.lraReady
-                  ? `${metering.lra.toFixed(1)} LU`
-                  : "--- LU"}
-              </p>
-              <p
-                className={`text-xs tabular-nums ${
-                  metering.correlationPeakMin < 0
-                    ? "text-red-400"
-                    : metering.correlationPeakMin < 0.3
-                      ? "text-amber-400"
-                      : "text-green-400"
-                }`}
-              >
-                Corr:{" "}
-                {metering.correlation >= 0
+          {/* Top readouts row — design Direction A: 5-col metering grid */}
+          <div
+            className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5"
+            data-testid="master-readouts"
+          >
+            <BigReadout
+              label="LUFS-I"
+              value={metering.lufs === -Infinity ? null : metering.lufs.toFixed(1)}
+              sub="Target −9.5"
+              emphasized
+            />
+            <BigReadout
+              label="dBTP"
+              value={
+                metering.truePeak === -Infinity ? null : metering.truePeak.toFixed(1)
+              }
+              sub="Ceiling −1.0"
+              warn={metering.truePeak > -0.5}
+            />
+            <BigReadout
+              label="LRA"
+              value={metering.lraReady ? `${metering.lra.toFixed(1)} LU` : null}
+              sub="Range"
+            />
+            <BigReadout
+              label="DR"
+              value={
+                Number.isFinite(metering.dynamicRange)
+                  ? metering.dynamicRange.toFixed(1)
+                  : null
+              }
+              sub="Dynamic range"
+            />
+            <BigReadout
+              label="CORR"
+              value={
+                metering.correlation >= 0
                   ? `+${metering.correlation.toFixed(2)}`
-                  : metering.correlation.toFixed(2)}
-              </p>
-              <p
-                className="text-[rgba(255,255,255,0.5)] text-xs tabular-nums"
-                data-testid="mb-gr-readout"
-              >
-                {params.multibandEnabled > 0 ? (
-                  <>
-                    MB L/M/H:{" "}
-                    <span className={mbGrColorClass(metering.multibandGR.low)}>
-                      {formatMbGr(metering.multibandGR.low)}
-                    </span>
-                    {" / "}
-                    <span className={mbGrColorClass(metering.multibandGR.mid)}>
-                      {formatMbGr(metering.multibandGR.mid)}
-                    </span>
-                    {" / "}
-                    <span
-                      className={mbGrColorClass(metering.multibandGR.high)}
-                    >
-                      {formatMbGr(metering.multibandGR.high)}
-                    </span>{" "}
-                    dB
-                  </>
-                ) : (
-                  "MB: ---"
-                )}
-              </p>
-            </div>
+                  : metering.correlation.toFixed(2)
+              }
+              sub="Stereo correlation"
+              warn={metering.correlationPeakMin < 0}
+            />
           </div>
 
           <WaveformDisplay

@@ -3,14 +3,19 @@
  * constants remain in sync with src/lib/audio/dsp/multiband.ts + crossover.ts +
  * compressor.ts.
  *
- * Source-inspection style (like halfband-parity.test.ts). Guards against
- * inadvertent drift when either side is edited.
+ * Two layers:
+ *   (A) Source-inspection (like halfband-parity.test.ts) — formulas/constants.
+ *   (B) Numerical parity — the worklet class is instantiated in a sandboxed vm
+ *       (EnvelopeScheduler absent → static params, no smoothing) and run against
+ *       the same input as MultibandCompressorDSP. Outputs must agree to < 1e-6.
+ *       This is what guarantees export (offline DSP) == preview (worklet).
  */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { BALANCE_RANGE_DB } from "../multiband";
+import vm from "node:vm";
+import { BALANCE_RANGE_DB, MultibandCompressorDSP, type BandParams } from "../multiband";
 
 const WORKLET_PATH = resolve(
   __dirname,
@@ -94,5 +99,218 @@ describe("multiband-parity — constants + formulas match TS reference", () => {
     expect(worklet).toMatch(
       /values:\s*\[\s*this\._state\.low\.lastGr\s*,\s*this\._state\.mid\.lastGr\s*,\s*this\._state\.high\.lastGr\s*\]/
     );
+  });
+});
+
+// ── (B) Numerical parity — sandboxed worklet instance vs pure-TS DSP ─────────
+
+const SR = 48000;
+const BLOCK = 128; // AudioWorklet render quantum
+
+interface SandboxedProcessor {
+  port: { onmessage: ((e: { data: { param: string; value: unknown } }) => void) | null };
+  process: (inputs: Float32Array[][], outputs: Float32Array[][]) => boolean;
+}
+
+function loadWorkletProcessor(): new () => SandboxedProcessor {
+  let registered: new () => SandboxedProcessor =
+    null as unknown as new () => SandboxedProcessor;
+  const sandbox: vm.Context = vm.createContext({
+    sampleRate: SR,
+    currentTime: 0,
+    // EnvelopeScheduler intentionally absent → _scheduler = null → static
+    // params are applied directly with no per-block smoothing.
+    registerProcessor: (_n: string, ctor: new () => SandboxedProcessor) => {
+      registered = ctor;
+    },
+    AudioWorkletProcessor: class {
+      port = {
+        onmessage: null as
+          | ((e: { data: { param: string; value: unknown } }) => void)
+          | null,
+        postMessage: () => {},
+      };
+    },
+    Math,
+    Object,
+    Error,
+  });
+  vm.runInContext(worklet, sandbox, { filename: "multiband-compressor-processor.js" });
+  if (!registered) throw new Error("worklet did not register processor");
+  return registered;
+}
+
+const WorkletCtor = loadWorkletProcessor();
+
+interface CfgBand {
+  enabled: number;
+  solo: number;
+  threshold: number;
+  ratio: number;
+  attackMs: number;
+  releaseMs: number;
+  makeup: number;
+  mode: "stereo" | "ms";
+  msBalance: number;
+}
+interface Cfg {
+  crossLowMid: number;
+  crossMidHigh: number;
+  low: CfgBand;
+  mid: CfgBand;
+  high: CfgBand;
+}
+
+function post(proc: SandboxedProcessor, param: string, value: unknown): void {
+  proc.port.onmessage?.({ data: { param, value } });
+}
+
+function makeWorklet(cfg: Cfg): SandboxedProcessor {
+  const p = new WorkletCtor();
+  post(p, "multibandEnabled", 1);
+  post(p, "mbCrossLowMid", cfg.crossLowMid);
+  post(p, "mbCrossMidHigh", cfg.crossMidHigh);
+  for (const name of ["Low", "Mid", "High"] as const) {
+    const b = cfg[name.toLowerCase() as "low" | "mid" | "high"];
+    post(p, `mb${name}Enabled`, b.enabled);
+    post(p, `mb${name}Solo`, b.solo);
+    post(p, `mb${name}Threshold`, b.threshold);
+    post(p, `mb${name}Ratio`, b.ratio);
+    post(p, `mb${name}Attack`, b.attackMs);
+    post(p, `mb${name}Release`, b.releaseMs);
+    post(p, `mb${name}Makeup`, b.makeup);
+    post(p, `mb${name}Mode`, b.mode);
+    post(p, `mb${name}MsBalance`, b.msBalance);
+  }
+  return p;
+}
+
+function toBand(b: CfgBand): BandParams {
+  return {
+    enabled: b.enabled,
+    solo: b.solo,
+    threshold: b.threshold,
+    ratio: b.ratio,
+    attack: b.attackMs / 1000,
+    release: b.releaseMs / 1000,
+    makeup: b.makeup,
+    mode: b.mode,
+    msBalance: b.msBalance,
+  };
+}
+
+function genInput(n: number): { L: Float32Array; R: Float32Array } {
+  const L = new Float32Array(n);
+  const R = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    // low (60 Hz) + mid (900 Hz) + high (6 kHz), slightly different per channel.
+    L[i] =
+      0.4 * Math.sin(2 * Math.PI * 60 * t) +
+      0.2 * Math.sin(2 * Math.PI * 900 * t) +
+      0.1 * Math.sin(2 * Math.PI * 6000 * t);
+    R[i] =
+      0.35 * Math.sin(2 * Math.PI * 60 * t) +
+      0.22 * Math.sin(2 * Math.PI * 900 * t) +
+      0.12 * Math.sin(2 * Math.PI * 6500 * t);
+  }
+  return { L, R };
+}
+
+function runWorklet(
+  proc: SandboxedProcessor,
+  L: Float32Array,
+  R: Float32Array,
+): { L: Float32Array; R: Float32Array } {
+  const outL = new Float32Array(L.length);
+  const outR = new Float32Array(R.length);
+  for (let off = 0; off < L.length; off += BLOCK) {
+    const bL = new Float32Array(BLOCK);
+    const bR = new Float32Array(BLOCK);
+    bL.set(L.subarray(off, off + BLOCK));
+    bR.set(R.subarray(off, off + BLOCK));
+    const oL = new Float32Array(BLOCK);
+    const oR = new Float32Array(BLOCK);
+    proc.process([[bL, bR]], [[oL, oR]]);
+    outL.set(oL, off);
+    outR.set(oR, off);
+  }
+  return { L: outL, R: outR };
+}
+
+function runDsp(cfg: Cfg, L: Float32Array, R: Float32Array): { L: Float32Array; R: Float32Array } {
+  const dsp = new MultibandCompressorDSP(SR);
+  const bands = { low: toBand(cfg.low), mid: toBand(cfg.mid), high: toBand(cfg.high) };
+  const cross = { lowMid: cfg.crossLowMid, midHigh: cfg.crossMidHigh };
+  const outL = new Float32Array(L.length);
+  const outR = new Float32Array(R.length);
+  for (let off = 0; off < L.length; off += BLOCK) {
+    const bL = new Float32Array(BLOCK);
+    const bR = new Float32Array(BLOCK);
+    bL.set(L.subarray(off, off + BLOCK));
+    bR.set(R.subarray(off, off + BLOCK));
+    const oL = new Float32Array(BLOCK);
+    const oR = new Float32Array(BLOCK);
+    dsp.processStereo(bL, bR, bands, cross, { left: oL, right: oR });
+    outL.set(oL, off);
+    outR.set(oR, off);
+  }
+  return { L: outL, R: outR };
+}
+
+function maxAbsDiff(a: Float32Array, b: Float32Array): number {
+  let m = 0;
+  for (let i = 0; i < a.length; i++) {
+    const d = Math.abs(a[i]! - b[i]!);
+    if (d > m) m = d;
+  }
+  return m;
+}
+
+const NEUTRAL: CfgBand = {
+  enabled: 0,
+  solo: 0,
+  threshold: -18,
+  ratio: 2,
+  attackMs: 20,
+  releaseMs: 250,
+  makeup: 0,
+  mode: "stereo",
+  msBalance: 0,
+};
+
+const CASES: { name: string; cfg: Cfg }[] = [
+  {
+    name: "low band compressing (stereo)",
+    cfg: {
+      crossLowMid: 200,
+      crossMidHigh: 2000,
+      low: { ...NEUTRAL, enabled: 1, threshold: -40, ratio: 8, attackMs: 5, releaseMs: 80, makeup: 2 },
+      mid: { ...NEUTRAL },
+      high: { ...NEUTRAL },
+    },
+  },
+  {
+    name: "all three bands active, mid in M/S",
+    cfg: {
+      crossLowMid: 250,
+      crossMidHigh: 2500,
+      low: { ...NEUTRAL, enabled: 1, threshold: -36, ratio: 4, makeup: 1 },
+      mid: { ...NEUTRAL, enabled: 1, threshold: -30, ratio: 3, mode: "ms", msBalance: 0.4 },
+      high: { ...NEUTRAL, enabled: 1, threshold: -28, ratio: 6, makeup: 0.5 },
+    },
+  },
+];
+
+describe("multiband-parity — numerical (worklet === offline DSP)", () => {
+  it.each(CASES)("worklet output matches the DSP for $name", ({ cfg }) => {
+    const n = BLOCK * 64; // 8192 samples, exact block multiple
+    const { L, R } = genInput(n);
+    const w = runWorklet(makeWorklet(cfg), L, R);
+    const d = runDsp(cfg, L, R);
+    // skip the first block (filter/envelope warm-up identical on both sides,
+    // but compare the steady state too)
+    expect(maxAbsDiff(w.L, d.L)).toBeLessThan(1e-6);
+    expect(maxAbsDiff(w.R, d.R)).toBeLessThan(1e-6);
   });
 });

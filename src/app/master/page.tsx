@@ -62,6 +62,18 @@ function formatTime(s: number): string {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
+function formatMbGr(db: number): string {
+  if (!Number.isFinite(db) || db === 0) return "0.0";
+  return db.toFixed(1);
+}
+
+function mbGrColorClass(db: number): string {
+  const g = -db;
+  if (g >= 6) return "text-red-400";
+  if (g >= 3) return "text-amber-400";
+  return "";
+}
+
 export default function MasterPage() {
   const router = useRouter();
   const file = useAudioStore((s) => s.file);
@@ -605,6 +617,30 @@ export default function MasterPage() {
             dynamicRange={metering.dynamicRange}
             target={params.targetLufs}
           />
+          <div
+            data-testid="mb-gr-readout"
+            className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] px-3 py-2.5 text-[11px] tabular-nums text-[rgba(255,255,255,0.55)]"
+          >
+            {params.multibandEnabled > 0 ? (
+              <>
+                MB L/M/H:{" "}
+                <span className={mbGrColorClass(metering.multibandGR.low)}>
+                  {formatMbGr(metering.multibandGR.low)}
+                </span>
+                {" / "}
+                <span className={mbGrColorClass(metering.multibandGR.mid)}>
+                  {formatMbGr(metering.multibandGR.mid)}
+                </span>
+                {" / "}
+                <span className={mbGrColorClass(metering.multibandGR.high)}>
+                  {formatMbGr(metering.multibandGR.high)}
+                </span>{" "}
+                dB
+              </>
+            ) : (
+              "MB: ---"
+            )}
+          </div>
           {proMode ? (
             <div data-testid="master-goniometer-slot">
               <Goniometer

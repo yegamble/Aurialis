@@ -78,8 +78,11 @@ Ordered high→low value. Each is one atomic commit; green gate at every commit.
 - [x] **`window.__deepDebug.envelopeAt(param, t)` verification hook** — fd7bd75
   (added to the stateful engine, `engine.ts:426`).
 ### Redesign Direction A — unified shell (cohesive batch; all touch master/mix layout)
-- [ ] **Extract `MasterScreen` component** (mode prop) from the inline mode-switch
-  in `src/app/master/page.tsx`. RTL test. [Phase 2]
+- [x] **Extract `MasterScreen` component** (mode prop) from the inline mode-switch
+  in `src/app/master/page.tsx`. The simple/advanced/deep switch was duplicated
+  (desktop inspector + mobile drawer); both now render `<MasterScreen>` with an
+  `animated` flag (AnimatePresence slide) and a `testIdSuffix` ("" / "-mobile")
+  so all E2E testids are preserved. RTL test covers mode routing + variants.
 - [x] **Build `StemsView`** wrapping the inline /mix layout. — b434d80 (RTL test).
 - [x] **Build `ExportView`** wrapping/restyling `ExportPanel`. — 559b3a4 (RTL test).
 - [x] **Add `AppShell`/`Sidebar` to /master & /mix** so all routes share the shell.

@@ -2,15 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { Play, Pause, SkipBack, Music } from "lucide-react";
 import { WaveformDisplay } from "@/components/visualization/WaveformDisplay";
 import { SpectrumDisplay } from "@/components/visualization/SpectrumDisplay";
 import { LevelMeter } from "@/components/visualization/LevelMeter";
 import { Goniometer } from "@/components/visualization/Goniometer";
-import { SimpleMastering } from "@/components/mastering/SimpleMastering";
-import { AdvancedMastering } from "@/components/mastering/AdvancedMastering";
-import { DeepMastering } from "@/components/mastering/DeepMastering";
+import { MasterScreen } from "@/components/mastering/MasterScreen";
 import { BigReadout } from "@/components/mastering/BigReadout";
 import { Sidebar, type ShellScreen } from "@/components/shell/Sidebar";
 import { ABToggle } from "@/components/mastering/ABToggle";
@@ -382,75 +380,26 @@ export default function MasterPage() {
             <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.5)]">
               Controls
             </div>
-            <AnimatePresence mode="wait">
-              {mode === "simple" ? (
-                <motion.div
-                  key="simple"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <SimpleMastering
-                    intensity={intensity}
-                    onIntensityChange={handleIntensityChange}
-                    genre={genre}
-                    onGenreChange={handleGenreChange}
-                    toggles={toggles}
-                    onToggle={handleToggle}
-                    onAutoMaster={handleAutoMaster}
-                  />
-                  {autoMasterStatus.kind === "analyzing" ? (
-                    <div
-                      data-testid="auto-master-progress"
-                      role="status"
-                      aria-live="polite"
-                      className="mt-2 rounded-md border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[10px] text-[rgba(255,255,255,0.7)]"
-                    >
-                      Analyzing… {autoMasterActiveStage}
-                    </div>
-                  ) : autoMasterStatus.kind === "error" ? (
-                    <div
-                      data-testid="auto-master-error"
-                      role="alert"
-                      className="mt-2 rounded-md border border-red-500/60 bg-red-500/5 px-3 py-2 text-[10px] text-red-300"
-                    >
-                      Failed at: {autoMasterStatus.stage} —{" "}
-                      {autoMasterStatus.message}
-                    </div>
-                  ) : null}
-                </motion.div>
-              ) : mode === "advanced" ? (
-                <motion.div
-                  key="advanced"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <AdvancedMastering
-                    params={{ ...params }}
-                    onParamChange={handleAdvancedParamChange}
-                    dynamics={{ deharsh: toggles.deharsh, glueComp: toggles.glueComp }}
-                    onDynamicsToggle={handleToggle}
-                    tonePreset={tonePreset}
-                    onTonePresetChange={handleTonePresetChange}
-                    outputPreset={outputPreset}
-                    onOutputPresetChange={handleOutputPresetChange}
-                  />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="deep"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <DeepMastering audioFile={file} />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <MasterScreen
+              animated
+              mode={mode as MasterMode}
+              audioFile={file}
+              intensity={intensity}
+              onIntensityChange={handleIntensityChange}
+              genre={genre}
+              onGenreChange={handleGenreChange}
+              toggles={toggles}
+              onToggle={handleToggle}
+              onAutoMaster={handleAutoMaster}
+              autoMasterStatus={autoMasterStatus}
+              autoMasterActiveStage={autoMasterActiveStage}
+              params={params}
+              onAdvancedParamChange={handleAdvancedParamChange}
+              tonePreset={tonePreset}
+              onTonePresetChange={handleTonePresetChange}
+              outputPreset={outputPreset}
+              onOutputPresetChange={handleOutputPresetChange}
+            />
           </aside>
         )}
 
@@ -555,51 +504,26 @@ export default function MasterPage() {
                 </span>
               </summary>
               <div className="pt-2">
-                {mode === "simple" ? (
-                  <>
-                    <SimpleMastering
-                      intensity={intensity}
-                      onIntensityChange={handleIntensityChange}
-                      genre={genre}
-                      onGenreChange={handleGenreChange}
-                      toggles={toggles}
-                      onToggle={handleToggle}
-                      onAutoMaster={handleAutoMaster}
-                    />
-                    {autoMasterStatus.kind === "analyzing" ? (
-                      <div
-                        data-testid="auto-master-progress-mobile"
-                        role="status"
-                        aria-live="polite"
-                        className="mt-2 rounded-md border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[10px] text-[rgba(255,255,255,0.7)]"
-                      >
-                        Analyzing… {autoMasterActiveStage}
-                      </div>
-                    ) : autoMasterStatus.kind === "error" ? (
-                      <div
-                        data-testid="auto-master-error-mobile"
-                        role="alert"
-                        className="mt-2 rounded-md border border-red-500/60 bg-red-500/5 px-3 py-2 text-[10px] text-red-300"
-                      >
-                        Failed at: {autoMasterStatus.stage} —{" "}
-                        {autoMasterStatus.message}
-                      </div>
-                    ) : null}
-                  </>
-                ) : mode === "advanced" ? (
-                  <AdvancedMastering
-                    params={{ ...params }}
-                    onParamChange={handleAdvancedParamChange}
-                    dynamics={{ deharsh: toggles.deharsh, glueComp: toggles.glueComp }}
-                    onDynamicsToggle={handleToggle}
-                    tonePreset={tonePreset}
-                    onTonePresetChange={handleTonePresetChange}
-                    outputPreset={outputPreset}
-                    onOutputPresetChange={handleOutputPresetChange}
-                  />
-                ) : (
-                  <DeepMastering audioFile={file} />
-                )}
+                <MasterScreen
+                  testIdSuffix="-mobile"
+                  mode={mode as MasterMode}
+                  audioFile={file}
+                  intensity={intensity}
+                  onIntensityChange={handleIntensityChange}
+                  genre={genre}
+                  onGenreChange={handleGenreChange}
+                  toggles={toggles}
+                  onToggle={handleToggle}
+                  onAutoMaster={handleAutoMaster}
+                  autoMasterStatus={autoMasterStatus}
+                  autoMasterActiveStage={autoMasterActiveStage}
+                  params={params}
+                  onAdvancedParamChange={handleAdvancedParamChange}
+                  tonePreset={tonePreset}
+                  onTonePresetChange={handleTonePresetChange}
+                  outputPreset={outputPreset}
+                  onOutputPresetChange={handleOutputPresetChange}
+                />
               </div>
             </details>
           )}

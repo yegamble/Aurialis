@@ -36,6 +36,7 @@ import { emitStage, emitErrorTrace, newRunId } from "@/lib/analysis-stage/emitte
 import { useAnalysisStageStore } from "@/lib/stores/analysis-stage-store";
 import type { JobStatus } from "@/lib/api/separation";
 import type { StemChannelParams } from "@/types/mixer";
+import type { RepairCoherence } from "@/lib/audio/smart-repair";
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -94,6 +95,9 @@ export function StemsView() {
   const [showModelSelect, setShowModelSelect] = useState(false);
   const [pendingSingleFile, setPendingSingleFile] = useState<File | null>(null);
   const [smartRepairEnabled, setSmartRepairEnabled] = useState(true);
+  const [phaseCoherence, setPhaseCoherence] = useState<RepairCoherence | null>(
+    null
+  );
   const { tokenRef, gate: turnstileGate } = useTurnstileToken();
   const [backendAvailable, setBackendAvailable] = useState<boolean | null>(null);
 
@@ -172,6 +176,7 @@ export function StemsView() {
       setIsSeparating(true);
       setLoadError(null);
       setSeparationError(null);
+      setPhaseCoherence(null);
       setSeparationStatus({
         jobId: "",
         status: "queued",
@@ -233,7 +238,9 @@ export function StemsView() {
 
         // Apply Smart Repair if enabled
         if (smartRepairEnabled) {
-          const { applySmartRepair } = await import("@/lib/audio/smart-repair");
+          const { applySmartRepair, summarizeRepairCoherence } = await import(
+            "@/lib/audio/smart-repair"
+          );
           // Decode original for phase coherence
           const origBuf = await file.arrayBuffer();
           const originalMix = await ctx.decodeAudioData(origBuf);
@@ -251,6 +258,16 @@ export function StemsView() {
               stem.buffer.getChannelData(c).set(repaired);
             }
           }
+
+          // Verify the repaired stems still sum back to the original mix and
+          // surface the coherence so a bad separation/repair is visible.
+          setPhaseCoherence(
+            summarizeRepairCoherence(
+              stemBuffers.map((s) => s.buffer.getChannelData(0)),
+              mixSamples,
+              originalMix.sampleRate
+            )
+          );
         }
 
         // Load directly using the engine's loadStems-like flow
@@ -654,6 +671,22 @@ export function StemsView() {
               failedAtStageLabel={separationView.failedAtStageLabel}
               stageTraceText={separationView.stageTraceText}
             />
+          )}
+
+          {/* Phase-coherence readout for the repaired stems */}
+          {phaseCoherence != null && (
+            <div
+              data-testid="phase-coherence"
+              className={`rounded-lg border px-4 py-2 text-xs ${
+                phaseCoherence.warn
+                  ? "border-yellow-500/20 bg-yellow-500/10 text-yellow-400"
+                  : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+              }`}
+            >
+              Phase coherence: {phaseCoherence.score}%
+              {phaseCoherence.warn &&
+                " — repaired stems drifted from the original mix"}
+            </div>
           )}
 
           {/* Backend unavailable warning */}

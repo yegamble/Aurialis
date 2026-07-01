@@ -4,6 +4,8 @@ import {
   applyExpansion,
   applyTransientRestore,
   checkPhaseCoherence,
+  summarizeRepairCoherence,
+  COHERENCE_WARN_THRESHOLD,
 } from "../smart-repair";
 import type { StemClassification } from "@/types/mixer";
 
@@ -278,6 +280,37 @@ describe("smart-repair", () => {
       const original = sine(440, 0.5, 1);
       const score = checkPhaseCoherence([], original, 44100);
       expect(score).toBe(0);
+    });
+  });
+
+  describe("summarizeRepairCoherence", () => {
+    it("reports a high score with no warning when stems sum to the mix", () => {
+      const sr = 44100;
+      const stem1 = sine(440, 0.3, 1, sr);
+      const stem2 = sine(880, 0.3, 1, sr);
+      const original = new Float32Array(sr);
+      for (let i = 0; i < sr; i++) original[i] = stem1[i] + stem2[i];
+
+      const { score, warn } = summarizeRepairCoherence(
+        [stem1, stem2],
+        original,
+        sr
+      );
+
+      expect(score).toBeGreaterThan(COHERENCE_WARN_THRESHOLD);
+      expect(warn).toBe(false);
+    });
+
+    it("warns when the repaired stems drift from the original mix", () => {
+      const sr = 44100;
+      const original = sine(440, 0.5, 1, sr);
+      const inverted = new Float32Array(sr);
+      for (let i = 0; i < sr; i++) inverted[i] = -original[i];
+
+      const { score, warn } = summarizeRepairCoherence([inverted], original, sr);
+
+      expect(score).toBeLessThan(COHERENCE_WARN_THRESHOLD);
+      expect(warn).toBe(true);
     });
   });
 });

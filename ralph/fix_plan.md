@@ -56,35 +56,32 @@ r2-upload.ts client (c02f72c); Radix profile-switch guard (c81492e).
 
 Ordered high→low value. Each is one atomic commit; green gate at every commit.
 
-- [ ] **Wire `BigReadout` into the master readout block.** It's a tested
-  primitive that's currently dead code (only its own test references it). Replace
-  the hand-inlined LUFS-I / dBTP / LRA / Corr / MB-GR `<p>` blocks in
-  `src/app/master/page.tsx` (~lines 435-491) with `BigReadout` instances; map
-  Corr/GR to its warn coloring. Done when: BigReadout is rendered + master-page
-  RTL test covers it. *(Flagged 4× in the audit: #5/#9/#12/#31.)*
-- [ ] **`checkPhaseCoherence` is implemented but never invoked.** Wire it into the
-  Smart-Repair flow in `src/app/mix/page.tsx` after the per-stem repair loop and
-  surface the result. Done when: called on repaired stems + test.
+- [x] **Wire `BigReadout` into the master readout block.** — c17daa9 (5-col
+  metering grid; b2bd668 re-homed MB-GR into the meters rail; 0b78474 E2E covers it).
+- [x] **`checkPhaseCoherence` is implemented but never invoked.** Wired into the
+  StemsView Smart-Repair flow after the per-stem repair loop via
+  `summarizeRepairCoherence` (score + warn threshold); surfaced as a
+  `data-testid="phase-coherence"` badge. Helper unit-tested in `smart-repair.test.ts`.
 - [ ] **Stereo sub-split DSP (`stereo-split.ts`) is never wired into the mixer.**
   Add a "Split L/R" control gated on `hasPannedContent`. Done when: control splits
   a panned stem + test.
 - [ ] **Pro Mode shows no denser spectrum** (only the Goniometer half landed). Add
   a `pro` density prop to `SpectrumDisplay`, drive from `proMode`. Done when: pro
   density visibly differs + test.
-- [ ] **Numerical multiband worklet↔TS parity test.** `multiband-parity.test.ts`
-  is regex source-inspection; add a `vm`-loaded numerical equivalence section
-  modeled on `parametric-eq-parity.test.ts`.
-- [ ] **`window.__deepDebug.envelopeAt(param, t)` verification hook** (plan calls
-  for it; not implemented). Add to the stateful engine.
+- [x] **Numerical multiband worklet↔TS parity test.** — afa8da4 (vm-loaded
+  numerical equivalence vs. `MultibandCompressorDSP.processStereo` < 1e-6).
+- [x] **`window.__deepDebug.envelopeAt(param, t)` verification hook** — fd7bd75
+  (added to the stateful engine, `engine.ts:426`).
 ### Redesign Direction A — unified shell (cohesive batch; all touch master/mix layout)
 - [ ] **Extract `MasterScreen` component** (mode prop) from the inline mode-switch
   in `src/app/master/page.tsx`. RTL test. [Phase 2]
-- [ ] **Build `StemsView`** wrapping the inline /mix layout. RTL test. [Phase 3]
-- [ ] **Build `ExportView`** wrapping/restyling `ExportPanel`. RTL test. [Phase 3]
-- [ ] **Add `AppShell`/`Sidebar` to /master & /mix** so all routes share the shell
-  (only / and /album have it). Preserve E2E `data-testid`s. [Phase 3, fix_plan #10]
-- [ ] **Make the Pro Mode toggle reachable on /master & /mix** (read today, no
-  control). Depends on the Sidebar task above. [#21]
+- [x] **Build `StemsView`** wrapping the inline /mix layout. — b434d80 (RTL test).
+- [x] **Build `ExportView`** wrapping/restyling `ExportPanel`. — 559b3a4 (RTL test).
+- [x] **Add `AppShell`/`Sidebar` to /master & /mix** so all routes share the shell.
+  — 83b3539 (master) + fef64c2 (mix); 3651daa removed the WindowChrome top bar.
+- [x] **Make the Pro Mode toggle reachable on /master & /mix** — the Sidebar owns
+  the Pro Mode toggle (`Sidebar.tsx:88`); both /master and /mix pass
+  `proMode`/`onProModeChange` into it. [#21]
 
 ## ▢ Remaining — needs a decision or live infra (NOT autonomous)
 

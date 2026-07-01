@@ -309,6 +309,33 @@ export function checkPhaseCoherence(
   return Math.round((coherentWindows / numWindows) * 100);
 }
 
+/**
+ * Below this windowed-correlation score the repaired stems have drifted from the
+ * original mix enough to warn the user (repair may have altered the material).
+ */
+export const COHERENCE_WARN_THRESHOLD = 70;
+
+export interface RepairCoherence {
+  /** 0-100 windowed-correlation score of the summed stems vs. the original mix. */
+  score: number;
+  /** True when {@link score} is below {@link COHERENCE_WARN_THRESHOLD}. */
+  warn: boolean;
+}
+
+/**
+ * Summarize how faithfully the repaired stems still sum to the original mix.
+ * Thin wrapper over {@link checkPhaseCoherence} that adds the warn threshold so
+ * the UI can surface a single value + coloring.
+ */
+export function summarizeRepairCoherence(
+  stems: Float32Array[],
+  originalMix: Float32Array,
+  sampleRate: number
+): RepairCoherence {
+  const score = checkPhaseCoherence(stems, originalMix, sampleRate);
+  return { score, warn: score < COHERENCE_WARN_THRESHOLD };
+}
+
 // --- Full pipeline ---
 
 export interface SmartRepairOptions {

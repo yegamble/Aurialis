@@ -1,12 +1,15 @@
 "use client";
 
 import { useRef, useEffect, useCallback } from "react";
+import { spectrumDensity } from "./spectrum-density";
 
 interface SpectrumDisplayProps {
   data: number[];
+  /** Pro Mode renders a denser grid (more frequency labels + gridlines). */
+  pro?: boolean;
 }
 
-export function SpectrumDisplay({ data }: SpectrumDisplayProps) {
+export function SpectrumDisplay({ data, pro = false }: SpectrumDisplayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -22,7 +25,8 @@ export function SpectrumDisplay({ data }: SpectrumDisplayProps) {
     canvas.style.width = `${rect.width}px`;
     canvas.style.height = `${rect.height}px`;
 
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, rect.width, rect.height);
 
@@ -78,15 +82,28 @@ export function SpectrumDisplay({ data }: SpectrumDisplayProps) {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Frequency labels
+    // Frequency reference grid — denser in Pro Mode.
+    const { labels, gridlines } = spectrumDensity(pro);
+
+    if (gridlines) {
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      ctx.lineWidth = 1;
+      labels.forEach((_, i) => {
+        const x = (i / (labels.length - 1)) * rect.width;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, rect.height);
+        ctx.stroke();
+      });
+    }
+
     ctx.fillStyle = "rgba(255,255,255,0.25)";
     ctx.font = "10px Inter, system-ui";
-    const labels = ["20", "100", "1k", "5k", "10k", "20k"];
     labels.forEach((label, i) => {
       const x = (i / (labels.length - 1)) * rect.width;
       ctx.fillText(label, x, rect.height - 4);
     });
-  }, [data]);
+  }, [data, pro]);
 
   useEffect(() => {
     draw();
@@ -97,6 +114,8 @@ export function SpectrumDisplay({ data }: SpectrumDisplayProps) {
   return (
     <div
       ref={containerRef}
+      data-testid="spectrum-display"
+      data-pro={pro ? "true" : "false"}
       className="w-full h-32 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] overflow-hidden"
       aria-label="Frequency spectrum display"
     >

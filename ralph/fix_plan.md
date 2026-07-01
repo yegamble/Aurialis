@@ -68,9 +68,11 @@ Ordered high→low value. Each is one atomic commit; green gate at every commit.
   `handleSplitStereo` M/S-decodes the stem and replaces it with two hard-panned
   L/R sub-stems. Track-building extracted to the pure `buildStereoSubTracks`
   helper (`src/lib/mix/split-stereo-tracks.ts`) + unit test.
-- [ ] **Pro Mode shows no denser spectrum** (only the Goniometer half landed). Add
-  a `pro` density prop to `SpectrumDisplay`, drive from `proMode`. Done when: pro
-  density visibly differs + test.
+- [x] **Pro Mode shows no denser spectrum** (only the Goniometer half landed).
+  Added a `pro` prop to `SpectrumDisplay` (driven from `proMode` on /master):
+  pro renders the denser 10-label frequency grid + vertical gridlines vs. the
+  sparse 6-label standard set. Density decision extracted to the pure
+  `spectrumDensity` helper + unit test; also null-guarded the 2D context.
 - [x] **Numerical multiband worklet↔TS parity test.** — afa8da4 (vm-loaded
   numerical equivalence vs. `MultibandCompressorDSP.processStereo` < 1e-6).
 - [x] **`window.__deepDebug.envelopeAt(param, t)` verification hook** — fd7bd75

@@ -535,7 +535,7 @@ export default function MasterPage() {
             </div>
           </div>
 
-          <SpectrumDisplay data={spectrumData} />
+          <SpectrumDisplay data={spectrumData} pro={proMode} />
           <ExportView
             onExport={handleExport}
             isExporting={isExporting}

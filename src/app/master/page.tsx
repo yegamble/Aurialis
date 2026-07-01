@@ -358,7 +358,7 @@ export default function MasterPage() {
           onProModeChange={setProMode}
         />
       )}
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <MasterToolbar
         fileName={file.name}
         durationLabel={formatTime(duration)}
@@ -454,7 +454,7 @@ export default function MasterPage() {
           </aside>
         )}
 
-        <main className="order-1 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
+        <main className="order-1 min-w-0 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
           {/* Top readouts row — design Direction A: 5-col metering grid */}
           <div
             className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5"

@@ -564,7 +564,7 @@ export function StemsView() {
           onProModeChange={setProMode}
         />
       )}
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <MixToolbar
         onBack={() => {
           stop();
@@ -598,7 +598,7 @@ export function StemsView() {
         )}
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
+        <main className="min-w-0 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
           {/* Model selection dialog */}
           {showModelSelect && pendingSingleFile && (
             <div className="rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] p-6">

@@ -98,6 +98,11 @@ export function StemsView() {
   const [phaseCoherence, setPhaseCoherence] = useState<RepairCoherence | null>(
     null
   );
+  // Ids of stems that carry meaningful stereo (side) energy — the "Split L/R"
+  // control is gated on this. Analysis is O(samples) so it runs off-render.
+  const [pannedStemIds, setPannedStemIds] = useState<Set<string>>(
+    () => new Set()
+  );
   const { tokenRef, gate: turnstileGate } = useTurnstileToken();
   const [backendAvailable, setBackendAvailable] = useState<boolean | null>(null);
 
@@ -108,6 +113,29 @@ export function StemsView() {
     const id = setInterval(() => setSeparationNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [isSeparating]);
+
+  // Detect which loaded stems have panned (stereo) content so we can offer the
+  // client-side "Split L/R" control. Recomputes only when the stem set changes.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { analyzePanContent } = await import("@/lib/audio/stereo-split");
+      const ids = new Set<string>();
+      for (const s of stems) {
+        if (
+          s.audioBuffer &&
+          s.audioBuffer.numberOfChannels > 1 &&
+          analyzePanContent(s.audioBuffer).hasPannedContent
+        ) {
+          ids.add(s.id);
+        }
+      }
+      if (!cancelled) setPannedStemIds(ids);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [stems]);
 
   // Subscribe to the harness store for the current separation run so the card
   // can show per-stage durations + failed-at label.
@@ -500,6 +528,46 @@ export function StemsView() {
     [stems, backendAvailable, engine, tokenRef]
   );
 
+  // Client-side stereo sub-split: M/S-decode a panned stem into hard-panned
+  // L/R sub-stems. No backend needed (distinct from "Split Further" above).
+  const handleSplitStereo = useCallback(
+    async (stemId: string) => {
+      const stem = stems.find((s) => s.id === stemId);
+      if (!stem?.audioBuffer) return;
+
+      const { stereoSplit } = await import("@/lib/audio/stereo-split");
+      const { buildStereoSubTracks } = await import(
+        "@/lib/mix/split-stereo-tracks"
+      );
+      const { generateWaveformPeaks } = await import("@/lib/audio/stem-loader");
+
+      await engine.init();
+      const ctx = engine.ctx!;
+      const sr = stem.audioBuffer.sampleRate;
+      const split = stereoSplit(stem.audioBuffer);
+
+      const makeBuffer = (data: Float32Array) => {
+        const buf = ctx.createBuffer(1, data.length, sr);
+        buf.getChannelData(0).set(data);
+        return buf;
+      };
+
+      const newTracks = buildStereoSubTracks(
+        stem,
+        split,
+        makeBuffer,
+        generateWaveformPeaks,
+        Date.now()
+      );
+
+      useMixerStore.getState().removeStem(stemId);
+      engine.removeStem(stemId);
+      useMixerStore.getState().addStems(newTracks);
+      for (const t of newTracks) engine.addStem(t);
+    },
+    [stems, engine]
+  );
+
   const handleSendToMaster = async () => {
     if (stems.length === 0 || isRendering) return;
     setIsRendering(true);
@@ -731,6 +799,24 @@ export function StemsView() {
                       >
                         <Sparkles className="w-3 h-3" />
                         Split Further: {s.name}
+                      </button>
+                    ))}
+                </div>
+              )}
+
+              {/* Split L/R — client-side M/S sub-split for panned stems */}
+              {stems.some((s) => pannedStemIds.has(s.id)) && (
+                <div className="flex flex-wrap gap-2" data-testid="split-lr-group">
+                  {stems
+                    .filter((s) => pannedStemIds.has(s.id))
+                    .map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => handleSplitStereo(s.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white text-xs transition-colors"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        Split L/R: {s.name}
                       </button>
                     ))}
                 </div>

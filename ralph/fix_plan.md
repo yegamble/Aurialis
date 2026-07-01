@@ -62,9 +62,12 @@ Ordered high→low value. Each is one atomic commit; green gate at every commit.
   StemsView Smart-Repair flow after the per-stem repair loop via
   `summarizeRepairCoherence` (score + warn threshold); surfaced as a
   `data-testid="phase-coherence"` badge. Helper unit-tested in `smart-repair.test.ts`.
-- [ ] **Stereo sub-split DSP (`stereo-split.ts`) is never wired into the mixer.**
-  Add a "Split L/R" control gated on `hasPannedContent`. Done when: control splits
-  a panned stem + test.
+- [x] **Stereo sub-split DSP (`stereo-split.ts`) is never wired into the mixer.**
+  Wired a client-side "Split L/R" control into StemsView: a per-stem effect runs
+  `analyzePanContent` off-render to gate the button on `hasPannedContent`;
+  `handleSplitStereo` M/S-decodes the stem and replaces it with two hard-panned
+  L/R sub-stems. Track-building extracted to the pure `buildStereoSubTracks`
+  helper (`src/lib/mix/split-stereo-tracks.ts`) + unit test.
 - [ ] **Pro Mode shows no denser spectrum** (only the Goniometer half landed). Add
   a `pro` density prop to `SpectrumDisplay`, drive from `proMode`. Done when: pro
   density visibly differs + test.

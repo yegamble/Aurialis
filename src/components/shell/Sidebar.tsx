@@ -22,6 +22,8 @@ export interface SidebarProps {
   activeScreen: ShellScreen;
   onSelect: (screen: ShellScreen) => void;
   tracks?: SidebarTrack[];
+  /** Label for the tracks group; falls back to "Tracks". */
+  collectionTitle?: string;
   activeTrackId?: string | null;
   onSelectTrack?: (id: string) => void;
   proMode?: boolean;
@@ -45,6 +47,7 @@ export function Sidebar({
   activeScreen,
   onSelect,
   tracks,
+  collectionTitle,
   activeTrackId,
   onSelectTrack,
   proMode,
@@ -115,7 +118,7 @@ export function Sidebar({
       </NavGroup>
 
       {filteredTracks && filteredTracks.length > 0 ? (
-        <NavGroup label="Tracks">
+        <NavGroup label={collectionTitle ?? "Tracks"}>
           {filteredTracks.map((t) => (
             <NavTrack
               key={t.id}

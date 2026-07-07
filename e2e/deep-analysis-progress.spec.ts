@@ -9,6 +9,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
+import { stubTurnstileNoToken } from "./helpers/turnstile";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEST_WAV = path.join(__dirname, "fixtures", "test-audio.wav");
@@ -16,6 +17,14 @@ const JOB_ID = "test-job-123";
 const TRACE_HEX = "0123456789abcdef0123456789abcdef";
 const SPAN_HEX = "0011223344556677";
 const TRACEPARENT = `00-${TRACE_HEX}-${SPAN_HEX}-01`;
+
+// The webServer sets a Cloudflare test site key, so the Turnstile gate is now
+// active. These specs mock only the legacy analyze path, so neutralise the
+// token before navigation to keep the browser on the multipart transport
+// (an auto-issued token would route uploads through the unmocked R2 plane).
+test.beforeEach(async ({ page }) => {
+  await stubTurnstileNoToken(page);
+});
 
 async function uploadAndOpenDeep(page: Page) {
   await page.goto("/");

@@ -18,18 +18,18 @@
  *
  * NOTE ON THE R2 PATH TEST: the token only exists when
  * `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is configured for the dev/preview server.
- * It is NOT set in the default Playwright webServer env, so the Turnstile gate
- * renders nothing and the browser always falls back to multipart. The R2-path
- * test therefore self-skips when the gate is absent (rather than asserting a
- * flow the environment cannot produce). To make it run, the webServer needs
- * `env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: "<cloudflare test key>" }` — see the
- * agent report's interface notes. The multipart-fallback test below runs
- * unconditionally and is the deterministic guarantee in CI.
+ * The Playwright webServer now sets Cloudflare's always-passing test key, so
+ * the gate renders and the R2-path test executes. Both tests still stub
+ * `window.turnstile` for hermeticism — the R2 test issues a token, the legacy
+ * test withholds one — so neither depends on reaching challenges.cloudflare.com.
+ * The R2 test keeps its `test.skip(gateCount === 0, …)` guard so it degrades to
+ * a skip (not a failure) if the key is ever unset.
  */
 
 import { expect, test, type Page, type Route } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
+import { stubTurnstileNoToken } from "./helpers/turnstile";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEST_WAV = path.join(__dirname, "fixtures", "test-audio.wav");
@@ -79,6 +79,11 @@ test.describe("R2 upload transport selection", () => {
   test("no Turnstile token → legacy multipart POST, no R2 control-plane calls", async ({
     page,
   }) => {
+    // The webServer configures a Cloudflare test site key, so the gate now
+    // renders. Neutralise it (render without a token callback) so the browser
+    // stays on the deterministic legacy multipart path regardless of env.
+    await stubTurnstileNoToken(page);
+
     let initiateCalls = 0;
     let analyzeContentType: string | null = null;
     let analyzeIsMultipart = false;
@@ -126,8 +131,9 @@ test.describe("R2 upload transport selection", () => {
     );
 
     await uploadAndOpenDeep(page);
-    // In the default env the Turnstile gate is absent → guaranteed fallback.
-    await expect(page.getByTestId("turnstile-gate")).toHaveCount(0);
+    // The gate may render (site key configured) but the stub never yields a
+    // token, so the browser must fall back to legacy multipart. The multipart
+    // + zero-initiate assertions below are the real guarantee.
 
     await page.getByTestId("deep-analyze-button").click();
 

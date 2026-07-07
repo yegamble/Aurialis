@@ -15,6 +15,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
+import { stubTurnstileNoToken } from "./helpers/turnstile";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEST_WAV = path.join(__dirname, "fixtures", "test-audio.wav");
@@ -39,6 +40,13 @@ test.beforeAll(async () => {
   } catch (e) {
     test.skip(true, `Backend at ${BACKEND_URL} unreachable: ${(e as Error).message}`);
   }
+});
+
+// The webServer sets a Cloudflare test site key, so the Turnstile gate is now
+// active. These specs exercise the legacy analyze path (not R2), so neutralise
+// the token before every navigation to keep the transport deterministic.
+test.beforeEach(async ({ page }) => {
+  await stubTurnstileNoToken(page);
 });
 
 async function uploadAndOpenDeep(page: Page, fixturePath: string) {

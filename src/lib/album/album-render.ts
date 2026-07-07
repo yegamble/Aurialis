@@ -20,6 +20,7 @@ import { loadAudioFile } from "@/lib/audio/loader";
 import { getAudioFile } from "@/lib/storage/library-storage";
 import type { LibraryEntry } from "@/lib/storage/library-types";
 import type { MasterAlbumDeps, RenderedTrack } from "./master-album";
+import { normalizeToAlbumTarget, DEFAULT_CEILING_DBTP } from "./normalize";
 
 /** WAV export settings for the album batch (matches the master export defaults). */
 const BATCH_BIT_DEPTH = 24;
@@ -66,6 +67,19 @@ export function createAlbumMasterDeps(resolveEntry: EntryResolver): AlbumMasterD
         buffer.sampleRate,
         entry.script,
       );
+
+      // The offline renderer applies the chain but does NOT re-gain to
+      // params.targetLufs, so each track would land at its own loudness. Re-gain
+      // the rendered buffer onto the album target here — peak-guarded by the
+      // entry's persisted ceiling — mutating its channel data in place before
+      // encoding. Non-finite measurements (silence) leave the buffer untouched.
+      const channels = Array.from(
+        { length: rendered.numberOfChannels },
+        (_, c) => rendered.getChannelData(c),
+      );
+      const ceiling = entry.settings?.params.ceiling ?? DEFAULT_CEILING_DBTP;
+      normalizeToAlbumTarget(channels, rendered.sampleRate, targetLufs, ceiling);
+
       return encodeWav(rendered, BATCH_BIT_DEPTH, BATCH_DITHER);
     },
 

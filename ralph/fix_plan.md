@@ -91,14 +91,38 @@ Ordered high→low value. Each is one atomic commit; green gate at every commit.
   the Pro Mode toggle (`Sidebar.tsx:88`); both /master and /mix pass
   `proMode`/`onProModeChange` into it. [#21]
 
+## ✅ 2026-07-07 design-100 (branch `feat/design-100`, Stage 3 merge + integration)
+
+Six area tracks (master, sidebar, library, album, export+mix, R2 tests) merged
+and integrated. One line per area landed:
+
+- [x] **Shell**: unified `AppShell` on `/`, `/master`, `/mix`, `/album`; shared
+  `libraryEntriesToSidebarTracks` builder feeds real tracks (analyzed check +
+  seeded art tile) into the sidebar on every route.
+- [x] **Master screen**: transport/waveform/spectrum cards, +5s skip, Direction-C
+  Phase Scope goniometer, full-width deep-timeline card, focused Export state.
+- [x] **Sidebar**: ⌘K search, OPFS/backend footer status, seeded art tiles.
+- [x] **Library + Import**: real-data table, album hero card, inline dropzone,
+  in-shell import; sidebar "Import" deep-links to `/?screen=upload` from any route.
+- [x] **Smart Master Album**: LUFS bar chart, hero stats, suggestions, client-side
+  master-all ZIP — now **re-gained to the album target** post-render (peak-guarded
+  by the persisted ceiling; renderer untouched).
+- [x] **Export + Mix**: WAV/MP3 formats, segmented sample-rate + dither, size
+  estimate, progress; `/mix` Export routes through shared options.
+- [x] **R2 test debt**: see the infra item below — gate mounted, 422 fix, both
+  transports covered; multipart-removal + live-Worker verify remain HELD.
+- [x] **Art-tile consolidation**: master toolbar + library table now source colours
+  from the shared `src/lib/art-tile.ts` `artGradient` (one seed → one colour).
+
 ## ▢ Remaining — needs a decision or live infra (NOT autonomous)
 
-- [infra] **Finish + ship the R2 cutover.** The rewire is ~70% done (both API
-  clients use `uploadFileToR2` with multipart fallback; `TurnstileGate`/
-  `useTurnstileToken` built). Remaining: **mount the gate** (it's destructured but
-  never rendered, so tokens never flow in prod); `test_main_json_endpoints.py`
-  (needs `respx` — not installed in the venv, or rewrite with `MockTransport`);
-  `e2e/r2-upload.spec.ts` + migrate existing specs; remove legacy multipart; then
-  **verify a real upload against the deployed Worker** (Turnstile secret set).
-  → replaces a currently-working path; do behind a deploy + your go-ahead.
-  [direct-R2 Tasks 5/6/8/9; #27/#28/#34]
+- [infra] **Finish + ship the R2 cutover.** Test debt now cleared on
+  `feat/design-100`: the gate is mounted (DeepMastering + StemsView render
+  `{turnstileGate}`); `test_main_json_endpoints.py` landed via httpx
+  `MockTransport` (no `respx`) and the JSON branches now return 422 on a bad
+  body (was a 500); `e2e/r2-upload.spec.ts` covers both transports and the
+  webServer sets a Turnstile test key so the direct-R2 path actually runs.
+  **Still HELD (unchanged — needs live infra + go-ahead):** remove the legacy
+  multipart fallback, and **verify a real upload against the deployed Worker**
+  (Turnstile secret set). → the multipart removal replaces a currently-working
+  path; do behind a deploy + your go-ahead. [direct-R2 Tasks 5/6/8/9; #27/#28/#34]

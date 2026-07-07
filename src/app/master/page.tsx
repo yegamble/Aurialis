@@ -602,6 +602,59 @@ export default function MasterPage() {
             <SpectrumDisplay data={spectrumData} pro={proMode} />
           </div>
 
+          {/* Compact player meters — the desktop right rail is `hidden xl:block`,
+              so on phones/tablets these live/animated visuals would vanish
+              entirely. Surface a compact variant inline instead of hiding: L/R
+              level meters always, plus the Phase Scope goniometer in Pro Mode.
+              (Distinct testids so the desktop rail's contracts stay singular.) */}
+          <div data-testid="master-meters-compact" className="xl:hidden space-y-4">
+            <LevelMeter
+              leftLevel={peakLevels.left}
+              rightLevel={peakLevels.right}
+              lufs={metering.lufs === -Infinity ? 0 : metering.lufs}
+              truePeak={metering.truePeak === -Infinity ? 0 : metering.truePeak}
+              dynamicRange={metering.dynamicRange}
+              target={params.targetLufs}
+            />
+            {proMode ? (
+              <div
+                data-testid="master-goniometer-slot-mobile"
+                className="rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-3"
+              >
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.5)]">
+                  Phase Scope
+                </div>
+                <div className="flex justify-center">
+                  <Goniometer
+                    left={engine.leftAnalyserNode}
+                    right={engine.rightAnalyserNode}
+                    size={180}
+                    hideLabel
+                  />
+                </div>
+                <div
+                  data-testid="phase-scope-status-mobile"
+                  className="mt-2 flex items-center justify-center gap-1.5 text-[10px] text-[rgba(255,255,255,0.55)]"
+                >
+                  <span
+                    aria-hidden
+                    className="inline-block h-2 w-2 rounded-full"
+                    style={{
+                      background:
+                        metering.correlation >= 0 ? "#30d158" : "#ff453a",
+                    }}
+                  />
+                  <span>
+                    {correlationPhrase(metering.correlation)}
+                    {Number.isFinite(metering.correlation)
+                      ? ` · ${metering.correlation >= 0 ? "+" : ""}${metering.correlation.toFixed(2)}`
+                      : ""}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
           {/* Deep timeline — promoted to a full-width main-canvas card below
               the transport when a script is ready (design views.jsx
               DeepTimelineBig). Header + Move/Edited/AI-Repair legend. */}

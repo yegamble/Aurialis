@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UploadScreen } from "@/components/upload/UploadScreen";
+import { ImportPanel } from "@/components/upload/ImportPanel";
 import { LibraryView } from "@/components/library/LibraryView";
 import { deriveLibraryAlbum } from "@/components/library/library-album";
 import { AppShell } from "@/components/shell/AppShell";
@@ -199,6 +200,11 @@ export default function UploadPage() {
             onImportFiles={(files) => void handleFilesUploaded(files)}
             album={album}
             onOpenAlbum={() => router.push("/album")}
+          />
+        ) : entries.length > 0 ? (
+          <ImportPanel
+            onFilesUploaded={handleFilesUploaded}
+            onCancel={() => setScreen("library")}
           />
         ) : (
           <div className="relative h-full">

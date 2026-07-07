@@ -64,7 +64,7 @@ export function MasterToolbar({
   return (
     <div
       data-testid="master-toolbar"
-      className="sticky top-0 z-40 flex items-center justify-between gap-4 border-b border-[rgba(255,255,255,0.06)] bg-[rgba(20,20,22,0.8)] px-5 py-3 backdrop-blur-xl"
+      className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-b border-[rgba(255,255,255,0.06)] bg-[rgba(20,20,22,0.8)] px-3 py-3 backdrop-blur-xl sm:flex-nowrap sm:gap-4 sm:px-5"
     >
       <div className="flex min-w-0 items-center gap-3">
         <button
@@ -86,7 +86,7 @@ export function MasterToolbar({
 
       <div
         aria-label="Mastering mode"
-        className="inline-flex rounded-md border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.06)] p-0.5"
+        className="order-last flex w-full justify-center rounded-md border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.06)] p-0.5 sm:order-none sm:inline-flex sm:w-auto"
       >
         {MODES.map((m) => {
           const active = mode === m.id;
@@ -120,7 +120,7 @@ export function MasterToolbar({
             className="inline-flex items-center gap-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] px-3 py-1.5 text-xs text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.1)]"
           >
             <Scissors className="h-3.5 w-3.5" />
-            Split stems
+            <span className="hidden sm:inline">Split stems</span>
           </button>
         )}
         {onExport && (

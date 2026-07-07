@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import { motion } from "motion/react";
 import type { DitherType } from "@/lib/audio/wav-encoder";
@@ -16,6 +16,8 @@ export interface ExportSettings {
 interface ExportPanelProps {
   onExport?: (settings: ExportSettings) => Promise<void>;
   isExporting?: boolean;
+  /** Notified with the live settings on mount and on every change (for size estimates). */
+  onSettingsChange?: (settings: ExportSettings) => void;
 }
 
 const FORMATS: ReadonlyArray<{ value: ExportFormat; label: string }> = [
@@ -36,7 +38,11 @@ const BIT_DEPTHS: ReadonlyArray<{ value: 16 | 24 | 32; label: string }> = [
   { value: 32, label: "32-bit float" },
 ];
 
-export function ExportPanel({ onExport, isExporting = false }: ExportPanelProps) {
+export function ExportPanel({
+  onExport,
+  isExporting = false,
+  onSettingsChange,
+}: ExportPanelProps) {
   const [format, setFormat] = useState<ExportFormat>("wav");
   const [sampleRate, setSampleRate] = useState<number>(44100);
   const [bitDepth, setBitDepth] = useState<16 | 24 | 32>(16);
@@ -44,14 +50,25 @@ export function ExportPanel({ onExport, isExporting = false }: ExportPanelProps)
 
   const lossy = format === "mp3";
 
-  const handleExport = () => {
-    if (!onExport || isExporting) return;
-    onExport({
+  const settings: ExportSettings = {
+    format,
+    sampleRate,
+    bitDepth,
+    dither: dither ? "tpdf" : "none",
+  };
+
+  useEffect(() => {
+    onSettingsChange?.({
       format,
       sampleRate,
       bitDepth,
       dither: dither ? "tpdf" : "none",
     });
+  }, [format, sampleRate, bitDepth, dither, onSettingsChange]);
+
+  const handleExport = () => {
+    if (!onExport || isExporting) return;
+    onExport(settings);
   };
 
   return (

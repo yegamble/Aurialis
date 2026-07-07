@@ -105,6 +105,24 @@ export function ExportPanel({
         disabled={lossy}
       />
 
+      {isExporting ? (
+        <div
+          data-testid="export-progress"
+          role="status"
+          aria-live="polite"
+          className="space-y-1"
+        >
+          <div className="flex justify-between text-[11px] text-[rgba(255,255,255,0.6)]">
+            <span>Rendering…</span>
+          </div>
+          {/* Indeterminate: renderOffline exposes no progress, so we signal
+              activity honestly rather than fabricate a percentage. */}
+          <div className="h-1 overflow-hidden rounded bg-[rgba(255,255,255,0.06)]">
+            <div className="h-full w-full animate-pulse bg-gradient-to-r from-[#30d158] to-[#5ac8fa]" />
+          </div>
+        </div>
+      ) : null}
+
       <motion.button
         onClick={handleExport}
         disabled={isExporting || !onExport}

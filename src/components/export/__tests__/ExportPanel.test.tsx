@@ -89,6 +89,17 @@ describe("ExportPanel", () => {
     expect(screen.getByRole("switch", { name: "Dither" })).toBeDisabled();
   });
 
+  it("shows an indeterminate progress indicator only while exporting", () => {
+    const { rerender } = render(
+      <ExportPanel onExport={vi.fn()} isExporting={false} />,
+    );
+    expect(screen.queryByTestId("export-progress")).toBeNull();
+    rerender(<ExportPanel onExport={vi.fn()} isExporting />);
+    expect(screen.getByTestId("export-progress")).toBeInTheDocument();
+    // Honest indeterminate bar — no fabricated percentage text.
+    expect(screen.getByTestId("export-progress")).toHaveTextContent(/rendering/i);
+  });
+
   it("passes WAV settings (format, sampleRate, bitDepth) by default", () => {
     const onExport = vi.fn();
     render(<ExportPanel onExport={onExport} />);

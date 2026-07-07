@@ -214,17 +214,24 @@ test.describe("TS-006: Send to Master", () => {
     await expect(page.getByText("mixed-stems.wav")).toBeVisible();
   });
 
-  test("export mix button triggers download", async ({ page }) => {
+  test("export mix opens the export dialog and triggers a download", async ({
+    page,
+  }) => {
     await navigateToMix(page);
     await uploadStems(page, STEM_FILES);
 
     const exportBtn = page.getByRole("button", { name: /export mix/i });
     await expect(exportBtn).toBeVisible();
 
-    // Set up download listener
-    const downloadPromise = page.waitForEvent("download", { timeout: 60000 });
-
+    // Export Mix now opens a dialog with the shared ExportPanel (format / SR /
+    // bit-depth / dither) instead of exporting immediately.
     await exportBtn.click();
+    const dialog = page.getByTestId("mix-export-dialog");
+    await expect(dialog).toBeVisible();
+
+    // Set up download listener, then export at the default WAV settings.
+    const downloadPromise = page.waitForEvent("download", { timeout: 60000 });
+    await dialog.getByRole("button", { name: /export wav/i }).click();
 
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe("mixed-stems.wav");

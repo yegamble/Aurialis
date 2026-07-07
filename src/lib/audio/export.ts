@@ -36,44 +36,45 @@ export interface ExportOptions {
   mp3Bitrate?: Mp3Bitrate;
 }
 
-/**
- * Render the source audio with the given params, encode as WAV, and trigger
- * a browser download.
- *
- * @param sourceBuffer  Decoded input AudioBuffer
- * @param params        Current mastering parameters
- * @param options       Export settings
- */
-export async function exportWav(
-  sourceBuffer: AudioBuffer,
-  params: AudioParams,
-  options: ExportOptions
-): Promise<void> {
-  // 1. Render offline
-  const rendered = await renderOffline(
-    sourceBuffer,
-    params,
-    options.sampleRate,
-    options.script ?? null,
-  );
+/** Encode + download settings for an already-rendered buffer. */
+export interface EncodeDownloadOptions {
+  /** Container format (default: "wav"). */
+  format?: ExportFormat;
+  /** Bit depth for WAV encoding. */
+  bitDepth: BitDepth;
+  /** Dither type for integer WAV encoding (default: "tpdf"). */
+  dither?: DitherType;
+  /** Constant bitrate for MP3 export in kbps (default 320). Ignored for WAV. */
+  mp3Bitrate?: Mp3Bitrate;
+  /** Suggested filename for the download (without extension). */
+  filename?: string;
+}
 
-  // 2. Encode to the chosen container format
+/**
+ * Encode an already-rendered AudioBuffer to the chosen container format and
+ * trigger a browser download. Shared by the /master export path (exportWav)
+ * and the /mix export path (renderMix → here) so both honor format/bit-depth/
+ * dither identically.
+ */
+export async function encodeAndDownload(
+  buffer: AudioBuffer,
+  options: EncodeDownloadOptions,
+): Promise<void> {
   const format = options.format ?? "wav";
   let data: ArrayBuffer;
   let mimeType: string;
   let extension: string;
   if (format === "mp3") {
     const { encodeMp3 } = await import("./mp3-encoder");
-    data = await encodeMp3(rendered, options.mp3Bitrate ?? 320);
+    data = await encodeMp3(buffer, options.mp3Bitrate ?? 320);
     mimeType = "audio/mpeg";
     extension = "mp3";
   } else {
-    data = encodeWav(rendered, options.bitDepth, options.dither);
+    data = encodeWav(buffer, options.bitDepth, options.dither);
     mimeType = "audio/wav";
     extension = "wav";
   }
 
-  // 3. Trigger browser download
   const blob = new Blob([data], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -84,4 +85,32 @@ export async function exportWav(
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Render the source audio with the given params, encode to the chosen format,
+ * and trigger a browser download.
+ *
+ * @param sourceBuffer  Decoded input AudioBuffer
+ * @param params        Current mastering parameters
+ * @param options       Export settings
+ */
+export async function exportWav(
+  sourceBuffer: AudioBuffer,
+  params: AudioParams,
+  options: ExportOptions
+): Promise<void> {
+  const rendered = await renderOffline(
+    sourceBuffer,
+    params,
+    options.sampleRate,
+    options.script ?? null,
+  );
+  await encodeAndDownload(rendered, {
+    format: options.format,
+    bitDepth: options.bitDepth,
+    dither: options.dither,
+    mp3Bitrate: options.mp3Bitrate,
+    filename: options.filename,
+  });
 }

@@ -83,6 +83,8 @@ export function MasterScreen({
           toggles={toggles}
           onToggle={onToggle}
           onAutoMaster={onAutoMaster}
+          outputPreset={outputPreset}
+          onOutputPresetChange={onOutputPresetChange}
         />
         {autoMasterStatus.kind === "analyzing" ? (
           <div

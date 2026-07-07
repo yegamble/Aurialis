@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactElement, ReactNode } from "react";
-import { ArrowLeft, Music } from "lucide-react";
+import { ArrowLeft, Music, Scissors, Download } from "lucide-react";
 
 export type MasterMode = "simple" | "advanced" | "deep";
 
@@ -13,6 +13,10 @@ export interface MasterToolbarProps {
   mode: MasterMode;
   onModeChange: (mode: MasterMode) => void;
   onBack: () => void;
+  /** Right-side "Split stems" action (→ /mix). Omitted when not provided. */
+  onStems?: () => void;
+  /** Right-side primary "Export" action. Omitted when not provided. */
+  onExport?: () => void;
   children?: ReactNode;
 }
 
@@ -30,6 +34,8 @@ export function MasterToolbar({
   mode,
   onModeChange,
   onBack,
+  onStems,
+  onExport,
   children,
 }: MasterToolbarProps): ReactElement {
   return (
@@ -83,7 +89,31 @@ export function MasterToolbar({
         })}
       </div>
 
-      <div className="flex min-w-[80px] items-center justify-end gap-2">{children}</div>
+      <div className="flex items-center justify-end gap-2">
+        {children}
+        {onStems && (
+          <button
+            type="button"
+            data-testid="master-split-stems-button"
+            onClick={onStems}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] px-3 py-1.5 text-xs text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.1)]"
+          >
+            <Scissors className="h-3.5 w-3.5" />
+            Split stems
+          </button>
+        )}
+        {onExport && (
+          <button
+            type="button"
+            data-testid="master-export-button"
+            onClick={onExport}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#0a84ff] px-3.5 py-1.5 text-xs font-medium text-white shadow-[0_1px_4px_rgba(10,132,255,0.4)] hover:bg-[#0066cc]"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export
+          </button>
+        )}
+      </div>
     </div>
   );
 }

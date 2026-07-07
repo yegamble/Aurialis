@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, ArrowLeft } from "lucide-react";
 import { WaveformDisplay } from "@/components/visualization/WaveformDisplay";
 import { SpectrumDisplay } from "@/components/visualization/SpectrumDisplay";
 import { LevelMeter } from "@/components/visualization/LevelMeter";
@@ -135,6 +135,9 @@ export default function MasterPage() {
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
+  // Focused "Export" screen state (design intent): the toolbar Export button
+  // opens a dedicated export view with a "Back to mastering" affordance.
+  const [showExport, setShowExport] = useState(false);
 
   // Simple mode: genre, intensity (0-100), and toggles. Hydrated from the
   // library entry on mount when loadedFromLibrary is set.
@@ -388,10 +391,32 @@ export default function MasterPage() {
           stop();
           router.push("/");
         }}
+        onStems={() => {
+          stop();
+          router.push("/mix");
+        }}
+        onExport={() => setShowExport(true)}
       >
         <LibraryStateBadge />
       </MasterToolbar>
 
+      {showExport ? (
+        <FocusedExport
+          fileName={file.name}
+          onBack={() => setShowExport(false)}
+        >
+          <ExportView
+            onExport={handleExport}
+            isExporting={isExporting}
+            lufs={metering.lufs}
+            truePeak={metering.truePeak}
+            lra={metering.lra}
+            lraReady={metering.lraReady}
+            dynamicRange={metering.dynamicRange}
+            durationSec={duration}
+          />
+        </FocusedExport>
+      ) : (
       <div className="flex-1 flex overflow-hidden">
         {isLgViewport && (
           <aside className="order-3 w-80 border-l border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(20,20,22,0.6)] p-4 shrink-0">
@@ -564,17 +589,6 @@ export default function MasterPage() {
             </div>
           ) : null}
 
-          <ExportView
-            onExport={handleExport}
-            isExporting={isExporting}
-            lufs={metering.lufs}
-            truePeak={metering.truePeak}
-            lra={metering.lra}
-            lraReady={metering.lraReady}
-            dynamicRange={metering.dynamicRange}
-            durationSec={duration}
-          />
-
           {!isLgViewport && (
             <details className="group">
               <summary className="cursor-pointer text-[#0a84ff] text-sm py-2 list-none flex items-center gap-1">
@@ -683,7 +697,51 @@ export default function MasterPage() {
           ) : null}
         </aside>
       </div>
+      )}
     </AppShell>
+  );
+}
+
+/**
+ * Focused "Export" screen state on /master — a dedicated view reached from the
+ * toolbar Export button. Header (Export + track name) + "Back to mastering";
+ * the existing ExportView is mounted inside unchanged.
+ */
+function FocusedExport({
+  fileName,
+  onBack,
+  children,
+}: {
+  fileName: string;
+  onBack: () => void;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <div
+      data-testid="master-export-focused"
+      className="flex-1 overflow-y-auto p-6"
+    >
+      <div className="mx-auto max-w-3xl">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold text-white">Export</h1>
+            <p className="truncate text-xs text-[rgba(255,255,255,0.5)]">
+              {fileName}
+            </p>
+          </div>
+          <button
+            type="button"
+            data-testid="export-back-button"
+            onClick={onBack}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] px-3 py-1.5 text-xs text-[rgba(255,255,255,0.75)] hover:bg-[rgba(255,255,255,0.1)]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to mastering
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }
 

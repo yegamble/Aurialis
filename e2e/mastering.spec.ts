@@ -736,6 +736,10 @@ test.describe("Parametric EQ (P3)", () => {
 test.describe("Export buttons", () => {
   test.beforeEach(async ({ page }) => {
     await uploadAndNavigate(page);
+    // Export is now a focused state reached from the toolbar Export button
+    // (design intent). Open it before asserting the export controls.
+    await page.getByTestId("master-export-button").click();
+    await expect(page.getByTestId("master-export-focused")).toBeVisible();
   });
 
   test("export format buttons update the export settings UI", async ({ page }) => {

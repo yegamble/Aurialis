@@ -10,6 +10,8 @@ import { LevelMeter } from "@/components/visualization/LevelMeter";
 import { Goniometer } from "@/components/visualization/Goniometer";
 import { MasterScreen } from "@/components/mastering/MasterScreen";
 import { BigReadout } from "@/components/mastering/BigReadout";
+import { DeepTimeline } from "@/components/mastering/DeepTimeline";
+import { PROFILE_CARDS } from "@/components/mastering/EngineerProfilePicker";
 import { type ShellScreen } from "@/components/shell/Sidebar";
 import { AppShell } from "@/components/shell/AppShell";
 import { ABToggle } from "@/components/mastering/ABToggle";
@@ -79,6 +81,10 @@ function correlationPhrase(c: number): string {
   return "Out of phase";
 }
 
+function profileLabel(id: string): string {
+  return PROFILE_CARDS.find((p) => p.id === id)?.name ?? id;
+}
+
 function mbGrColorClass(db: number): string {
   const g = -db;
   if (g >= 6) return "text-red-400";
@@ -122,6 +128,7 @@ export default function MasterPage() {
   // Library bridge — used to persist + restore mastering settings per song.
   const loadedFromLibrary = useDeepStore((s) => s.loadedFromLibrary);
   const suppressLibraryAutoUpdate = useDeepStore((s) => s.suppressLibraryAutoUpdate);
+  const deepScript = useDeepStore((s) => s.script);
   const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
   const updateLibrarySettings = useLibraryStore((s) => s.updateSettings);
   const updateMeasuredLufs = useLibraryStore((s) => s.updateMeasuredLufs);
@@ -534,6 +541,29 @@ export default function MasterPage() {
             </div>
             <SpectrumDisplay data={spectrumData} pro={proMode} />
           </div>
+
+          {/* Deep timeline — promoted to a full-width main-canvas card below
+              the transport when a script is ready (design views.jsx
+              DeepTimelineBig). Header + Move/Edited/AI-Repair legend. */}
+          {mode === "deep" && deepScript ? (
+            <div
+              data-testid="deep-timeline-card"
+              className="rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-4"
+            >
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.5)]">
+                  Mastering Script &middot; {profileLabel(deepScript.profile)}
+                </span>
+                <div className="flex items-center gap-3 text-[10px] text-[rgba(255,255,255,0.5)]">
+                  <LegendDot color="#0a84ff" label="Move" />
+                  <LegendDot color="#ffd60a" label="Edited" />
+                  <LegendDot color="#ff7a00" label="AI Repair" />
+                </div>
+              </div>
+              <DeepTimeline script={deepScript} />
+            </div>
+          ) : null}
+
           <ExportView
             onExport={handleExport}
             isExporting={isExporting}
@@ -654,6 +684,25 @@ export default function MasterPage() {
         </aside>
       </div>
     </AppShell>
+  );
+}
+
+function LegendDot({
+  color,
+  label,
+}: {
+  color: string;
+  label: string;
+}): React.ReactElement {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span
+        aria-hidden
+        className="inline-block h-2 w-2 rounded-full"
+        style={{ background: color }}
+      />
+      {label}
+    </span>
   );
 }
 

@@ -8,6 +8,7 @@ import { LibraryView } from "@/components/library/LibraryView";
 import { deriveLibraryAlbum } from "@/components/library/library-album";
 import { AppShell } from "@/components/shell/AppShell";
 import type { ShellScreen, SidebarTrack } from "@/components/shell/Sidebar";
+import { libraryEntriesToSidebarTracks } from "@/components/shell/sidebar-tracks";
 import { ResumeOrFreshDialog } from "@/components/library/ResumeOrFreshDialog";
 import { useAudioStore } from "@/lib/stores/audio-store";
 import { useLibraryStore } from "@/lib/stores/library-store";
@@ -185,11 +186,7 @@ function LibraryImportPage() {
   const album = useMemo(() => deriveLibraryAlbum(entries), [entries]);
 
   const sidebarTracks = useMemo<SidebarTrack[]>(
-    () =>
-      entries.slice(0, 12).map((e) => ({
-        id: e.fingerprint,
-        title: e.fileName.replace(/\.[^.]+$/, ""),
-      })),
+    () => libraryEntriesToSidebarTracks(entries),
     [entries],
   );
 

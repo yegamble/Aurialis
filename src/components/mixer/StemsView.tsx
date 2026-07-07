@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { Play, Pause, SkipBack, Sparkles } from "lucide-react";
@@ -16,7 +16,10 @@ import { formatAutoMixStageLabel } from "@/lib/mix/auto-mix-label";
 import { useTurnstileToken } from "@/components/security/TurnstileGate";
 import { type ShellScreen } from "@/components/shell/Sidebar";
 import { AppShell } from "@/components/shell/AppShell";
+import { libraryEntriesToSidebarTracks } from "@/components/shell/sidebar-tracks";
 import { useSettingsStore } from "@/lib/stores/settings-store";
+import { useLibraryStore } from "@/lib/stores/library-store";
+import { openLibraryEntryFromList } from "@/lib/storage/library-resume";
 import {
   startSeparation,
   downloadStem,
@@ -49,6 +52,10 @@ export function StemsView() {
   const router = useRouter();
   const proMode = useSettingsStore((s) => s.proMode);
   const setProMode = useSettingsStore((s) => s.setProMode);
+  const libraryEntries = useLibraryStore((s) => s.entries);
+  const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
+  const hydrateLibrary = useLibraryStore((s) => s.hydrate);
+  const libraryHydrated = useLibraryStore((s) => s.hydrated);
   const stems = useMixerStore((s) => s.stems);
   const isAutoMixing = useMixerStore((s) => s.isAutoMixing);
   const autoMixRunId = useMixerStore((s) => s.autoMixRunId);
@@ -114,6 +121,11 @@ export function StemsView() {
     const id = setInterval(() => setSeparationNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [isSeparating]);
+
+  // Hydrate the library so the shared sidebar can list real tracks on /mix.
+  useEffect(() => {
+    if (!libraryHydrated) void hydrateLibrary();
+  }, [libraryHydrated, hydrateLibrary]);
 
   // Detect which loaded stems have panned (stereo) content so we can offer the
   // client-side "Split L/R" control. Recomputes only when the stem set changes.
@@ -631,9 +643,23 @@ export function StemsView() {
 
   const hasStemsLoaded = stems.length > 0;
 
+  const sidebarTracks = useMemo(
+    () => libraryEntriesToSidebarTracks(libraryEntries),
+    [libraryEntries],
+  );
+
+  const handleSelectTrack = useCallback(
+    async (id: string) => {
+      const res = await openLibraryEntryFromList(id);
+      if (res.ok) router.push("/master");
+    },
+    [router],
+  );
+
   const handleSidebarSelect = (next: ShellScreen) => {
     if (next === "stems") return;
     if (next === "album") router.push("/album");
+    else if (next === "upload") router.push("/?screen=upload");
     else router.push("/");
   };
 
@@ -643,6 +669,9 @@ export function StemsView() {
       <AppShell
         activeScreen="stems"
         onSelect={handleSidebarSelect}
+        tracks={sidebarTracks}
+        activeTrackId={activeFingerprint}
+        onSelectTrack={(id) => void handleSelectTrack(id)}
         proMode={proMode}
         onProModeChange={setProMode}
         variant="workspace"

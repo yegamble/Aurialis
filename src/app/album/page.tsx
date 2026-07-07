@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
 import { AlbumView, type AlbumTrackRow } from "@/components/album/AlbumView";
 import type { ShellScreen } from "@/components/shell/Sidebar";
+import { libraryEntriesToSidebarTracks } from "@/components/shell/sidebar-tracks";
 import { useLibraryStore } from "@/lib/stores/library-store";
 import { useSettingsStore } from "@/lib/stores/settings-store";
 import {
@@ -19,6 +20,7 @@ import { createAlbumMasterDeps } from "@/lib/album/album-render";
 export default function AlbumPage(): React.ReactElement {
   const router = useRouter();
   const entries = useLibraryStore((s) => s.entries);
+  const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
   const hydrate = useLibraryStore((s) => s.hydrate);
   const hydrated = useLibraryStore((s) => s.hydrated);
   const proMode = useSettingsStore((s) => s.proMode);
@@ -38,6 +40,11 @@ export default function AlbumPage(): React.ReactElement {
   // the configured per-track targets, so deltas reflect real loudness drift.
   const tracks = useMemo<AlbumTrackRow[]>(
     () => libraryEntriesToAlbumRows(entries),
+    [entries],
+  );
+
+  const sidebarTracks = useMemo(
+    () => libraryEntriesToSidebarTracks(entries),
     [entries],
   );
 
@@ -124,6 +131,9 @@ export default function AlbumPage(): React.ReactElement {
       <AppShell
         activeScreen="album"
         onSelect={handleSelect}
+        tracks={sidebarTracks}
+        activeTrackId={activeFingerprint}
+        onSelectTrack={(id) => void handleOpenTrack(id)}
         proMode={proMode}
         onProModeChange={setProMode}
       >

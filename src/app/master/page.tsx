@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { Play, Pause, SkipBack, SkipForward, ArrowLeft } from "lucide-react";
@@ -9,6 +9,8 @@ import { SpectrumDisplay } from "@/components/visualization/SpectrumDisplay";
 import { LevelMeter } from "@/components/visualization/LevelMeter";
 import { Goniometer } from "@/components/visualization/Goniometer";
 import { MasterScreen } from "@/components/mastering/MasterScreen";
+import { libraryEntriesToSidebarTracks } from "@/components/shell/sidebar-tracks";
+import { openLibraryEntryFromList } from "@/lib/storage/library-resume";
 import { BigReadout } from "@/components/mastering/BigReadout";
 import { DeepTimeline } from "@/components/mastering/DeepTimeline";
 import { PROFILE_CARDS } from "@/components/mastering/EngineerProfilePicker";
@@ -130,6 +132,7 @@ export default function MasterPage() {
   const suppressLibraryAutoUpdate = useDeepStore((s) => s.suppressLibraryAutoUpdate);
   const deepScript = useDeepStore((s) => s.script);
   const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
+  const libraryEntries = useLibraryStore((s) => s.entries);
   const updateLibrarySettings = useLibraryStore((s) => s.updateSettings);
   const updateMeasuredLufs = useLibraryStore((s) => s.updateMeasuredLufs);
 
@@ -351,6 +354,11 @@ export default function MasterPage() {
     }
   }, [file, router]);
 
+  const sidebarTracks = useMemo(
+    () => libraryEntriesToSidebarTracks(libraryEntries),
+    [libraryEntries],
+  );
+
   if (!file) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -371,10 +379,36 @@ export default function MasterPage() {
     else router.push("/");
   };
 
+  // Switch to another library track without leaving the mastering workspace.
+  // Re-opens the entry (restoring its persisted chain + audio) and rehydrates
+  // the Simple-mode UI state the same way the initial mount does, so no control
+  // is left showing the previous track's values.
+  const handleSelectTrack = async (id: string): Promise<void> => {
+    if (id === activeFingerprint) return;
+    stop();
+    const res = await openLibraryEntryFromList(id);
+    if (!res.ok) return;
+    const nextFile = useAudioStore.getState().file;
+    if (nextFile) await loadFile(nextFile);
+    const settings = useLibraryStore
+      .getState()
+      .entries.find((e) => e.fingerprint === id)?.settings;
+    if (settings) {
+      setGenre(settings.simple.genre);
+      setIntensity(settings.simple.intensity);
+      setToggles({ ...INITIAL_TOGGLES, ...settings.simple.toggles });
+      setTonePreset(settings.tonePreset);
+      setOutputPreset(settings.outputPreset);
+    }
+  };
+
   return (
     <AppShell
       activeScreen="master"
       onSelect={handleSidebarSelect}
+      tracks={sidebarTracks}
+      activeTrackId={activeFingerprint}
+      onSelectTrack={(id) => void handleSelectTrack(id)}
       proMode={proMode}
       onProModeChange={setProMode}
       variant="workspace"

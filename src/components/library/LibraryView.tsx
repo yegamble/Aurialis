@@ -2,11 +2,33 @@
 
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import type { DragEvent, ReactElement } from "react";
-import { CheckCircle2, Music, Plus, Trash2, Upload } from "lucide-react";
+import { Plus, Trash2, Upload } from "lucide-react";
 import type { LibraryEntry } from "@/lib/storage/library-types";
+import { computeAlbumTargetLufs } from "@/lib/stores/album-store";
 import { AlbumHeroCard } from "./AlbumHeroCard";
 
 export type LibraryFilter = "all" | "analyzed" | "drafts";
+
+/** Shared column template so the header row and data rows stay aligned. */
+const LIBRARY_GRID =
+  "grid grid-cols-[1fr_84px_84px_112px_40px] items-center gap-3";
+
+/** Loudness drift threshold (LU) for the amber LUFS flag. */
+const DRIFT_LU = 1.5;
+
+/**
+ * Deterministic gradient for a row's art tile, seeded by a stable string
+ * (the fingerprint). Same input → same gradient, so a track keeps its colour.
+ */
+function gradientFor(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (Math.imul(h, 31) + seed.charCodeAt(i)) >>> 0;
+  }
+  const h1 = h % 360;
+  const h2 = (h1 + 40 + (h % 60)) % 360;
+  return `linear-gradient(135deg, hsl(${h1} 55% 42%), hsl(${h2} 60% 22%))`;
+}
 
 export interface LibraryAlbum {
   title: string;
@@ -77,6 +99,9 @@ export function LibraryView({
     if (filter === "analyzed") return entries.filter((e) => e.script !== null);
     return entries.filter((e) => e.script === null);
   }, [entries, filter]);
+  // Reference target for the per-row LUFS drift flag — the same derivation the
+  // /album view and the hero card use, so nothing disagrees across surfaces.
+  const albumTarget = useMemo(() => computeAlbumTargetLufs(entries, null), [entries]);
 
   return (
     <div className="flex min-h-full flex-col gap-[22px] p-8 pt-6">
@@ -145,24 +170,38 @@ export function LibraryView({
         />
       ) : null}
 
-      <ul
+      <div
+        role="list"
         data-testid="library-list"
-        className="flex flex-col gap-1 overflow-hidden rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[rgba(28,28,30,0.6)] p-1.5"
+        className="overflow-hidden rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[rgba(28,28,30,0.6)]"
       >
+        <div
+          className={
+            LIBRARY_GRID +
+            " border-b border-[rgba(255,255,255,0.06)] px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.4)]"
+          }
+        >
+          <span>Title</span>
+          <span className="text-right">LUFS</span>
+          <span className="text-right">Length</span>
+          <span className="text-right">Modified</span>
+          <span aria-hidden />
+        </div>
         {filtered.map((entry) => (
           <LibraryRow
             key={entry.fingerprint}
             entry={entry}
+            target={albumTarget}
             onOpen={onOpenEntry}
             onRequestDelete={onRequestDelete}
           />
         ))}
         {filtered.length === 0 ? (
-          <li className="px-3 py-6 text-center text-[12px] text-[rgba(255,255,255,0.5)]">
+          <div className="px-3 py-6 text-center text-[12px] text-[rgba(255,255,255,0.5)]">
             No tracks match this filter.
-          </li>
+          </div>
         ) : null}
-      </ul>
+      </div>
 
       {onImportFiles ? (
         <>
@@ -219,77 +258,104 @@ export function LibraryView({
 
 interface LibraryRowProps {
   entry: LibraryEntry;
+  target: number;
   onOpen: (fingerprint: string) => void | Promise<void>;
   onRequestDelete: (fingerprint: string) => void;
 }
 
 const LibraryRow = memo(function LibraryRow({
   entry,
+  target,
   onOpen,
   onRequestDelete,
 }: LibraryRowProps): ReactElement {
   const analyzed = entry.script !== null;
+  const lufs = entry.measuredLufs;
+  const hasLufs = typeof lufs === "number" && Number.isFinite(lufs);
+  const drift = hasLufs && Math.abs(lufs - target) > DRIFT_LU;
   return (
-    <li
+    <div
+      role="listitem"
       data-testid="library-row"
       data-fingerprint={entry.fingerprint}
-      className="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2 hover:border-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.04)]"
+      className={
+        LIBRARY_GRID +
+        " border-b border-[rgba(255,255,255,0.04)] px-5 py-2.5 last:border-b-0 hover:bg-[rgba(255,255,255,0.03)]"
+      }
     >
       <button
         type="button"
         onClick={() => void onOpen(entry.fingerprint)}
-        className="flex flex-1 items-center gap-3 text-left"
+        className="contents text-left"
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[rgba(255,255,255,0.06)]">
-          <Music className="h-4 w-4 text-[#0a84ff]" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm text-white">{entry.fileName}</p>
-          <p className="text-xs text-[rgba(255,255,255,0.4)]">
-            {entry.durationSec ? formatDuration(entry.durationSec) : formatBytes(entry.fileSize)}
-            {" · "}
-            {formatRelative(entry.lastModified)}
-          </p>
-        </div>
-        {analyzed ? (
-          <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-[#0a84ff]">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Analyzed
-          </span>
-        ) : null}
-        {!entry.audioPersisted ? (
+        <span className="flex min-w-0 items-center gap-3">
           <span
-            data-testid="reupload-badge"
-            title="The audio for this track isn't stored on this device — re-upload the file to play it."
-            className="shrink-0 text-[10px] uppercase tracking-wider text-[rgba(255,196,84,0.9)]"
-          >
-            Re-upload audio to play
+            data-testid="library-art"
+            aria-hidden
+            className="h-10 w-10 shrink-0 rounded-md"
+            style={{ background: gradientFor(entry.fingerprint) }}
+          />
+          <span className="min-w-0">
+            <span className="flex items-center gap-2">
+              <span className="truncate text-[13.5px] font-medium text-white">
+                {entry.fileName}
+              </span>
+              {analyzed ? (
+                <span className="shrink-0 rounded bg-[rgba(10,132,255,0.13)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#0a84ff]">
+                  Analyzed
+                </span>
+              ) : null}
+            </span>
+            {!entry.audioPersisted ? (
+              <span
+                data-testid="reupload-badge"
+                title="The audio for this track isn't stored on this device — re-upload the file to play it."
+                className="mt-0.5 block text-[10px] uppercase tracking-wider text-[rgba(255,196,84,0.9)]"
+              >
+                Re-upload audio to play
+              </span>
+            ) : null}
           </span>
-        ) : null}
+        </span>
+        <span
+          data-testid="library-lufs"
+          data-drift={drift ? "true" : "false"}
+          className={
+            "text-right text-[12px] tabular-nums " +
+            (drift ? "font-medium text-[#ff9f0a]" : "text-white")
+          }
+        >
+          {hasLufs ? formatLufs(lufs) : "—"}
+        </span>
+        <span className="text-right text-[12px] tabular-nums text-[rgba(255,255,255,0.7)]">
+          {entry.durationSec ? formatDuration(entry.durationSec) : "—"}
+        </span>
+        <span className="text-right text-[12px] tabular-nums text-[rgba(255,255,255,0.45)]">
+          {formatRelative(entry.lastModified)}
+        </span>
       </button>
       <button
         type="button"
         aria-label={`Delete ${entry.fileName}`}
         data-testid="library-delete-button"
         onClick={() => onRequestDelete(entry.fingerprint)}
-        className="rounded-md p-2 text-[rgba(255,255,255,0.4)] hover:bg-[rgba(255,255,255,0.05)] hover:text-red-400"
+        className="justify-self-end rounded-md p-2 text-[rgba(255,255,255,0.4)] hover:bg-[rgba(255,255,255,0.05)] hover:text-red-400"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
-    </li>
+    </div>
   );
 });
+
+function formatLufs(value: number): string {
+  const abs = Math.abs(value).toFixed(1);
+  return value < 0 ? `−${abs}` : value > 0 ? `+${abs}` : abs;
+}
 
 function formatDuration(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function formatRelative(ms: number): string {

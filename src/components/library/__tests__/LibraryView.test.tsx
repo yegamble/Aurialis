@@ -59,6 +59,65 @@ describe("LibraryView", () => {
     expect(screen.getByTestId("library-summary")).toHaveTextContent(/2 songs/i);
   });
 
+  it("renders uppercase column headers", () => {
+    render(
+      <LibraryView
+        entries={[analyzedEntry, draftEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Title")).toBeInTheDocument();
+    expect(screen.getByText("LUFS")).toBeInTheDocument();
+    expect(screen.getByText("Length")).toBeInTheDocument();
+    expect(screen.getByText("Modified")).toBeInTheDocument();
+  });
+
+  it("shows an em-dash for LUFS when the track has no measured loudness", () => {
+    render(
+      <LibraryView
+        entries={[draftEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    const row = screen.getByTestId("library-row");
+    expect(within(row).getByTestId("library-lufs")).toHaveTextContent("—");
+  });
+
+  it("renders the measured LUFS and flags drift >1.5 LU from target as amber", () => {
+    // No per-track target → album target = default (-14). Measured -10 → 4 LU drift.
+    const drifted = makeEntry({
+      fingerprint: "fp-drift",
+      fileName: "Loud.wav",
+      measuredLufs: -10,
+      script: { version: 1 } as never,
+    });
+    render(
+      <LibraryView
+        entries={[drifted]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    const lufs = within(screen.getByTestId("library-row")).getByTestId("library-lufs");
+    expect(lufs).toHaveTextContent("−10.0");
+    expect(lufs).toHaveAttribute("data-drift", "true");
+  });
+
+  it("renders a deterministic gradient art tile per row", () => {
+    render(
+      <LibraryView
+        entries={[analyzedEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    const art = within(screen.getByTestId("library-row")).getByTestId("library-art");
+    expect(art).toBeInTheDocument();
+    expect(art.getAttribute("style")).toMatch(/linear-gradient/);
+  });
+
   it("renders a row for every entry in the default (all) filter", () => {
     render(
       <LibraryView

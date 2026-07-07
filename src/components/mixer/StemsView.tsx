@@ -8,6 +8,7 @@ import { StemUpload } from "@/components/mixer/StemUpload";
 import { StemList } from "@/components/mixer/StemList";
 import { StemTimeline } from "@/components/mixer/StemTimeline";
 import { MixToolbar } from "@/components/mixer/MixToolbar";
+import { ExportPanel, type ExportSettings } from "@/components/export/ExportPanel";
 import { SeparationProgressCard } from "@/components/mix/SeparationProgressCard";
 import { useMixEngine } from "@/hooks/useMixEngine";
 import { useMixerStore } from "@/lib/stores/mixer-store";
@@ -80,6 +81,7 @@ export function StemsView() {
   const [isLoadingStems, setIsLoadingStems] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   // Separation state
   const [isSeparating, setIsSeparating] = useState(false);
@@ -596,26 +598,24 @@ export function StemsView() {
     }
   };
 
-  const handleExportMix = async () => {
+  // Render the mix at the chosen settings and encode/download via the shared
+  // export path so /mix honors format/SR/bit-depth/dither (no more hardcoded
+  // 16-bit/44.1 kHz WAV). Invoked by the ExportPanel mounted in the dialog.
+  const handleMixExport = async (settings: ExportSettings) => {
     if (stems.length === 0 || isRendering) return;
     setIsRendering(true);
+    setLoadError(null);
     try {
       const { renderMix } = await import("@/lib/audio/mix-renderer");
-      const { encodeWav } = await import("@/lib/audio/wav-encoder");
+      const { encodeAndDownload } = await import("@/lib/audio/export");
 
-      const rendered = await renderMix(stems, 44100, masterParams);
-      const wavData = encodeWav(rendered, 16);
-      const blob = new Blob([wavData], { type: "audio/wav" });
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "mixed-stems.wav";
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const rendered = await renderMix(stems, settings.sampleRate, masterParams);
+      await encodeAndDownload(rendered, {
+        format: settings.format,
+        bitDepth: settings.bitDepth,
+        dither: settings.dither,
+        filename: "mixed-stems",
+      });
     } catch (e) {
       setLoadError(
         e instanceof Error ? e.message : "Failed to export mix"
@@ -661,7 +661,7 @@ export function StemsView() {
         autoMixLabel={autoMixLabel}
         onSendToMaster={handleSendToMaster}
         sendDisabled={isRendering}
-        onExportMix={handleExportMix}
+        onExportMix={() => setShowExportDialog(true)}
         exportDisabled={isRendering}
       />
 
@@ -864,10 +864,68 @@ export function StemsView() {
                   </div>
                 </details>
               </div>
+
+              {/* Send-to-mastering CTA */}
+              <div
+                data-testid="send-to-master-card"
+                className="flex items-center gap-4 rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-4"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0a84ff]/10 text-[#0a84ff]">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold text-white">
+                    Send these stems to mastering?
+                  </div>
+                  <div className="text-[11.5px] text-[rgba(255,255,255,0.5)]">
+                    Aurialis will analyze each stem separately and run
+                    section-aware EQ/Comp on the bus.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSendToMaster}
+                  disabled={isRendering}
+                  className="shrink-0 rounded-lg bg-[#0a84ff] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[#0066cc] disabled:opacity-40"
+                >
+                  {isRendering ? "Rendering…" : "Smart Mix → Master"}
+                </button>
+              </div>
             </>
           )}
         </div>
       </div>
+
+      {showExportDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Export mix"
+          data-testid="mix-export-dialog"
+          onClick={() => {
+            if (!isRendering) setShowExportDialog(false);
+          }}
+        >
+          <div
+            className="w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-medium text-white">Export mix</h2>
+              <button
+                type="button"
+                onClick={() => setShowExportDialog(false)}
+                disabled={isRendering}
+                className="rounded-md px-2 py-1 text-xs text-[rgba(255,255,255,0.5)] hover:text-white disabled:opacity-40"
+              >
+                Close
+              </button>
+            </div>
+            <ExportPanel onExport={handleMixExport} isExporting={isRendering} />
+          </div>
+        </div>
+      )}
       </AppShell>
     </>
   );

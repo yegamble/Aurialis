@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, fireEvent } from "@testing-library/react";
 import { ExportView } from "../ExportView";
 
 const baseProps = {
@@ -30,6 +30,22 @@ describe("ExportView", () => {
     expect(within(view).getByText("6.2 LU")).toBeInTheDocument();
     expect(within(view).getByText("11.3")).toBeInTheDocument(); // DR
     expect(within(view).getByText("3:38")).toBeInTheDocument(); // duration
+  });
+
+  it("shows an estimated file size that reacts to the chosen format", () => {
+    render(<ExportView {...baseProps} />);
+    const view = screen.getByTestId("export-view");
+    // Estimated size row is present with a "~" approximation label.
+    expect(within(view).getByText("Estimated size")).toBeInTheDocument();
+    const wavSize = within(view).getByTestId("estimated-size").textContent;
+    expect(wavSize).toMatch(/~/);
+
+    // Switching to MP3 yields a (much smaller) estimate → value changes.
+    const format = within(view).getByRole("group", { name: "Format" });
+    fireEvent.click(within(format).getByRole("button", { name: "MP3" }));
+    const mp3Size = within(view).getByTestId("estimated-size").textContent;
+    expect(mp3Size).toMatch(/~/);
+    expect(mp3Size).not.toEqual(wavSize);
   });
 
   it("renders em-dash placeholders for unavailable metrics", () => {

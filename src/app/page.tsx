@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { UploadScreen } from "@/components/upload/UploadScreen";
 import { ImportPanel } from "@/components/upload/ImportPanel";
 import { LibraryView } from "@/components/library/LibraryView";
@@ -22,8 +22,9 @@ import type { LibraryEntry } from "@/lib/storage/library-types";
 
 type LocalScreen = Extract<ShellScreen, "library" | "upload">;
 
-export default function UploadPage() {
+function LibraryImportPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const entries = useLibraryStore((s) => s.entries);
   const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
   const removeEntry = useLibraryStore((s) => s.removeEntry);
@@ -50,8 +51,20 @@ export default function UploadPage() {
   // react-hooks/set-state-in-effect warns about.
   if (hydrated && !initialized) {
     setInitialized(true);
-    if (entries.length === 0) setScreen("upload");
+    // `/?screen=upload` (sidebar Import from any route) forces the import
+    // screen; otherwise a first-run empty library opens straight into upload.
+    if (searchParams.get("screen") === "upload") setScreen("upload");
+    else if (entries.length === 0) setScreen("upload");
   }
+
+  // Consume the one-shot `screen` query param and strip it from the URL so a
+  // reload/back doesn't re-force the import screen. The useSearchParams value
+  // captured above still reflects the original intent for the guard.
+  useEffect(() => {
+    if (searchParams.get("screen") && typeof window !== "undefined") {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [searchParams]);
 
   const proceedToMaster = useCallback(() => {
     router.push("/master");
@@ -259,5 +272,15 @@ export default function UploadPage() {
         </div>
       ) : null}
     </>
+  );
+}
+
+export default function UploadPage() {
+  // useSearchParams (read in LibraryImportPage for `?screen=upload`) requires a
+  // Suspense boundary for static rendering under the App Router.
+  return (
+    <Suspense fallback={null}>
+      <LibraryImportPage />
+    </Suspense>
   );
 }

@@ -234,24 +234,6 @@ const OUTPUT_PRESET_EXPECTATIONS = [
   { button: "CD", expected: { "Target LUFS": -9, Ceiling: -0.1 } },
 ];
 
-const EXPORT_FORMAT_EXPECTATIONS = [
-  {
-    button: "Streaming",
-    sampleRate: "44.1 kHz",
-    bitDepth: "16-bit",
-  },
-  {
-    button: "CD Quality",
-    sampleRate: "44.1 kHz",
-    bitDepth: "16-bit",
-  },
-  {
-    button: "Hi-Res",
-    sampleRate: "96 kHz",
-    bitDepth: "24-bit",
-  },
-];
-
 const SECTION_EXPECTATIONS = [
   { title: "Input", childRole: "slider", childName: "Input Gain", startsOpen: true },
   // Phase 4a split the former "Dynamics" Section into "Compressor" (sliders) +
@@ -743,16 +725,43 @@ test.describe("Export buttons", () => {
   });
 
   test("export format buttons update the export settings UI", async ({ page }) => {
-    for (const format of EXPORT_FORMAT_EXPECTATIONS) {
-      const formatButton = page.getByRole("button", {
-        name: format.button,
-        exact: true,
-      });
-      await formatButton.click();
-      await expect(formatButton).toHaveAttribute("aria-pressed", "true");
-      await expect(page.getByLabel("Sample Rate")).toHaveValue(format.sampleRate);
-      await expect(page.getByLabel("Bit Depth")).toHaveValue(format.bitDepth);
-    }
+    // The export panel is now segmented Format / Sample rate / Bit depth groups
+    // (WAV+MP3), replacing the old Streaming/CD/Hi-Res output-target presets.
+    const view = page.getByTestId("master-export-focused");
+    const formatGroup = view.getByRole("group", { name: "Format" });
+    const wav = formatGroup.getByRole("button", { name: "WAV", exact: true });
+    const mp3 = formatGroup.getByRole("button", { name: "MP3", exact: true });
+
+    // WAV is the default and labels the export button.
+    await expect(wav).toHaveAttribute("aria-pressed", "true");
+    await expect(view.getByRole("button", { name: "Export WAV" })).toBeVisible();
+
+    // Switching to MP3 marks it pressed, relabels export, and disables the
+    // bit-depth + dither controls (lossy — they don't apply).
+    await mp3.click();
+    await expect(mp3).toHaveAttribute("aria-pressed", "true");
+    await expect(view.getByRole("button", { name: "Export MP3" })).toBeVisible();
+    await expect(
+      view
+        .getByRole("group", { name: "Bit depth" })
+        .getByRole("button", { name: "24-bit", exact: true }),
+    ).toBeDisabled();
+    await expect(view.getByRole("switch", { name: "Dither" })).toBeDisabled();
+
+    // Back to WAV re-enables bit depth; sample-rate + bit-depth buttons flip
+    // their pressed state.
+    await wav.click();
+    await expect(wav).toHaveAttribute("aria-pressed", "true");
+
+    const sr = view.getByRole("group", { name: "Sample rate" });
+    const sr96 = sr.getByRole("button", { name: "96 kHz", exact: true });
+    await sr96.click();
+    await expect(sr96).toHaveAttribute("aria-pressed", "true");
+
+    const bd = view.getByRole("group", { name: "Bit depth" });
+    const bd24 = bd.getByRole("button", { name: "24-bit", exact: true });
+    await bd24.click();
+    await expect(bd24).toHaveAttribute("aria-pressed", "true");
   });
 
   test("export wav button is visible and triggers a download", async ({

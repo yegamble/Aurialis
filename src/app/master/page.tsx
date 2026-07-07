@@ -10,7 +10,8 @@ import { LevelMeter } from "@/components/visualization/LevelMeter";
 import { Goniometer } from "@/components/visualization/Goniometer";
 import { MasterScreen } from "@/components/mastering/MasterScreen";
 import { BigReadout } from "@/components/mastering/BigReadout";
-import { Sidebar, type ShellScreen } from "@/components/shell/Sidebar";
+import { type ShellScreen } from "@/components/shell/Sidebar";
+import { AppShell } from "@/components/shell/AppShell";
 import { ABToggle } from "@/components/mastering/ABToggle";
 import { MasterToolbar, type MasterMode } from "@/components/mastering/MasterToolbar";
 import { ExportView } from "@/components/export/ExportView";
@@ -347,16 +348,13 @@ export default function MasterPage() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-black">
-      {isLgViewport && (
-        <Sidebar
-          activeScreen="master"
-          onSelect={handleSidebarSelect}
-          proMode={proMode}
-          onProModeChange={setProMode}
-        />
-      )}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <AppShell
+      activeScreen="master"
+      onSelect={handleSidebarSelect}
+      proMode={proMode}
+      onProModeChange={setProMode}
+      variant="workspace"
+    >
       <MasterToolbar
         fileName={file.name}
         durationLabel={formatTime(duration)}
@@ -403,7 +401,7 @@ export default function MasterPage() {
           </aside>
         )}
 
-        <main className="order-1 min-w-0 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
+        <div className="order-1 min-w-0 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
           {/* Top readouts row — design Direction A: 5-col metering grid */}
           <div
             className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5"
@@ -527,7 +525,7 @@ export default function MasterPage() {
               </div>
             </details>
           )}
-        </main>
+        </div>
 
         <aside
           data-testid="master-right-rail"
@@ -575,8 +573,7 @@ export default function MasterPage() {
           ) : null}
         </aside>
       </div>
-      </div>
-    </div>
+    </AppShell>
   );
 }
 

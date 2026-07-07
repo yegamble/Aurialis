@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { StemsView } from "../StemsView";
 
 // Keep the unified shell deterministic.
@@ -27,5 +27,19 @@ describe("StemsView", () => {
     ).toBeInTheDocument();
     // No stems yet → the upload dropzone is shown.
     expect(screen.getByText(/Drop audio files or ZIP/i)).toBeInTheDocument();
+  });
+
+  it("composes the shared AppShell workspace (mixer content lives inside app-shell)", () => {
+    render(<StemsView />);
+    const shell = screen.getByTestId("app-shell");
+    expect(shell).toBeInTheDocument();
+    // Sidebar + Pro Mode toggle thread through the shell.
+    expect(within(shell).getByTestId("sidebar")).toBeInTheDocument();
+    expect(within(shell).getByTestId("pro-mode-toggle")).toBeInTheDocument();
+    // The mixer workspace renders inside the shell (a single role="main" region).
+    expect(within(shell).getByRole("main")).toBeInTheDocument();
+    expect(
+      within(shell).getByText(/Drop audio files or ZIP/i),
+    ).toBeInTheDocument();
   });
 });

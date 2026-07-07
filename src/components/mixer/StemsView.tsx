@@ -13,9 +13,9 @@ import { useMixEngine } from "@/hooks/useMixEngine";
 import { useMixerStore } from "@/lib/stores/mixer-store";
 import { formatAutoMixStageLabel } from "@/lib/mix/auto-mix-label";
 import { useTurnstileToken } from "@/components/security/TurnstileGate";
-import { Sidebar, type ShellScreen } from "@/components/shell/Sidebar";
+import { type ShellScreen } from "@/components/shell/Sidebar";
+import { AppShell } from "@/components/shell/AppShell";
 import { useSettingsStore } from "@/lib/stores/settings-store";
-import { useIsLgViewport } from "@/hooks/use-is-lg-viewport";
 import {
   startSeparation,
   downloadStem,
@@ -48,7 +48,6 @@ export function StemsView() {
   const router = useRouter();
   const proMode = useSettingsStore((s) => s.proMode);
   const setProMode = useSettingsStore((s) => s.setProMode);
-  const isLgViewport = useIsLgViewport();
   const stems = useMixerStore((s) => s.stems);
   const isAutoMixing = useMixerStore((s) => s.isAutoMixing);
   const autoMixRunId = useMixerStore((s) => s.autoMixRunId);
@@ -639,17 +638,15 @@ export function StemsView() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-black">
+    <>
       {turnstileGate}
-      {isLgViewport && (
-        <Sidebar
-          activeScreen="stems"
-          onSelect={handleSidebarSelect}
-          proMode={proMode}
-          onProModeChange={setProMode}
-        />
-      )}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <AppShell
+        activeScreen="stems"
+        onSelect={handleSidebarSelect}
+        proMode={proMode}
+        onProModeChange={setProMode}
+        variant="workspace"
+      >
       <MixToolbar
         onBack={() => {
           stop();
@@ -683,7 +680,7 @@ export function StemsView() {
         )}
 
         {/* Main content */}
-        <main className="min-w-0 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
+        <div className="min-w-0 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
           {/* Model selection dialog */}
           {showModelSelect && pendingSingleFile && (
             <div className="rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] p-6">
@@ -869,9 +866,9 @@ export function StemsView() {
               </div>
             </>
           )}
-        </main>
+        </div>
       </div>
-      </div>
-    </div>
+      </AppShell>
+    </>
   );
 }

@@ -447,12 +447,23 @@ export default function MasterPage() {
             />
           </div>
 
-          <WaveformDisplay
-            audioData={waveformPeaks}
-            currentTime={currentTime}
-            duration={duration}
-            onSeek={seek}
-          />
+          {/* Waveform card — header: current time · "Waveform" · duration.
+              Honest label: the display is not M/S, so no Mid/Side claim. */}
+          <div className="rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] px-4 py-3">
+            <div className="mb-2 flex items-center justify-between text-[10px] tabular-nums text-[rgba(255,255,255,0.4)]">
+              <span>{formatTime(currentTime)}</span>
+              <span className="font-semibold uppercase tracking-[0.14em] text-[rgba(255,255,255,0.5)]">
+                Waveform
+              </span>
+              <span>{formatTime(duration)}</span>
+            </div>
+            <WaveformDisplay
+              audioData={waveformPeaks}
+              currentTime={currentTime}
+              duration={duration}
+              onSeek={seek}
+            />
+          </div>
 
           {/* Transport — bordered three-zone card: A/B left · controls
               center · time right (design app.jsx Transport). */}

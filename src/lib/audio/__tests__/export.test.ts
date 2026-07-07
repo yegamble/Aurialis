@@ -81,4 +81,43 @@ describe("exportWav", () => {
 
     expect(anchor.download).toBe("mastered.wav");
   });
+
+  it("routes format:'mp3' through the mp3 encoder and downloads a .mp3", async () => {
+    const rendered = mockBuffer();
+    vi.spyOn(renderer, "renderOffline").mockResolvedValue(rendered);
+    const encodeWavSpy = vi.spyOn(encoder, "encodeWav");
+    const mp3 = await import("../mp3-encoder");
+    const mp3Spy = vi
+      .spyOn(mp3, "encodeMp3")
+      .mockResolvedValue(new ArrayBuffer(16));
+    const anchor = mockAnchorDownload();
+
+    await exportWav(mockBuffer(), DEFAULT_PARAMS, {
+      sampleRate: 44100,
+      bitDepth: 16,
+      format: "mp3",
+      mp3Bitrate: 256,
+    });
+
+    expect(mp3Spy).toHaveBeenCalledWith(rendered, 256);
+    expect(encodeWavSpy).not.toHaveBeenCalled();
+    expect(anchor.download).toBe("mastered.mp3");
+  });
+
+  it("defaults MP3 bitrate to 320 when unspecified", async () => {
+    vi.spyOn(renderer, "renderOffline").mockResolvedValue(mockBuffer());
+    const mp3 = await import("../mp3-encoder");
+    const mp3Spy = vi
+      .spyOn(mp3, "encodeMp3")
+      .mockResolvedValue(new ArrayBuffer(16));
+    mockAnchorDownload();
+
+    await exportWav(mockBuffer(), DEFAULT_PARAMS, {
+      sampleRate: 44100,
+      bitDepth: 16,
+      format: "mp3",
+    });
+
+    expect(mp3Spy).toHaveBeenCalledWith(expect.anything(), 320);
+  });
 });

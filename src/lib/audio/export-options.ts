@@ -14,13 +14,18 @@ export interface DeepScriptSelection {
  * the user hears.
  */
 export function buildExportOptions(
-  settings: Pick<ExportOptions, "sampleRate" | "bitDepth" | "dither">,
+  settings: Pick<
+    ExportOptions,
+    "sampleRate" | "bitDepth" | "dither" | "format" | "mp3Bitrate"
+  >,
   deep: DeepScriptSelection,
 ): ExportOptions {
   return {
     sampleRate: settings.sampleRate,
     bitDepth: settings.bitDepth,
     dither: settings.dither,
+    format: settings.format,
+    mp3Bitrate: settings.mp3Bitrate,
     script: deep.scriptActive ? deep.script : null,
   };
 }

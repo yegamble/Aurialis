@@ -4,8 +4,10 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { motion } from "motion/react";
 import type { DitherType } from "@/lib/audio/wav-encoder";
+import type { ExportFormat } from "@/lib/audio/export";
 
 export interface ExportSettings {
+  format: ExportFormat;
   sampleRate: number;
   bitDepth: 16 | 24 | 32;
   dither?: DitherType;
@@ -16,11 +18,10 @@ interface ExportPanelProps {
   isExporting?: boolean;
 }
 
-const FORMAT_PRESETS: Record<string, ExportSettings> = {
-  streaming: { sampleRate: 44100, bitDepth: 16 },
-  cd:        { sampleRate: 44100, bitDepth: 16 },
-  hires:     { sampleRate: 96000, bitDepth: 24 },
-};
+const FORMATS: ReadonlyArray<{ id: ExportFormat; label: string }> = [
+  { id: "wav", label: "WAV" },
+  { id: "mp3", label: "MP3" },
+];
 
 const SR_MAP: Record<string, number> = {
   "44.1 kHz": 44100,
@@ -35,25 +36,10 @@ const BD_MAP: Record<string, 16 | 24 | 32> = {
 };
 
 export function ExportPanel({ onExport, isExporting = false }: ExportPanelProps) {
-  const [format, setFormat] = useState("cd");
+  const [format, setFormat] = useState<ExportFormat>("wav");
   const [sampleRate, setSampleRate] = useState("44.1 kHz");
   const [bitDepth, setBitDepth] = useState("16-bit");
   const [dither, setDither] = useState("TPDF");
-
-  const formats = [
-    { id: "streaming", label: "Streaming" },
-    { id: "cd", label: "CD Quality" },
-    { id: "hires", label: "Hi-Res" },
-  ];
-
-  const handleFormatChange = (id: string) => {
-    setFormat(id);
-    const preset = FORMAT_PRESETS[id];
-    if (preset) {
-      setSampleRate(Object.entries(SR_MAP).find(([, v]) => v === preset.sampleRate)?.[0] ?? "44.1 kHz");
-      setBitDepth(Object.entries(BD_MAP).find(([, v]) => v === preset.bitDepth)?.[0] ?? "16-bit");
-    }
-  };
 
   const DITHER_MAP: Record<string, DitherType> = {
     "None": "none",
@@ -63,6 +49,7 @@ export function ExportPanel({ onExport, isExporting = false }: ExportPanelProps)
   const handleExport = () => {
     if (!onExport || isExporting) return;
     const settings: ExportSettings = {
+      format,
       sampleRate: SR_MAP[sampleRate] ?? 44100,
       bitDepth: BD_MAP[bitDepth] ?? 16,
       dither: DITHER_MAP[dither] ?? "tpdf",
@@ -76,21 +63,31 @@ export function ExportPanel({ onExport, isExporting = false }: ExportPanelProps)
         Export
       </p>
 
-      <div className="flex gap-1 bg-[rgba(255,255,255,0.04)] rounded-lg p-0.5">
-        {formats.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => handleFormatChange(f.id)}
-            aria-pressed={format === f.id}
-            className={`flex-1 py-1.5 rounded-md text-xs transition-all ${
-              format === f.id
-                ? "bg-[rgba(255,255,255,0.1)] text-white"
-                : "text-[rgba(255,255,255,0.4)] hover:text-[rgba(255,255,255,0.6)]"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div>
+        <p className="text-[rgba(255,255,255,0.35)] text-[10px] uppercase tracking-wider mb-1">
+          Format
+        </p>
+        <div
+          className="flex gap-1 bg-[rgba(255,255,255,0.04)] rounded-lg p-0.5"
+          role="group"
+          aria-label="Format"
+        >
+          {FORMATS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFormat(f.id)}
+              aria-pressed={format === f.id}
+              className={`flex-1 py-1.5 rounded-md text-xs transition-all ${
+                format === f.id
+                  ? "bg-[rgba(255,255,255,0.1)] text-white"
+                  : "text-[rgba(255,255,255,0.4)] hover:text-[rgba(255,255,255,0.6)]"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -105,12 +102,14 @@ export function ExportPanel({ onExport, isExporting = false }: ExportPanelProps)
           value={bitDepth}
           onChange={setBitDepth}
           options={["16-bit", "24-bit", "32-bit float"]}
+          disabled={format === "mp3"}
         />
         <SelectField
           label="Dither"
           value={dither}
           onChange={setDither}
           options={["None", "TPDF"]}
+          disabled={format === "mp3"}
         />
       </div>
 
@@ -124,7 +123,7 @@ export function ExportPanel({ onExport, isExporting = false }: ExportPanelProps)
         }`}
       >
         <Download className="w-4 h-4" />
-        {isExporting ? "Exporting…" : "Export WAV"}
+        {isExporting ? "Exporting…" : `Export ${format.toUpperCase()}`}
       </motion.button>
     </div>
   );
@@ -135,11 +134,13 @@ function SelectField({
   value,
   onChange,
   options,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: string[];
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -149,7 +150,8 @@ function SelectField({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] rounded-lg px-2 py-1.5 text-white text-xs appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#0a84ff]"
+        disabled={disabled}
+        className="w-full bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] rounded-lg px-2 py-1.5 text-white text-xs appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#0a84ff] disabled:cursor-not-allowed disabled:opacity-40"
         aria-label={label}
       >
         {options.map((o) => (

@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 import { Sparkles } from "lucide-react";
+import { LufsBarChart } from "./LufsBarChart";
 
 export interface AlbumTrackRow {
   id: string;
@@ -104,6 +105,10 @@ export function AlbumView({
             Add at least one analyzed track to your library to see album consistency.
           </div>
         ) : (
+          <>
+            <div className="mb-4">
+              <LufsBarChart tracks={tracks} target={targetLufs} onOpen={onOpenTrack} />
+            </div>
           <ul className="flex flex-col gap-1">
             {tracks.map((t) => {
               const delta =
@@ -154,6 +159,7 @@ export function AlbumView({
               );
             })}
           </ul>
+          </>
         )}
       </section>
     </div>

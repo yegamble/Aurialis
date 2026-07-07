@@ -9,6 +9,8 @@ interface GoniometerProps {
   right: AnalyserNode | null;
   /** Canvas pixel size (square). Defaults to 192. */
   size?: number;
+  /** Hide the built-in "Goniometer" caption (caller supplies its own header). */
+  hideLabel?: boolean;
 }
 
 /**
@@ -22,7 +24,12 @@ interface GoniometerProps {
  * Respects `prefers-reduced-motion`: when enabled, updates at ~5 Hz via
  * setTimeout instead of rAF. When the tab is hidden, rendering pauses.
  */
-export function Goniometer({ left, right, size = 192 }: GoniometerProps) {
+export function Goniometer({
+  left,
+  right,
+  size = 192,
+  hideLabel = false,
+}: GoniometerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Reuse sample buffers across frames to avoid per-frame allocation.
   const leftBufRef = useRef<Float32Array | null>(null);
@@ -92,9 +99,11 @@ export function Goniometer({ left, right, size = 192 }: GoniometerProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="text-[rgba(255,255,255,0.4)] text-[10px] uppercase tracking-wider">
-        Goniometer
-      </div>
+      {!hideLabel && (
+        <div className="text-[rgba(255,255,255,0.4)] text-[10px] uppercase tracking-wider">
+          Goniometer
+        </div>
+      )}
       <canvas
         ref={canvasRef}
         width={size}

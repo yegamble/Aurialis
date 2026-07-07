@@ -49,6 +49,28 @@ describe("DeepTimeline (T14)", () => {
     expect(screen.getByTestId("deep-timeline-empty")).toBeInTheDocument();
   });
 
+  it("renders an empty timeline (no crash) when moves/sections are malformed", () => {
+    // A malformed backend envelope can hand us a script whose `moves` is not
+    // an array. The timeline must render lanes empty, not throw
+    // "script.moves is not iterable".
+    const malformed = {
+      version: 1,
+      trackId: "test",
+      sampleRate: 44100,
+      duration: 30,
+      profile: "modern_pop_polish",
+      sections: undefined,
+      moves: undefined,
+    } as unknown as MasteringScript;
+    expect(() => render(<DeepTimeline script={malformed} />)).not.toThrow();
+    expect(screen.getByTestId("deep-timeline")).toBeInTheDocument();
+    for (const lane of TIMELINE_LANES) {
+      expect(
+        screen.getByTestId(`deep-timeline-lane-${lane.id}`),
+      ).toBeInTheDocument();
+    }
+  });
+
   it("renders 5 lanes (Volume / EQ / Comp/Sat / Width / AI Repair)", () => {
     render(
       <DeepTimeline script={script([], [section()])} />,

@@ -97,6 +97,15 @@ export function SpectrumDisplay({ data, pro = false }: SpectrumDisplayProps) {
       });
     }
 
+    // Hairline divider above the frequency-label row.
+    const labelBandTop = rect.height - 16;
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, labelBandTop);
+    ctx.lineTo(rect.width, labelBandTop);
+    ctx.stroke();
+
     ctx.fillStyle = "rgba(255,255,255,0.25)";
     ctx.font = "10px Inter, system-ui";
     labels.forEach((label, i) => {
@@ -116,7 +125,7 @@ export function SpectrumDisplay({ data, pro = false }: SpectrumDisplayProps) {
       ref={containerRef}
       data-testid="spectrum-display"
       data-pro={pro ? "true" : "false"}
-      className="w-full h-32 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] overflow-hidden"
+      className="w-full h-32 rounded-lg bg-[rgba(0,0,0,0.15)] overflow-hidden"
       aria-label="Frequency spectrum display"
     >
       <canvas ref={canvasRef} className="w-full h-full" />

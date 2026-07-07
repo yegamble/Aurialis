@@ -218,43 +218,47 @@ export function AlbumView({
         data-testid="album-hero"
         className="overflow-hidden rounded-2xl border border-[rgba(255,255,255,0.08)] bg-gradient-to-br from-[#7b1d4d] to-[#1b0612] p-6 text-white"
       >
-        <div className="flex items-center gap-5">
-          <div className="flex h-[120px] w-[120px] items-center justify-center rounded-xl bg-white/10 backdrop-blur">
-            <Sparkles className="h-10 w-10 text-white/70" />
-          </div>
-          <div className="flex-1">
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider opacity-70">
-              Smart Master Album
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-4 sm:gap-5">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-white/10 backdrop-blur sm:h-[120px] sm:w-[120px]">
+              <Sparkles className="h-8 w-8 text-white/70 sm:h-10 sm:w-10" />
             </div>
-            <h1 className="text-[26px] font-semibold tracking-tight">{title}</h1>
-            <p className="text-[13px] opacity-70">
-              {artist} · {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
-            </p>
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                type="button"
-                data-testid="album-master-all"
-                onClick={onMasterAll}
-                disabled={!canMasterAll}
-                title={
-                  !hasMeasured
-                    ? "Analyze at least one track to master the album"
-                    : undefined
-                }
-                className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-semibold text-[#1a1a1c] hover:bg-white/90 disabled:opacity-60"
-              >
-                {isRunning ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3 w-3" />
-                )}
-                {isRunning ? "Mastering…" : "Master entire album"}
-              </button>
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider opacity-70">
+                Smart Master Album
+              </div>
+              <h1 className="truncate text-xl font-semibold tracking-tight sm:text-[26px]">
+                {title}
+              </h1>
+              <p className="truncate text-[13px] opacity-70">
+                {artist} · {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
+              </p>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="album-master-all"
+                  onClick={onMasterAll}
+                  disabled={!canMasterAll}
+                  title={
+                    !hasMeasured
+                      ? "Analyze at least one track to master the album"
+                      : undefined
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-semibold text-[#1a1a1c] hover:bg-white/90 disabled:opacity-60"
+                >
+                  {isRunning ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  {isRunning ? "Mastering…" : "Master entire album"}
+                </button>
+              </div>
             </div>
           </div>
           <dl
             data-testid="album-hero-stats"
-            className="hidden w-[180px] flex-col gap-2.5 border-l border-white/15 pl-[18px] sm:flex"
+            className="grid grid-cols-3 gap-4 border-t border-white/15 pt-4 sm:flex sm:w-[180px] sm:flex-col sm:gap-2.5 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-[18px]"
           >
             <div>
               <dt className="text-[9px] font-semibold uppercase tracking-wider opacity-60">

@@ -195,10 +195,23 @@ test.describe("R2 upload transport selection", () => {
       });
     });
     await page.route("https://r2.mock/part/1", (route: Route) => {
+      // Cross-origin presigned PUT: real R2 answers the CORS preflight and
+      // exposes the ETag header (bucket CORS config). Without these the browser
+      // hides the ETag from JS, so putPartWithRetry throws "Missing ETag" and
+      // retries maxRetries times (partPutCount would be 4, not 1).
+      const cors = {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "PUT, OPTIONS",
+        "access-control-allow-headers": "*",
+        "access-control-expose-headers": "etag, ETag",
+      };
+      if (route.request().method() === "OPTIONS") {
+        return route.fulfill({ status: 204, headers: cors, body: "" });
+      }
       partPutCount++;
       return route.fulfill({
         status: 200,
-        headers: { etag: '"etag-part-1"' },
+        headers: { ...cors, etag: '"etag-part-1"' },
         body: "",
       });
     });

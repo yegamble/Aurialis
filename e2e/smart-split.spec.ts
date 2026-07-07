@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
+import { stubTurnstileNoToken } from "./helpers/turnstile";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STEMS_DIR = path.join(__dirname, "fixtures", "stems");
@@ -33,6 +34,13 @@ async function navigateToMix(page: Page) {
     timeout: 15000,
   });
 }
+
+// The webServer sets a Cloudflare test site key, so StemsView's Turnstile gate
+// is active. The single-file separation flow here mocks only the legacy
+// `/separate` path, so withhold a token to keep it on multipart transport.
+test.beforeEach(async ({ page }) => {
+  await stubTurnstileNoToken(page);
+});
 
 // TS-004: Multi-File Upload Bypass (no separation needed)
 test.describe("TS-004: Multi-File Upload Bypass", () => {

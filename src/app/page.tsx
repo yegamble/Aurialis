@@ -37,7 +37,13 @@ function LibraryImportPage() {
     null,
   );
   const [confirmFp, setConfirmFp] = useState<string | null>(null);
-  const [screen, setScreen] = useState<LocalScreen>("library");
+  // `/?screen=upload` (sidebar Import from any route) forces the import screen.
+  // Capture the intent SYNCHRONOUSLY in the initial state so it survives the
+  // param-strip effect below racing hydration — reading it only after hydration
+  // could lose it to the strip and leave us on the Library screen.
+  const [screen, setScreen] = useState<LocalScreen>(
+    searchParams.get("screen") === "upload" ? "upload" : "library",
+  );
   const [initialized, setInitialized] = useState(false);
   const proMode = useSettingsStore((s) => s.proMode);
   const setProMode = useSettingsStore((s) => s.setProMode);
@@ -46,16 +52,14 @@ function LibraryImportPage() {
     if (!hydrated) void hydrate();
   }, [hydrate, hydrated]);
 
-  // Derive initial screen once, on first render after hydration completes.
+  // After hydration, open a first-run empty library straight into upload. The
+  // explicit `?screen=upload` intent was already captured in the initial state.
   // Setting state during render (with a guard) is the recommended React 18+
   // pattern for derived initial state and avoids the cascading effect that
   // react-hooks/set-state-in-effect warns about.
   if (hydrated && !initialized) {
     setInitialized(true);
-    // `/?screen=upload` (sidebar Import from any route) forces the import
-    // screen; otherwise a first-run empty library opens straight into upload.
-    if (searchParams.get("screen") === "upload") setScreen("upload");
-    else if (entries.length === 0) setScreen("upload");
+    if (screen !== "upload" && entries.length === 0) setScreen("upload");
   }
 
   // Consume the one-shot `screen` query param and strip it from the URL so a

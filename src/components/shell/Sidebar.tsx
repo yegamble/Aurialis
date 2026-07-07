@@ -3,6 +3,8 @@
 import type { ReactElement, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Library, Sparkles, Scissors, Upload, Search } from "lucide-react";
+import { checkBackendHealth } from "@/lib/api/separation";
+import { formatBytes, getStorageUsage } from "@/lib/storage-estimate";
 
 export type ShellScreen = "library" | "album" | "stems" | "upload" | "master";
 
@@ -58,6 +60,22 @@ export function Sidebar({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  const [cacheSize, setCacheSize] = useState<string | null>(null);
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void getStorageUsage().then((bytes) => {
+      if (active && bytes !== null) setCacheSize(formatBytes(bytes));
+    });
+    void checkBackendHealth().then((health) => {
+      if (active) setBackendOnline(health.ok);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const filteredTracks = useMemo(() => {
     if (!tracks) return tracks;
     const q = query.trim().toLowerCase();
@@ -105,6 +123,37 @@ export function Sidebar({
       ) : null}
 
       <div className="flex-1" />
+
+      <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-3 text-[10.5px] text-[rgba(255,255,255,0.45)]">
+        <div className="mb-1 flex items-center justify-between">
+          <span>Cache</span>
+          <span data-testid="sidebar-cache-size" className="tabular-nums">
+            {cacheSize ?? "—"}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span>Backend</span>
+          <span
+            data-testid="sidebar-backend-status"
+            className="flex items-center gap-1"
+            style={{
+              color:
+                backendOnline === null
+                  ? "rgba(255,255,255,0.45)"
+                  : backendOnline
+                    ? "#30d158"
+                    : "#ff453a",
+            }}
+          >
+            <span aria-hidden>●</span>
+            {backendOnline === null
+              ? "checking…"
+              : backendOnline
+                ? "online"
+                : "offline"}
+          </span>
+        </div>
+      </div>
 
       {showProToggle ? (
         <div className="border-t border-[rgba(255,255,255,0.06)] px-3 py-3">

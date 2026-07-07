@@ -196,6 +196,7 @@ export default function UploadPage() {
             onOpenEntry={handleOpenLibraryEntry}
             onRequestDelete={handleRequestDelete}
             onUpload={() => setScreen("upload")}
+            onImportFiles={(files) => void handleFilesUploaded(files)}
             album={album}
             onOpenAlbum={() => router.push("/album")}
           />

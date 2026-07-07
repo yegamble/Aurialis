@@ -175,6 +175,48 @@ describe("LibraryView", () => {
     expect(onUpload).toHaveBeenCalledOnce();
   });
 
+  it("renders a persistent import dropzone when onImportFiles is supplied", () => {
+    render(
+      <LibraryView
+        entries={[analyzedEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onImportFiles={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("library-dropzone")).toBeInTheDocument();
+    expect(screen.getByText(/Drop audio files to import/i)).toBeInTheDocument();
+  });
+
+  it("does NOT render the dropzone when onImportFiles is absent", () => {
+    render(
+      <LibraryView
+        entries={[analyzedEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("library-dropzone")).not.toBeInTheDocument();
+  });
+
+  it("calls onImportFiles when files are dropped on the dropzone", () => {
+    const onImportFiles = vi.fn();
+    render(
+      <LibraryView
+        entries={[analyzedEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onImportFiles={onImportFiles}
+      />,
+    );
+    const file = new File([new Uint8Array(4)], "dropped.wav", { type: "audio/wav" });
+    fireEvent.drop(screen.getByTestId("library-dropzone"), {
+      dataTransfer: { files: [file] },
+    });
+    expect(onImportFiles).toHaveBeenCalledOnce();
+    expect(onImportFiles.mock.calls[0]![0][0].name).toBe("dropped.wav");
+  });
+
   it("calls onOpenEntry with the fingerprint when a row is clicked", () => {
     const onOpenEntry = vi.fn();
     render(

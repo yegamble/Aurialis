@@ -1,8 +1,8 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
-import type { ReactElement } from "react";
-import { CheckCircle2, Music, Plus, Trash2 } from "lucide-react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
+import type { DragEvent, ReactElement } from "react";
+import { CheckCircle2, Music, Plus, Trash2, Upload } from "lucide-react";
 import type { LibraryEntry } from "@/lib/storage/library-types";
 import { AlbumHeroCard } from "./AlbumHeroCard";
 
@@ -25,6 +25,12 @@ export interface LibraryViewProps {
   onRequestDelete: (fingerprint: string) => void;
   onOpenAlbum?: () => void;
   onUpload?: () => void;
+  /**
+   * Import files directly from the persistent library dropzone. Wired to the
+   * same upload handler the Import screen uses, so dropping/selecting here
+   * follows the identical resume/analyze/mix routing.
+   */
+  onImportFiles?: (files: File[]) => void;
   album?: LibraryAlbum;
 }
 
@@ -40,9 +46,28 @@ export function LibraryView({
   onRequestDelete,
   onOpenAlbum,
   onUpload,
+  onImportFiles,
   album,
 }: LibraryViewProps): ReactElement {
   const [filter, setFilter] = useState<LibraryFilter>("all");
+  const [dropActive, setDropActive] = useState(false);
+  const dropInputRef = useRef<HTMLInputElement>(null);
+
+  const emitImport = useCallback(
+    (files: File[]) => {
+      if (files.length > 0) onImportFiles?.(files);
+    },
+    [onImportFiles],
+  );
+
+  const handleDrop = useCallback(
+    (e: DragEvent) => {
+      e.preventDefault();
+      setDropActive(false);
+      emitImport(Array.from(e.dataTransfer.files));
+    },
+    [emitImport],
+  );
   const totalDurationSec = useMemo(
     () => entries.reduce((s, e) => s + (e.durationSec ?? 0), 0),
     [entries],
@@ -138,6 +163,56 @@ export function LibraryView({
           </li>
         ) : null}
       </ul>
+
+      {onImportFiles ? (
+        <>
+          <div
+            role="button"
+            tabIndex={0}
+            data-testid="library-dropzone"
+            aria-label="Import audio. Drop files here or click to browse."
+            onClick={() => dropInputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                dropInputRef.current?.click();
+              }
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDropActive(true);
+            }}
+            onDragLeave={() => setDropActive(false)}
+            onDrop={handleDrop}
+            className={
+              "cursor-pointer rounded-2xl border-[1.5px] border-dashed px-6 py-[26px] text-center transition-colors " +
+              (dropActive
+                ? "border-[#0a84ff] bg-[#0a84ff]/[0.08]"
+                : "border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.02)] hover:border-[rgba(255,255,255,0.24)]")
+            }
+          >
+            <div className="mb-2.5 inline-flex h-11 w-11 items-center justify-center rounded-full bg-[rgba(10,132,255,0.1)] text-[#0a84ff]">
+              <Upload className="h-[18px] w-[18px]" />
+            </div>
+            <div className="text-sm font-medium text-white">Drop audio files to import</div>
+            <div className="mt-0.5 text-[12px] text-[rgba(255,255,255,0.55)]">
+              WAV, MP3, FLAC, OGG, AAC, M4A · or a ZIP of stems
+            </div>
+          </div>
+          <input
+            ref={dropInputRef}
+            type="file"
+            accept="audio/*,.zip"
+            multiple
+            className="hidden"
+            aria-hidden="true"
+            onChange={(e) => {
+              emitImport(Array.from(e.target.files ?? []));
+              e.target.value = "";
+            }}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

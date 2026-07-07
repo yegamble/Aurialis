@@ -1,8 +1,9 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Loader2, Check, AlertCircle, X } from "lucide-react";
 import { LufsBarChart } from "./LufsBarChart";
+import type { AlbumMasterProgress, AlbumTrackState } from "@/lib/album/master-album";
 
 export interface AlbumTrackRow {
   id: string;
@@ -18,6 +19,10 @@ export interface AlbumViewProps {
   targetLufs: number;
   onOpenTrack: (id: string) => void;
   onMasterAll?: () => void;
+  /** Live batch-master progress, or null when idle. */
+  master?: AlbumMasterProgress | null;
+  /** Cancel the in-flight batch (honoured between tracks). */
+  onCancelMaster?: () => void;
 }
 
 const ON_TARGET_LU = 0.5;
@@ -74,6 +79,79 @@ function Dot({ color }: { color: string }): ReactElement {
   );
 }
 
+function TrackStatusIcon({ status }: { status: AlbumTrackState["status"] }): ReactElement {
+  if (status === "done") return <Check className="h-3.5 w-3.5 text-[#30d158]" />;
+  if (status === "error") return <AlertCircle className="h-3.5 w-3.5 text-[#ff453a]" />;
+  if (status === "rendering")
+    return <Loader2 className="h-3.5 w-3.5 animate-spin text-white/80" />;
+  return <span className="h-1.5 w-1.5 rounded-full bg-white/30" aria-hidden />;
+}
+
+/** Live per-track batch-master progress, shown inside the hero while running. */
+function MasterProgress({
+  master,
+  onCancel,
+}: {
+  master: AlbumMasterProgress;
+  onCancel?: () => void;
+}): ReactElement {
+  const active = master.phase === "running" || master.phase === "zipping";
+  const pct = Math.round(master.fraction * 100);
+  const headline =
+    master.phase === "zipping"
+      ? "Packaging archive…"
+      : master.phase === "done"
+        ? "Album mastered"
+        : master.phase === "cancelled"
+          ? "Cancelled"
+          : `Mastering ${master.completed} of ${master.total}`;
+  return (
+    <div
+      data-testid="album-master-progress"
+      className="mt-3.5 border-t border-white/12 pt-3.5"
+    >
+      <div className="mb-1.5 flex items-center justify-between text-[11px]">
+        <span>{headline}</span>
+        <div className="flex items-center gap-3">
+          <span className="tabular-nums">{pct}%</span>
+          {active && onCancel ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-medium hover:bg-white/25"
+            >
+              <X className="h-3 w-3" />
+              Cancel
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div className="h-[3px] overflow-hidden rounded-full bg-white/18">
+        <div
+          className="h-full bg-white transition-[width] duration-150"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <ul className="mt-2.5 flex flex-col gap-1">
+        {master.tracks.map((t) => (
+          <li
+            key={t.id}
+            className="flex items-center gap-2 text-[11px] text-white/85"
+          >
+            <TrackStatusIcon status={t.status} />
+            <span className="min-w-0 flex-1 truncate">{t.title}</span>
+            {t.status === "error" ? (
+              <span className="truncate text-[#ff8a80]">{t.error ?? "Failed"}</span>
+            ) : (
+              <span className="capitalize text-white/45">{t.status}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * Consistency dimension selector. Only LUFS is wired today; Tonal and Dynamics
  * render but are honestly disabled ("Coming soon") — no dead-looking active
@@ -123,6 +201,8 @@ export function AlbumView({
   targetLufs,
   onOpenTrack,
   onMasterAll,
+  master,
+  onCancelMaster,
 }: AlbumViewProps): ReactElement {
   const stats = computeStats(tracks, targetLufs);
   const rangeText =
@@ -130,6 +210,8 @@ export function AlbumView({
       ? `${formatLufs(stats.min)} → ${formatLufs(stats.max)}`
       : "—";
   const hasMeasured = stats.min !== null;
+  const isRunning = master?.phase === "running" || master?.phase === "zipping";
+  const canMasterAll = Boolean(onMasterAll) && hasMeasured && !isRunning;
   return (
     <div className="flex min-h-full flex-col gap-[22px] p-8">
       <section
@@ -151,12 +233,22 @@ export function AlbumView({
             <div className="mt-3 flex items-center gap-2">
               <button
                 type="button"
+                data-testid="album-master-all"
                 onClick={onMasterAll}
-                disabled={!onMasterAll}
+                disabled={!canMasterAll}
+                title={
+                  !hasMeasured
+                    ? "Analyze at least one track to master the album"
+                    : undefined
+                }
                 className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-semibold text-[#1a1a1c] hover:bg-white/90 disabled:opacity-60"
               >
-                <Sparkles className="h-3 w-3" />
-                Master entire album
+                {isRunning ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3 w-3" />
+                )}
+                {isRunning ? "Mastering…" : "Master entire album"}
               </button>
             </div>
           </div>
@@ -199,6 +291,9 @@ export function AlbumView({
             </div>
           </dl>
         </div>
+        {master && master.phase !== "empty" ? (
+          <MasterProgress master={master} onCancel={onCancelMaster} />
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[rgba(28,28,30,0.6)] p-5">

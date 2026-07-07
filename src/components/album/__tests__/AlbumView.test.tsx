@@ -87,6 +87,57 @@ describe("AlbumView", () => {
     expect(onOpenTrack).toHaveBeenCalledWith("fp-1");
   });
 
+  it("exposes the master-all button under a stable testid", () => {
+    render(<AlbumView {...baseProps} onMasterAll={vi.fn()} />);
+    expect(screen.getByTestId("album-master-all")).toBeInTheDocument();
+  });
+
+  it("disables master-all when no track has a measured LUFS", () => {
+    render(
+      <AlbumView
+        {...baseProps}
+        onMasterAll={vi.fn()}
+        tracks={[{ id: "n", title: "None", lufs: null, durationSec: 100 }]}
+      />,
+    );
+    expect(screen.getByTestId("album-master-all")).toBeDisabled();
+  });
+
+  it("enables master-all when at least one track is analyzed", () => {
+    render(<AlbumView {...baseProps} onMasterAll={vi.fn()} />);
+    expect(screen.getByTestId("album-master-all")).not.toBeDisabled();
+  });
+
+  it("renders per-track master progress with statuses and a cancel button", () => {
+    const onCancelMaster = vi.fn();
+    render(
+      <AlbumView
+        {...baseProps}
+        onMasterAll={vi.fn()}
+        onCancelMaster={onCancelMaster}
+        master={{
+          phase: "running",
+          total: 3,
+          completed: 1,
+          fraction: 1 / 3,
+          tracks: [
+            { id: "fp-1", title: "Velvet Static", status: "done" },
+            { id: "fp-2", title: "Slow Run", status: "rendering" },
+            { id: "fp-3", title: "Honey Walls", status: "error", error: "decode failed" },
+          ],
+        }}
+      />,
+    );
+    const progress = screen.getByTestId("album-master-progress");
+    expect(within(progress).getByText("Velvet Static")).toBeInTheDocument();
+    expect(within(progress).getByText(/decode failed/)).toBeInTheDocument();
+    const cancel = within(progress).getByRole("button", { name: /cancel/i });
+    fireEvent.click(cancel);
+    expect(onCancelMaster).toHaveBeenCalledOnce();
+    // master button disabled while running
+    expect(screen.getByTestId("album-master-all")).toBeDisabled();
+  });
+
   it("renders empty state when tracks is empty", () => {
     render(<AlbumView {...baseProps} tracks={[]} />);
     expect(screen.getByTestId("album-empty")).toBeInTheDocument();

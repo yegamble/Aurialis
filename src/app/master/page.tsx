@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Play, Pause, SkipBack, Music } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { WaveformDisplay } from "@/components/visualization/WaveformDisplay";
 import { SpectrumDisplay } from "@/components/visualization/SpectrumDisplay";
 import { LevelMeter } from "@/components/visualization/LevelMeter";
@@ -483,6 +483,14 @@ export default function MasterPage() {
                 <Play className="w-5 h-5 text-white ml-0.5" />
               )}
             </motion.button>
+            <button
+              onClick={() => seek(Math.min(duration, currentTime + 5))}
+              disabled={!isLoaded}
+              className="w-8 h-8 rounded-full bg-[rgba(255,255,255,0.06)] flex items-center justify-center hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-40"
+              aria-label="Skip forward 5 seconds"
+            >
+              <SkipForward className="w-3.5 h-3.5 text-[rgba(255,255,255,0.7)]" />
+            </button>
             <div className="flex-1" />
             <div className="text-xs tabular-nums min-w-[90px] text-right text-[rgba(255,255,255,0.7)]">
               {formatTime(currentTime)}{" "}

@@ -2,6 +2,7 @@
 
 import type { ReactElement, ReactNode } from "react";
 import { ArrowLeft, Scissors, Download } from "lucide-react";
+import { artGradient } from "@/lib/art-tile";
 
 export type MasterMode = "simple" | "advanced" | "deep";
 
@@ -20,24 +21,13 @@ export interface MasterToolbarProps {
   children?: ReactNode;
 }
 
-/** Deterministic string hash → non-negative int (djb2-ish). */
-function hashSeed(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
-}
-
 /**
  * Deterministic gradient album-art tile seeded by a string (the file name).
- * A self-contained local helper — the sidebar has its own equivalent; this
- * intentionally does not import from it.
+ * Colours come from the shared {@link artGradient} helper so every surface
+ * (sidebar, library table, this toolbar) derives the same hue from a seed.
  */
 function ArtThumb({ seed, size = 36 }: { seed: string; size?: number }): ReactElement {
-  const h = hashSeed(seed);
-  const hue1 = h % 360;
-  const hue2 = (hue1 + 40 + ((h >> 3) % 80)) % 360;
+  const g = artGradient(seed);
   return (
     <div
       aria-hidden
@@ -46,7 +36,7 @@ function ArtThumb({ seed, size = 36 }: { seed: string; size?: number }): ReactEl
       style={{
         width: size,
         height: size,
-        background: `linear-gradient(135deg, hsl(${hue1} 70% 46%), hsl(${hue2} 62% 34%))`,
+        background: `linear-gradient(135deg, ${g.a}, ${g.b})`,
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
       }}
     />

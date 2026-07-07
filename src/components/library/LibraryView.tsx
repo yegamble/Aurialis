@@ -5,6 +5,7 @@ import type { DragEvent, ReactElement } from "react";
 import { Plus, Trash2, Upload } from "lucide-react";
 import type { LibraryEntry } from "@/lib/storage/library-types";
 import { computeAlbumTargetLufs } from "@/lib/stores/album-store";
+import { artGradient } from "@/lib/art-tile";
 import { AlbumHeroCard } from "./AlbumHeroCard";
 
 export type LibraryFilter = "all" | "analyzed" | "drafts";
@@ -18,16 +19,12 @@ const DRIFT_LU = 1.5;
 
 /**
  * Deterministic gradient for a row's art tile, seeded by a stable string
- * (the fingerprint). Same input → same gradient, so a track keeps its colour.
+ * (the fingerprint). Colours come from the shared {@link artGradient} helper so
+ * a track keeps one colour across the sidebar, toolbar and this table.
  */
 function gradientFor(seed: string): string {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) {
-    h = (Math.imul(h, 31) + seed.charCodeAt(i)) >>> 0;
-  }
-  const h1 = h % 360;
-  const h2 = (h1 + 40 + (h % 60)) % 360;
-  return `linear-gradient(135deg, hsl(${h1} 55% 42%), hsl(${h2} 60% 22%))`;
+  const g = artGradient(seed);
+  return `linear-gradient(135deg, ${g.a}, ${g.b})`;
 }
 
 export interface LibraryAlbum {

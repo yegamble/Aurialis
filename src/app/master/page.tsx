@@ -454,21 +454,27 @@ export default function MasterPage() {
             onSeek={seek}
           />
 
-          <div className="flex items-center justify-center gap-4">
+          {/* Transport — bordered three-zone card: A/B left · controls
+              center · time right (design app.jsx Transport). */}
+          <div
+            data-testid="master-transport"
+            className="flex items-center gap-4 rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] px-4 py-2.5"
+          >
             <ABToggle isActive={isBypassed} onToggle={toggleBypass} />
+            <div className="flex-1" />
             <button
               onClick={stop}
-              className="w-10 h-10 rounded-full bg-[rgba(255,255,255,0.06)] flex items-center justify-center hover:bg-[rgba(255,255,255,0.1)] transition-colors"
+              className="w-8 h-8 rounded-full bg-[rgba(255,255,255,0.06)] flex items-center justify-center hover:bg-[rgba(255,255,255,0.1)] transition-colors"
               aria-label="Stop and return to beginning"
             >
-              <SkipBack className="w-4 h-4 text-[rgba(255,255,255,0.7)]" />
+              <SkipBack className="w-3.5 h-3.5 text-[rgba(255,255,255,0.7)]" />
             </button>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => (isPlaying ? pause() : play())}
               disabled={!isLoaded}
-              className="w-12 h-12 rounded-full bg-gradient-to-b from-[#0a84ff] to-[#0066cc] flex items-center justify-center shadow-[0_2px_20px_rgba(10,132,255,0.35)] disabled:opacity-40"
+              className="w-11 h-11 rounded-full bg-gradient-to-b from-[#0a84ff] to-[#0066cc] flex items-center justify-center shadow-[0_2px_20px_rgba(10,132,255,0.35)] disabled:opacity-40"
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? (
@@ -477,8 +483,12 @@ export default function MasterPage() {
                 <Play className="w-5 h-5 text-white ml-0.5" />
               )}
             </motion.button>
-            <div className="text-[rgba(255,255,255,0.5)] text-xs tabular-nums min-w-[80px] text-center">
-              {formatTime(currentTime)} / {formatTime(duration)}
+            <div className="flex-1" />
+            <div className="text-xs tabular-nums min-w-[90px] text-right text-[rgba(255,255,255,0.7)]">
+              {formatTime(currentTime)}{" "}
+              <span className="text-[rgba(255,255,255,0.4)]">
+                / {formatTime(duration)}
+              </span>
             </div>
           </div>
 

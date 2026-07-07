@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactElement, ReactNode } from "react";
-import { ArrowLeft, Music, Scissors, Download } from "lucide-react";
+import { ArrowLeft, Scissors, Download } from "lucide-react";
 
 export type MasterMode = "simple" | "advanced" | "deep";
 
@@ -18,6 +18,39 @@ export interface MasterToolbarProps {
   /** Right-side primary "Export" action. Omitted when not provided. */
   onExport?: () => void;
   children?: ReactNode;
+}
+
+/** Deterministic string hash → non-negative int (djb2-ish). */
+function hashSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+/**
+ * Deterministic gradient album-art tile seeded by a string (the file name).
+ * A self-contained local helper — the sidebar has its own equivalent; this
+ * intentionally does not import from it.
+ */
+function ArtThumb({ seed, size = 36 }: { seed: string; size?: number }): ReactElement {
+  const h = hashSeed(seed);
+  const hue1 = h % 360;
+  const hue2 = (hue1 + 40 + ((h >> 3) % 80)) % 360;
+  return (
+    <div
+      aria-hidden
+      data-testid="master-art-tile"
+      className="shrink-0 rounded-lg"
+      style={{
+        width: size,
+        height: size,
+        background: `linear-gradient(135deg, hsl(${hue1} 70% 46%), hsl(${hue2} 62% 34%))`,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+      }}
+    />
+  );
 }
 
 const MODES: { id: MasterMode; label: string }[] = [
@@ -52,9 +85,7 @@ export function MasterToolbar({
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(255,255,255,0.06)]">
-          <Music className="h-4 w-4 text-[#0a84ff]" />
-        </div>
+        <ArtThumb seed={fileName} />
         <div className="min-w-0">
           <p className="truncate text-sm text-white">{fileName}</p>
           <p className="truncate text-xs text-[rgba(255,255,255,0.4)]">

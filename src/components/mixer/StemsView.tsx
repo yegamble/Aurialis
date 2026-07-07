@@ -864,6 +864,33 @@ export function StemsView() {
                   </div>
                 </details>
               </div>
+
+              {/* Send-to-mastering CTA */}
+              <div
+                data-testid="send-to-master-card"
+                className="flex items-center gap-4 rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-4"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0a84ff]/10 text-[#0a84ff]">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold text-white">
+                    Send these stems to mastering?
+                  </div>
+                  <div className="text-[11.5px] text-[rgba(255,255,255,0.5)]">
+                    Aurialis will analyze each stem separately and run
+                    section-aware EQ/Comp on the bus.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSendToMaster}
+                  disabled={isRendering}
+                  className="shrink-0 rounded-lg bg-[#0a84ff] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[#0066cc] disabled:opacity-40"
+                >
+                  {isRendering ? "Rendering…" : "Smart Mix → Master"}
+                </button>
+              </div>
             </>
           )}
         </div>

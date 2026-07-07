@@ -511,7 +511,16 @@ export default function MasterPage() {
             </div>
           </div>
 
-          <SpectrumDisplay data={spectrumData} pro={proMode} />
+          {/* Spectrum card — header: "Spectrum" · range + source. */}
+          <div className="rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] px-4 py-3">
+            <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.5)]">
+              <span>Spectrum</span>
+              <span className="text-[rgba(255,255,255,0.4)]">
+                20 Hz — 20 kHz &middot; Bus output
+              </span>
+            </div>
+            <SpectrumDisplay data={spectrumData} pro={proMode} />
+          </div>
           <ExportView
             onExport={handleExport}
             isExporting={isExporting}

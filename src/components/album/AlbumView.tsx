@@ -74,6 +74,48 @@ function Dot({ color }: { color: string }): ReactElement {
   );
 }
 
+/**
+ * Consistency dimension selector. Only LUFS is wired today; Tonal and Dynamics
+ * render but are honestly disabled ("Coming soon") — no dead-looking active
+ * options.
+ */
+function ConsistencySegmented(): ReactElement {
+  const dims: { id: string; label: string; enabled: boolean }[] = [
+    { id: "lufs", label: "LUFS", enabled: true },
+    { id: "tonal", label: "Tonal", enabled: false },
+    { id: "dr", label: "Dynamics", enabled: false },
+  ];
+  return (
+    <div
+      data-testid="album-consistency-segmented"
+      role="group"
+      aria-label="Consistency dimension"
+      className="inline-flex rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] p-0.5"
+    >
+      {dims.map((d) => {
+        const active = d.enabled; // LUFS is the only active dimension today
+        return (
+          <button
+            key={d.id}
+            type="button"
+            aria-pressed={active}
+            disabled={!d.enabled}
+            title={d.enabled ? undefined : "Coming soon"}
+            className={
+              "rounded-md px-3 py-1 text-xs font-medium transition-colors " +
+              (active
+                ? "bg-[rgba(255,255,255,0.1)] text-white"
+                : "text-[rgba(255,255,255,0.35)] disabled:cursor-not-allowed")
+            }
+          >
+            {d.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AlbumView({
   title,
   artist,
@@ -180,6 +222,10 @@ export function AlbumView({
               {formatLufs(targetLufs)}
             </div>
           </div>
+        </div>
+
+        <div className="mb-4">
+          <ConsistencySegmented />
         </div>
 
         {tracks.length === 0 ? (

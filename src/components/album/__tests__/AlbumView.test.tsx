@@ -124,6 +124,19 @@ describe("AlbumView", () => {
     expect(within(stats).getByTestId("album-hero-issues")).toHaveTextContent("1");
   });
 
+  it("renders a consistency segmented control with LUFS active and others disabled", () => {
+    render(<AlbumView {...baseProps} />);
+    const seg = screen.getByTestId("album-consistency-segmented");
+    const lufs = within(seg).getByRole("button", { name: /^LUFS$/ });
+    expect(lufs).toHaveAttribute("aria-pressed", "true");
+    const tonal = within(seg).getByRole("button", { name: /^Tonal$/ });
+    const dyn = within(seg).getByRole("button", { name: /^Dynamics$/ });
+    expect(tonal).toBeDisabled();
+    expect(dyn).toBeDisabled();
+    expect(tonal).toHaveAttribute("title", "Coming soon");
+    expect(dyn).toHaveAttribute("title", "Coming soon");
+  });
+
   it("renders a Smart suggestions card header", () => {
     render(<AlbumView {...baseProps} />);
     expect(screen.getByText(/Smart suggestions/i)).toBeInTheDocument();

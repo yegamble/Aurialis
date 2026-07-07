@@ -267,41 +267,25 @@ def test_separate_json_content_type_routes_to_json_branch(client, monkeypatch) -
 
 
 # ===========================================================================
-# KNOWN PRODUCTION BUG (reported in deferred): a JSON body with a
-# missing/invalid `fetchUrl` raises a raw pydantic ValidationError inside the
-# handler (``SeparateBody(**await request.json())``) which is *not* translated
-# to a 4xx — the client sees a 500. FastAPI only auto-converts validation
-# errors to 422 when the body is a declared parameter. The JSON branch parses
-# the body manually, so it escapes that machinery.
-#
-# These xfail tests pin the CORRECT contract (a 4xx for bad client input).
-# Flip them to normal asserts once main.py validates the JSON body properly
-# (e.g. declare a typed body param, or catch ValidationError -> 422).
+# FIXED (was a production 500): a JSON body with a missing/invalid `fetchUrl`
+# used to raise a raw pydantic ValidationError inside the handler
+# (``SeparateBody(**await request.json())``), which — because the JSON branch
+# parses the body manually, bypassing FastAPI's declared-body machinery —
+# surfaced as a 500 instead of a 4xx. main.py now catches ValidationError in
+# both JSON branches and returns 422, so these assert a real 4xx contract.
 # ===========================================================================
 
 
-@pytest.mark.xfail(
-    reason="main.py JSON branch surfaces pydantic ValidationError as 500, not 4xx",
-    strict=True,
-)
 def test_separate_json_missing_fetch_url_should_be_4xx(client) -> None:
     resp = client.post("/separate", json={"model": "htdemucs"})
     assert 400 <= resp.status_code < 500
 
 
-@pytest.mark.xfail(
-    reason="main.py JSON branch surfaces pydantic ValidationError as 500, not 4xx",
-    strict=True,
-)
 def test_separate_json_invalid_fetch_url_should_be_4xx(client) -> None:
     resp = client.post("/separate", json={"fetchUrl": "not-a-url", "model": "htdemucs"})
     assert 400 <= resp.status_code < 500
 
 
-@pytest.mark.xfail(
-    reason="main.py JSON branch surfaces pydantic ValidationError as 500, not 4xx",
-    strict=True,
-)
 def test_analyze_deep_json_missing_fetch_url_should_be_4xx(client) -> None:
     resp = client.post("/analyze/deep", json={"profile": "modern_pop_polish"})
     assert 400 <= resp.status_code < 500

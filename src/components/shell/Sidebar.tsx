@@ -2,15 +2,20 @@
 
 import type { ReactElement, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Library, Sparkles, Scissors, Upload, Search } from "lucide-react";
+import { Library, Sparkles, Scissors, Upload, Search, Check } from "lucide-react";
 import { checkBackendHealth } from "@/lib/api/separation";
 import { formatBytes, getStorageUsage } from "@/lib/storage-estimate";
+import { ArtTile } from "./ArtTile";
 
 export type ShellScreen = "library" | "album" | "stems" | "upload" | "master";
 
 export interface SidebarTrack {
   id: string;
   title: string;
+  /** True when the entry has saved analysis — renders a trailing check. */
+  analyzed?: boolean;
+  /** Optional seed override for the deterministic art tile (defaults to id). */
+  artSeed?: string;
 }
 
 export interface SidebarProps {
@@ -114,7 +119,10 @@ export function Sidebar({
           {filteredTracks.map((t) => (
             <NavTrack
               key={t.id}
+              id={t.id}
               title={t.title}
+              seed={t.artSeed ?? t.id}
+              analyzed={t.analyzed ?? false}
               active={activeTrackId === t.id}
               onClick={() => onSelectTrack?.(t.id)}
             />
@@ -268,12 +276,15 @@ function NavItem({ active, icon, onClick, children }: NavItemProps): ReactElemen
 }
 
 interface NavTrackProps {
+  id: string;
   title: string;
+  seed: string;
+  analyzed: boolean;
   active: boolean;
   onClick: () => void;
 }
 
-function NavTrack({ title, active, onClick }: NavTrackProps): ReactElement {
+function NavTrack({ id, title, seed, analyzed, active, onClick }: NavTrackProps): ReactElement {
   return (
     <li>
       <button
@@ -287,7 +298,15 @@ function NavTrack({ title, active, onClick }: NavTrackProps): ReactElement {
             : "text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.05)]")
         }
       >
-        <span className="truncate">{title}</span>
+        <ArtTile seed={seed} data-testid={`sidebar-track-art-${id}`} />
+        <span className="min-w-0 flex-1 truncate">{title}</span>
+        {analyzed ? (
+          <Check
+            data-testid={`sidebar-track-check-${id}`}
+            aria-label="Analyzed"
+            className="h-3 w-3 flex-shrink-0 text-[rgba(255,255,255,0.45)]"
+          />
+        ) : null}
       </button>
     </li>
   );

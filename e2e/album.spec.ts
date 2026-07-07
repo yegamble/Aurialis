@@ -96,6 +96,31 @@ test("loudness chart renders once a measured LUFS exists", async ({ page }) => {
   await expect(page.getByTestId("album-lufs-bar")).toHaveCount(1);
 });
 
+test("D4: sidebar Import from /album reaches the import screen", async ({
+  page,
+}) => {
+  // A non-empty library so the compact ImportPanel ("Add audio") renders.
+  await seedAnalyzedEntry(page, {
+    fileName: "album-seed.wav",
+    measuredLufs: -10,
+    wavBase64: TEST_WAV_B64,
+  });
+  await page.goto("/album");
+  await expect(page.getByTestId("album-hero")).toBeVisible();
+
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: /Import/i })
+    .click();
+
+  // Lands on the home route's import screen via /?screen=upload.
+  await page.waitForURL(/\/(\?.*)?$/, { timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: /Add audio/i })).toBeVisible();
+  await expect(page.locator('input[type="file"]')).toBeAttached();
+  // The one-shot query param is stripped after consumption.
+  expect(page.url()).not.toContain("screen=upload");
+});
+
 test("master-all downloads a ZIP for an analyzed entry", async ({ page }) => {
   await seedAnalyzedEntry(page, {
     fileName: "to-master.wav",

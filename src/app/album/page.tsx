@@ -102,7 +102,11 @@ export default function AlbumPage(): React.ReactElement {
 
   const handleSelect = useCallback(
     (next: ShellScreen) => {
-      if (next === "library" || next === "upload") {
+      if (next === "upload") {
+        router.push("/?screen=upload");
+        return;
+      }
+      if (next === "library") {
         router.push("/");
         return;
       }

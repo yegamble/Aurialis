@@ -367,6 +367,7 @@ export default function MasterPage() {
     stop();
     if (next === "stems") router.push("/mix");
     else if (next === "album") router.push("/album");
+    else if (next === "upload") router.push("/?screen=upload");
     else router.push("/");
   };
 

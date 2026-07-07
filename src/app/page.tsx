@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UploadScreen } from "@/components/upload/UploadScreen";
 import { LibraryView } from "@/components/library/LibraryView";
+import { deriveLibraryAlbum } from "@/components/library/library-album";
 import { AppShell } from "@/components/shell/AppShell";
 import type { ShellScreen, SidebarTrack } from "@/components/shell/Sidebar";
 import { ResumeOrFreshDialog } from "@/components/library/ResumeOrFreshDialog";
@@ -167,6 +168,8 @@ export default function UploadPage() {
     [router],
   );
 
+  const album = useMemo(() => deriveLibraryAlbum(entries), [entries]);
+
   const sidebarTracks = useMemo<SidebarTrack[]>(
     () =>
       entries.slice(0, 12).map((e) => ({
@@ -193,6 +196,8 @@ export default function UploadPage() {
             onOpenEntry={handleOpenLibraryEntry}
             onRequestDelete={handleRequestDelete}
             onUpload={() => setScreen("upload")}
+            album={album}
+            onOpenAlbum={() => router.push("/album")}
           />
         ) : (
           <div className="relative h-full">

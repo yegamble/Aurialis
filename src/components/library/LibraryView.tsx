@@ -13,6 +13,10 @@ export interface LibraryAlbum {
   artist: string;
   trackCount: number;
   avgLufs?: number;
+  /** Loudness spread (range, in LU) across analyzed tracks; undefined until ≥2. */
+  variance?: number;
+  /** Count of analyzed tracks drifting >1.5 LU from the album target. */
+  issues?: number;
 }
 
 export interface LibraryViewProps {
@@ -110,6 +114,8 @@ export function LibraryView({
           artist={album.artist}
           trackCount={album.trackCount}
           avgLufs={album.avgLufs}
+          variance={album.variance}
+          issues={album.issues}
           onClick={onOpenAlbum}
         />
       ) : null}

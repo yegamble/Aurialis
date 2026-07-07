@@ -129,6 +129,27 @@ describe("LibraryView", () => {
     expect(screen.getByTestId("album-hero-card")).toBeInTheDocument();
   });
 
+  it("passes album variance and issues through to the hero card", () => {
+    render(
+      <LibraryView
+        entries={[analyzedEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+        album={{
+          title: "Library album",
+          artist: "Loudness consistency across your tracks",
+          trackCount: 3,
+          avgLufs: -10.6,
+          variance: 2.4,
+          issues: 3,
+        }}
+        onOpenAlbum={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("album-variance")).toHaveTextContent("2.4 LU");
+    expect(screen.getByTestId("album-issues")).toHaveTextContent("3");
+  });
+
   it("does NOT render the album hero card when no album is supplied", () => {
     render(
       <LibraryView

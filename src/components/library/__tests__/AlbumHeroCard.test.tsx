@@ -41,4 +41,16 @@ describe("AlbumHeroCard", () => {
     render(<AlbumHeroCard {...baseProps} />);
     expect(screen.getByTestId("album-hero-card")).toBeInTheDocument();
   });
+
+  it("renders variance and issues stats when provided", () => {
+    render(<AlbumHeroCard {...baseProps} variance={2.4} issues={3} />);
+    expect(screen.getByTestId("album-variance")).toHaveTextContent("2.4 LU");
+    expect(screen.getByTestId("album-issues")).toHaveTextContent("3");
+  });
+
+  it("omits variance and issues stats when undefined", () => {
+    render(<AlbumHeroCard {...baseProps} />);
+    expect(screen.queryByTestId("album-variance")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("album-issues")).not.toBeInTheDocument();
+  });
 });

@@ -31,6 +31,26 @@ async function uploadAndOpenDeep(page: Page) {
 /** Convenience for matching any host hitting `/path`. */
 const url = (suffix: string) => `**${suffix}`;
 
+/**
+ * The REAL `/jobs/{id}/result` backend response is the job's `partial_result`
+ * envelope — `{ sections, stems, script }` — NOT a bare MasteringScript. The
+ * frontend unwraps `.script`. Mocking the bare script here produced a false
+ * green that hid the "script.moves is not iterable" crash on real backends.
+ */
+const resultEnvelope = (moves: unknown[] = []) => ({
+  sections: [],
+  stems: [],
+  script: {
+    version: 1,
+    trackId: "t1",
+    sampleRate: 48000,
+    duration: 30,
+    profile: "modern_pop_polish",
+    sections: [],
+    moves,
+  },
+});
+
 test.describe("TS-001 — happy path: progress visible at every phase", () => {
   test("progress card cycles through sections → stems → done", async ({ page }) => {
     let pollCount = 0;
@@ -85,15 +105,7 @@ test.describe("TS-001 — happy path: progress visible at every phase", () => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({
-          version: 1,
-          trackId: "t1",
-          sampleRate: 48000,
-          duration: 30,
-          profile: "modern_pop_polish",
-          sections: [],
-          moves: [],
-        }),
+        body: JSON.stringify(resultEnvelope()),
       })
     );
 
@@ -147,15 +159,7 @@ test.describe("TS-002 — backend down: error with Retry + technical details", (
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({
-          version: 1,
-          trackId: "t1",
-          sampleRate: 48000,
-          duration: 30,
-          profile: "modern_pop_polish",
-          sections: [],
-          moves: [],
-        }),
+        body: JSON.stringify(resultEnvelope()),
       })
     );
 
@@ -417,7 +421,7 @@ test.describe("Verbose progress (harness)", () => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ moves: [] }),
+        body: JSON.stringify(resultEnvelope()),
       })
     );
 

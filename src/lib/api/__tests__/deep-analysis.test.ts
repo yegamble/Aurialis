@@ -308,22 +308,88 @@ describe("deep-analysis API client", () => {
   });
 
   describe("fetchDeepResult", () => {
-    it("returns the parsed MasteringScript", async () => {
-      const fakeScript = {
-        version: 1,
-        trackId: "t1",
-        sampleRate: 48000,
-        duration: 30,
-        profile: "modern_pop_polish",
-        sections: [],
-        moves: [],
+    // The real backend `/jobs/{id}/result` route returns the job's
+    // `partial_result` envelope verbatim — `{ sections, stems, script }` —
+    // NOT a bare MasteringScript. This is the captured shape.
+    const fakeScript = {
+      version: 1,
+      trackId: "t1",
+      sampleRate: 48000,
+      duration: 30,
+      profile: "modern_pop_polish",
+      sections: [
+        {
+          id: "s1",
+          type: "verse",
+          startSec: 0,
+          endSec: 30,
+          loudnessLufs: -9.5,
+          spectralCentroidHz: 2200,
+        },
+      ],
+      moves: [
+        {
+          id: "m1",
+          param: "master.eq.band3.gain",
+          startSec: 0,
+          endSec: 30,
+          envelope: [
+            [0, 0],
+            [30, 1.2],
+          ],
+          reason: "lift presence",
+          original: 0,
+          edited: false,
+          muted: false,
+        },
+      ],
+    };
+
+    it("unwraps `script` from the backend envelope", async () => {
+      const envelope = {
+        sections: fakeScript.sections,
+        stems: [],
+        script: fakeScript,
       };
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve(fakeScript),
+        json: () => Promise.resolve(envelope),
       });
       const out = await fetchDeepResult("j1");
       expect(out).toEqual(fakeScript);
+      expect(out.moves).toHaveLength(1);
+    });
+
+    it("throws a useful error when the envelope has no script", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ sections: [], stems: [], script_error: "boom" }),
+      });
+      await expect(fetchDeepResult("j1")).rejects.toBeInstanceOf(
+        DeepAnalysisError
+      );
+      try {
+        await fetchDeepResult("j1");
+      } catch (err) {
+        const e = err as DeepAnalysisError;
+        expect(e.details.status).toBe("backend-error");
+        expect(e.details.message).toMatch(/boom/);
+      }
+      consoleSpy.mockRestore();
+    });
+
+    it("throws when the envelope is malformed (no script field)", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ moves: [] }),
+      });
+      await expect(fetchDeepResult("j1")).rejects.toBeInstanceOf(
+        DeepAnalysisError
+      );
+      consoleSpy.mockRestore();
     });
 
     it("throws on HTTP error", async () => {

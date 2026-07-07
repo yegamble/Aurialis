@@ -29,7 +29,9 @@ const BACKEND_URL =
 test.beforeAll(async () => {
   try {
     const res = await fetch(`${BACKEND_URL}/health`, {
-      signal: AbortSignal.timeout(2_000),
+      // Docker-for-Mac's vpnkit adds ~3s to the first localhost round-trip;
+      // 2s was too tight and produced spurious skips even with a live backend.
+      signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) {
       test.skip(true, `Backend at ${BACKEND_URL} returned ${res.status}`);

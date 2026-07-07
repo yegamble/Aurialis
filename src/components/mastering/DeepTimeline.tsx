@@ -84,12 +84,17 @@ export function DeepTimeline({
       width: [],
       airepair: [],
     };
-    if (!script) return map;
+    // Defensive: a malformed backend envelope (or a partially-populated
+    // script) may hand us a non-array `moves`. Render an empty timeline
+    // rather than throwing "script.moves is not iterable".
+    if (!script || !Array.isArray(script.moves)) return map;
     for (const move of script.moves) {
       map[laneForParam(move.param)].push(move);
     }
     return map;
   }, [script]);
+
+  const sections = Array.isArray(script?.sections) ? script.sections : [];
 
   if (!script) {
     return (
@@ -113,7 +118,7 @@ export function DeepTimeline({
         className="relative w-full border-b border-[rgba(255,255,255,0.06)]"
         style={{ height: SECTIONS_HEIGHT }}
       >
-        {script.sections.map((section) => (
+        {sections.map((section) => (
           <SectionBand
             key={section.id}
             section={section}

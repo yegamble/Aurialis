@@ -124,6 +124,27 @@ describe("AlbumView", () => {
     expect(within(stats).getByTestId("album-hero-issues")).toHaveTextContent("1");
   });
 
+  it("renders a Smart suggestions card header", () => {
+    render(<AlbumView {...baseProps} />);
+    expect(screen.getByText(/Smart suggestions/i)).toBeInTheDocument();
+  });
+
+  it("renders 3-tier severity copy from the signed delta", () => {
+    const props = {
+      ...baseProps,
+      targetLufs: -10,
+      tracks: [
+        { id: "off", title: "WayOff", lufs: -13, durationSec: 100 }, // Δ-3.0 → off by
+        { id: "close", title: "Nearby", lufs: -11, durationSec: 100 }, // Δ-1.0 → close
+        { id: "on", title: "Bang", lufs: -10.2, durationSec: 100 }, // Δ-0.2 → on target
+      ] as AlbumTrackRow[],
+    };
+    render(<AlbumView {...props} />);
+    expect(screen.getByText(/Loudness off by −3\.0 LU/)).toBeInTheDocument();
+    expect(screen.getByText(/Close to target \(−1\.0 LU\)/)).toBeInTheDocument();
+    expect(screen.getByText(/^On target$/)).toBeInTheDocument();
+  });
+
   it("shows an em-dash range when no track has a measured LUFS", () => {
     const props = {
       ...baseProps,

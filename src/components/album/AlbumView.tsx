@@ -50,6 +50,30 @@ function formatDelta(delta: number): string {
   return delta < 0 ? `−${abs}` : delta > 0 ? `+${abs}` : "+0.0";
 }
 
+interface Severity {
+  color: string;
+  copy: string;
+}
+
+/** Three-tier severity copy + dot color from a signed delta (LU). */
+function severityFor(delta: number | null): Severity {
+  if (delta === null) return { color: "rgba(255,255,255,0.3)", copy: "Not analyzed" };
+  const sev = Math.abs(delta);
+  if (sev > 1.5) return { color: "#ff9f0a", copy: `Loudness off by ${formatDelta(delta)} LU` };
+  if (sev > 0.8) return { color: "#ffd60a", copy: `Close to target (${formatDelta(delta)} LU)` };
+  return { color: "#30d158", copy: "On target" };
+}
+
+function Dot({ color }: { color: string }): ReactElement {
+  return (
+    <span
+      aria-hidden
+      className="inline-block h-2 w-2 shrink-0 rounded-full"
+      style={{ background: color }}
+    />
+  );
+}
+
 export function AlbumView({
   title,
   artist,
@@ -63,6 +87,7 @@ export function AlbumView({
     stats.min !== null && stats.max !== null
       ? `${formatLufs(stats.min)} → ${formatLufs(stats.max)}`
       : "—";
+  const hasMeasured = stats.min !== null;
   return (
     <div className="flex min-h-full flex-col gap-[22px] p-8">
       <section
@@ -164,64 +189,75 @@ export function AlbumView({
           >
             Add at least one analyzed track to your library to see album consistency.
           </div>
+        ) : hasMeasured ? (
+          <LufsBarChart tracks={tracks} target={targetLufs} onOpen={onOpenTrack} />
         ) : (
-          <>
-            <div className="mb-4">
-              <LufsBarChart tracks={tracks} target={targetLufs} onOpen={onOpenTrack} />
-            </div>
-          <ul className="flex flex-col gap-1">
-            {tracks.map((t) => {
-              const delta =
-                t.lufs !== null && Number.isFinite(t.lufs) ? t.lufs - targetLufs : null;
-              const onTarget = delta !== null && Math.abs(delta) < ON_TARGET_LU;
-              return (
-                <li
-                  key={t.id}
-                  data-testid="album-track-row"
-                  data-fingerprint={t.id}
-                  className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 rounded-lg border border-transparent px-3 py-2 hover:border-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.04)]"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-white">{t.title}</p>
-                    <p className="text-xs text-[rgba(255,255,255,0.4)]">
-                      {onTarget ? "On target" : delta !== null ? `${formatDelta(delta)} LU from target` : "Not analyzed"}
-                    </p>
-                  </div>
-                  <div
-                    data-testid="album-track-lufs"
-                    className="text-sm tabular-nums text-white"
-                  >
-                    {formatLufs(t.lufs)}
-                  </div>
-                  <div
-                    data-testid="album-track-delta"
-                    className={
-                      "text-xs tabular-nums " +
-                      (delta === null
-                        ? "text-[rgba(255,255,255,0.4)]"
-                        : onTarget
-                          ? "text-green-400"
-                          : Math.abs(delta) > 1.5
-                            ? "text-red-400"
-                            : "text-amber-300")
-                    }
-                  >
-                    {delta === null ? "—" : formatDelta(delta)}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onOpenTrack(t.id)}
-                    className="rounded-md bg-[rgba(255,255,255,0.06)] px-3 py-1 text-xs text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.1)]"
-                  >
-                    Open
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          </>
+          <div className="rounded-lg border border-dashed border-[rgba(255,255,255,0.08)] px-4 py-8 text-center text-sm text-[rgba(255,255,255,0.5)]">
+            Analyze your tracks in the mastering view to plot loudness across the album.
+          </div>
         )}
       </section>
+
+      {tracks.length > 0 ? (
+        <section className="overflow-hidden rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[rgba(28,28,30,0.6)]">
+          <div className="border-b border-[rgba(255,255,255,0.06)] px-5 py-3.5">
+            <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.45)]">
+              Smart suggestions
+            </div>
+            <p className="text-[13px] text-[rgba(255,255,255,0.7)]">
+              {stats.issues > 0
+                ? `${stats.issues} ${stats.issues === 1 ? "track drifts" : "tracks drift"} more than 1.5 LU from the target — open a track to apply a correction.`
+                : "Every analyzed track sits within 1.5 LU of the album target."}
+            </p>
+          </div>
+          {tracks.map((t) => {
+            const delta =
+              t.lufs !== null && Number.isFinite(t.lufs) ? t.lufs - targetLufs : null;
+            const sev = severityFor(delta);
+            const deltaClass =
+              delta === null
+                ? "text-[rgba(255,255,255,0.4)]"
+                : Math.abs(delta) < ON_TARGET_LU
+                  ? "text-green-400"
+                  : Math.abs(delta) > 1.5
+                    ? "text-red-400"
+                    : "text-amber-300";
+            return (
+              <div
+                key={t.id}
+                data-testid="album-track-row"
+                data-fingerprint={t.id}
+                className="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 border-b border-[rgba(255,255,255,0.05)] px-5 py-3 last:border-b-0"
+              >
+                <Dot color={sev.color} />
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-medium text-white">{t.title}</p>
+                  <p className="text-xs text-[rgba(255,255,255,0.6)]">{sev.copy}</p>
+                </div>
+                <div
+                  data-testid="album-track-lufs"
+                  className="text-sm tabular-nums text-white"
+                >
+                  {formatLufs(t.lufs)}
+                </div>
+                <div
+                  data-testid="album-track-delta"
+                  className={"text-xs tabular-nums " + deltaClass}
+                >
+                  {delta === null ? "—" : formatDelta(delta)}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenTrack(t.id)}
+                  className="rounded-md bg-[rgba(255,255,255,0.06)] px-3 py-1 text-xs text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.1)]"
+                >
+                  Open
+                </button>
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
     </div>
   );
 }

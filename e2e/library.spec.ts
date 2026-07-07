@@ -300,6 +300,27 @@ test("TS-006: sequential uploads accumulate as separate library entries", async 
   expect(fileNames[1]).toContain("song-a.wav");
 });
 
+// D4 — deep-link into the import screen from any route ------------------------
+
+test("D4: /?screen=upload opens the import screen and cleans the URL", async ({
+  page,
+}) => {
+  await seedLibraryEntry(page, {
+    fileName: "deeplink.wav",
+    fileSize: 16,
+    withScript: true,
+  });
+
+  await page.goto("/?screen=upload");
+
+  // The compact ImportPanel (non-empty library) renders, with a file input.
+  await expect(page.getByRole("heading", { name: /Add audio/i })).toBeVisible();
+  await expect(page.locator('input[type="file"]')).toBeAttached();
+
+  // The one-shot query param is stripped so a reload won't re-force import.
+  expect(page.url()).not.toContain("screen=upload");
+});
+
 // Smoke check on fingerprint format ------------------------------------------
 
 test("fingerprints follow name|size|lastModified format", async ({ page }) => {

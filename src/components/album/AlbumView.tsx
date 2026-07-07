@@ -21,6 +21,23 @@ export interface AlbumViewProps {
 }
 
 const ON_TARGET_LU = 0.5;
+const ISSUE_LU = 1.5;
+
+interface AlbumStats {
+  min: number | null;
+  max: number | null;
+  issues: number;
+}
+
+/** Derive range + issue count from the *measured* tracks only. */
+function computeStats(tracks: AlbumTrackRow[], targetLufs: number): AlbumStats {
+  const measured = tracks
+    .map((t) => t.lufs)
+    .filter((v): v is number => v !== null && Number.isFinite(v));
+  if (measured.length === 0) return { min: null, max: null, issues: 0 };
+  const issues = measured.filter((v) => Math.abs(v - targetLufs) > ISSUE_LU).length;
+  return { min: Math.min(...measured), max: Math.max(...measured), issues };
+}
 
 function formatLufs(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
@@ -41,6 +58,11 @@ export function AlbumView({
   onOpenTrack,
   onMasterAll,
 }: AlbumViewProps): ReactElement {
+  const stats = computeStats(tracks, targetLufs);
+  const rangeText =
+    stats.min !== null && stats.max !== null
+      ? `${formatLufs(stats.min)} → ${formatLufs(stats.max)}`
+      : "—";
   return (
     <div className="flex min-h-full flex-col gap-[22px] p-8">
       <section
@@ -71,6 +93,44 @@ export function AlbumView({
               </button>
             </div>
           </div>
+          <dl
+            data-testid="album-hero-stats"
+            className="hidden w-[180px] flex-col gap-2.5 border-l border-white/15 pl-[18px] sm:flex"
+          >
+            <div>
+              <dt className="text-[9px] font-semibold uppercase tracking-wider opacity-60">
+                Target
+              </dt>
+              <dd className="mt-0.5 text-lg font-medium tabular-nums">
+                {formatLufs(targetLufs)} LUFS
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[9px] font-semibold uppercase tracking-wider opacity-60">
+                Range
+              </dt>
+              <dd
+                data-testid="album-hero-range"
+                className="mt-0.5 text-lg font-medium tabular-nums"
+              >
+                {rangeText}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[9px] font-semibold uppercase tracking-wider opacity-60">
+                Issues
+              </dt>
+              <dd
+                data-testid="album-hero-issues"
+                className={
+                  "mt-0.5 text-lg font-medium tabular-nums " +
+                  (stats.issues > 0 ? "text-[#ffd60a]" : "")
+                }
+              >
+                {stats.issues}
+              </dd>
+            </div>
+          </dl>
         </div>
       </section>
 

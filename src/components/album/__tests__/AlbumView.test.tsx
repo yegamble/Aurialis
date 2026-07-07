@@ -97,4 +97,39 @@ describe("AlbumView", () => {
     render(<AlbumView {...baseProps} />);
     expect(screen.getByTestId("album-target-lufs")).toHaveTextContent("−10.0");
   });
+
+  it("renders the hero stats column with target, range and issues", () => {
+    render(<AlbumView {...baseProps} />);
+    const stats = screen.getByTestId("album-hero-stats");
+    // target
+    expect(within(stats).getByText(/−10\.0 LUFS/)).toBeInTheDocument();
+    // range = min → max of measured LUFS (−11.2 → −8.7)
+    expect(within(stats).getByText(/−11\.2\s*→\s*−8\.7/)).toBeInTheDocument();
+    // issues: none of the base tracks drift > 1.5 LU
+    expect(within(stats).getByText(/^Issues$/)).toBeInTheDocument();
+  });
+
+  it("counts issues as tracks drifting more than 1.5 LU from target", () => {
+    const props = {
+      ...baseProps,
+      targetLufs: -6,
+      tracks: [
+        { id: "a", title: "Loud", lufs: -8.7, durationSec: 100 },
+        { id: "b", title: "Fine", lufs: -6.2, durationSec: 100 },
+      ] as AlbumTrackRow[],
+    };
+    render(<AlbumView {...props} />);
+    const stats = screen.getByTestId("album-hero-stats");
+    // -8.7 vs -6 → 2.7 LU drift (issue); -6.2 vs -6 → 0.2 (ok) ⇒ 1 issue
+    expect(within(stats).getByTestId("album-hero-issues")).toHaveTextContent("1");
+  });
+
+  it("shows an em-dash range when no track has a measured LUFS", () => {
+    const props = {
+      ...baseProps,
+      tracks: [{ id: "n", title: "None", lufs: null, durationSec: 100 }] as AlbumTrackRow[],
+    };
+    render(<AlbumView {...props} />);
+    expect(within(screen.getByTestId("album-hero-stats")).getByTestId("album-hero-range")).toHaveTextContent("—");
+  });
 });

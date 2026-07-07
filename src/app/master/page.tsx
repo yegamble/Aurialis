@@ -66,6 +66,19 @@ function formatMbGr(db: number): string {
   return db.toFixed(1);
 }
 
+/**
+ * Human-readable stereo-correlation phrase for the Phase Scope status line
+ * (Direction C). Derived from the same live value that drives the CORR
+ * readout — never a mocked number.
+ */
+function correlationPhrase(c: number): string {
+  if (!Number.isFinite(c)) return "No signal";
+  if (c >= 0.6) return "Mono-compatible";
+  if (c >= 0.2) return "Mostly correlated";
+  if (c >= -0.2) return "Wide / decorrelated";
+  return "Out of phase";
+}
+
 function mbGrColorClass(db: number): string {
   const g = -db;
   if (g >= 6) return "text-red-400";
@@ -602,11 +615,40 @@ export default function MasterPage() {
             )}
           </div>
           {proMode ? (
-            <div data-testid="master-goniometer-slot">
-              <Goniometer
-                left={engine.leftAnalyserNode}
-                right={engine.rightAnalyserNode}
-              />
+            <div
+              data-testid="master-goniometer-slot"
+              className="rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-3"
+            >
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.5)]">
+                Phase Scope
+              </div>
+              <div className="flex justify-center">
+                <Goniometer
+                  left={engine.leftAnalyserNode}
+                  right={engine.rightAnalyserNode}
+                  size={200}
+                  hideLabel
+                />
+              </div>
+              <div
+                data-testid="phase-scope-status"
+                className="mt-2 flex items-center gap-1.5 text-[10px] text-[rgba(255,255,255,0.55)]"
+              >
+                <span
+                  aria-hidden
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{
+                    background:
+                      metering.correlation >= 0 ? "#30d158" : "#ff453a",
+                  }}
+                />
+                <span>
+                  {correlationPhrase(metering.correlation)}
+                  {Number.isFinite(metering.correlation)
+                    ? ` · ${metering.correlation >= 0 ? "+" : ""}${metering.correlation.toFixed(2)}`
+                    : ""}
+                </span>
+              </div>
             </div>
           ) : null}
         </aside>

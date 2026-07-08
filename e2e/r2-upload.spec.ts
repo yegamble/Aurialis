@@ -177,6 +177,7 @@ test.describe("R2 upload transport selection", () => {
     const initiateBodies: unknown[] = [];
     let partPutCount = 0;
     let completeCalls = 0;
+    const completeBodies: Record<string, unknown>[] = [];
     let analyzeContentType: string | null = null;
     let analyzeJsonBody: { key?: string; profile?: string } | null = null;
 
@@ -217,6 +218,9 @@ test.describe("R2 upload transport selection", () => {
     });
     await page.route(url("/upload/complete"), (route: Route) => {
       completeCalls++;
+      completeBodies.push(
+        route.request().postDataJSON() as Record<string, unknown>,
+      );
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -268,6 +272,17 @@ test.describe("R2 upload transport selection", () => {
     expect(initiateBodies.length).toBe(1);
     expect(partPutCount).toBe(1);
     expect(completeCalls).toBe(1);
+
+    // New contract: /upload/complete is authorized by the uploadId + key
+    // capability from initiate, NOT a Turnstile token. The client must not send
+    // one (the single-use token was already spent on initiate).
+    expect(completeBodies).toHaveLength(1);
+    expect(completeBodies[0]).toMatchObject({
+      key: R2_KEY,
+      uploadId: "u1",
+      parts: [{ partNumber: 1, etag: '"etag-part-1"' }],
+    });
+    expect(completeBodies[0]).not.toHaveProperty("token");
 
     // The analyze request carried the R2 key as JSON, not a multipart file.
     expect(analyzeContentType).toContain("application/json");

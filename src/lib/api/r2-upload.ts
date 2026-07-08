@@ -10,8 +10,9 @@
  *   1. POST /upload/initiate { token, contentType, size }
  *        → { uploadId, key, chunkSize, partUrls: [{ partNumber, url }] }
  *   2. PUT each chunk to its presigned `partUrls[i].url`, capturing the ETag.
- *   3. POST /upload/complete { token, key, uploadId, parts: [{ partNumber, etag }] }
- *        → { key }
+ *   3. POST /upload/complete { key, uploadId, parts: [{ partNumber, etag }] }
+ *        → { key }  (authorized by the uploadId+key capability initiate issued;
+ *           the single-use Turnstile token is only spent on initiate)
  *   4. POST /upload/abort { key, uploadId } on unrecoverable failure.
  *
  * Returns the R2 object key; callers then POST { key, ... } to /analyze/deep or
@@ -89,7 +90,6 @@ export async function uploadFileToR2(
     const done = await postJson<{ key: string }>(
       `${baseUrl}/upload/complete`,
       {
-        token: turnstileToken,
         key,
         uploadId,
         parts: partUrls.map((p, i) => ({

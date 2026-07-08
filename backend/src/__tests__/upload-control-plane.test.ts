@@ -252,6 +252,88 @@ describe("POST /upload/abort", () => {
   });
 });
 
+describe("POST /upload/complete", () => {
+  beforeEach(() => {
+    patchEnv({
+      TURNSTILE_SECRET_KEY: "test-secret",
+      R2_ACCESS_KEY_ID: "test-akid",
+      R2_SECRET_ACCESS_KEY: "test-secret-key",
+      R2_ACCOUNT_ID: "test-account",
+    });
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("rejects a missing uploadId with 400", async () => {
+    const req = makeRequest("/upload/complete", {
+      body: JSON.stringify({
+        key: "12345678-1234-1234-1234-123456789012.wav",
+        parts: [{ partNumber: 1, etag: "etag" }],
+      }),
+    });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects missing parts with 400", async () => {
+    const req = makeRequest("/upload/complete", {
+      body: JSON.stringify({
+        key: "12345678-1234-1234-1234-123456789012.wav",
+        uploadId: "some-upload-id",
+        parts: [],
+      }),
+    });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(400);
+  });
+
+  it("completes a real multipart upload WITHOUT a Turnstile token and never calls siteverify", async () => {
+    // New contract: complete is authorized by possession of the uploadId + key
+    // that initiate minted, NOT by a Turnstile token (which is single-use and
+    // already spent on initiate). Drive a real R2 multipart upload through the
+    // miniflare binding, then complete it via the Worker with no token field.
+    const spy = stubTurnstile(true); // would flag any siteverify call
+
+    const key = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.wav";
+    const created = await env.UPLOADS.createMultipartUpload(key);
+    const part = await created.uploadPart(
+      1,
+      new Uint8Array(1024).fill(7),
+    );
+
+    const req = makeRequest("/upload/complete", {
+      body: JSON.stringify({
+        key,
+        uploadId: created.uploadId,
+        parts: [{ partNumber: part.partNumber, etag: part.etag }],
+      }),
+    });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { key: string };
+    expect(data.key).toBe(key);
+
+    // No Turnstile siteverify request was ever issued for /upload/complete.
+    const siteverifyCalls = spy.mock.calls.filter(([input]) => {
+      const u =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
+      return u === TURNSTILE_VERIFY_URL;
+    });
+    expect(siteverifyCalls).toHaveLength(0);
+  });
+});
+
 describe("POST /analyze/deep — JSON forward path", () => {
   beforeEach(() => {
     patchEnv({

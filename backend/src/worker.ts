@@ -169,12 +169,16 @@ async function handleInitiate(request: Request, env: Env): Promise<Response> {
 }
 
 interface CompleteBody {
-  token: string;
   key: string;
   uploadId: string;
   parts: { partNumber: number; etag: string }[];
 }
 
+// Authorization for /upload/complete is possession of the R2 multipart
+// uploadId + key that /upload/initiate issued — an unguessable capability
+// already scoped to this upload. Turnstile is verified ONCE, on
+// /upload/initiate; re-verifying here would reject the (single-use) token the
+// client already spent on initiate. R2 itself rejects a bogus uploadId/key.
 async function handleComplete(request: Request, env: Env): Promise<Response> {
   let body: CompleteBody;
   try {
@@ -182,7 +186,6 @@ async function handleComplete(request: Request, env: Env): Promise<Response> {
   } catch {
     return errorResponse(request, env, "Invalid JSON body", 400);
   }
-  if (!body.token) return errorResponse(request, env, "Missing Turnstile token", 400);
   if (!body.key || !KEY_REGEX.test(body.key)) {
     return errorResponse(request, env, "Invalid key", 400);
   }
@@ -191,21 +194,6 @@ async function handleComplete(request: Request, env: Env): Promise<Response> {
   }
   if (!Array.isArray(body.parts) || body.parts.length === 0) {
     return errorResponse(request, env, "Missing parts", 400);
-  }
-
-  const turnstile = await verifyTurnstile(
-    body.token,
-    "upload-complete",
-    clientIp(request),
-    env
-  );
-  if (!turnstile.ok) {
-    return errorResponse(
-      request,
-      env,
-      `Turnstile verification failed: ${turnstile.reason}`,
-      403
-    );
   }
 
   const upload = env.UPLOADS.resumeMultipartUpload(body.key, body.uploadId);

@@ -94,17 +94,13 @@
   // Workers Analytics Engine for the multipart_legacy_calls counter (used
   // to gate Task 9 of the direct-r2-upload plan — verifies zero legacy
   // multipart traffic before removing the FormData endpoints).
-  // TEMPORARILY DISABLED 2026-07-08: Analytics Engine is not enabled on the
-  // Cloudflare account (wrangler error 10089) and was blocking the deploy of
-  // the fixed worker during the half-deployed upload outage. metrics.ts
-  // no-ops when the binding is absent. Re-enable this block once Analytics
-  // Engine is switched on in the dashboard, then redeploy.
-  // "analytics_engine_datasets": [
-  //   {
-  //     "binding": "METRICS",
-  //     "dataset": "aurialis_metrics"
-  //   }
-  // ],
+  // Requires Analytics Engine to be enabled on the account (enabled 2026-07-08).
+  "analytics_engine_datasets": [
+    {
+      "binding": "METRICS",
+      "dataset": "aurialis_metrics"
+    }
+  ],
 
   "observability": {
     "enabled": true

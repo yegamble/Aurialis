@@ -20,7 +20,14 @@ let backendAvailable = false;
 
 test.beforeAll(async () => {
   try {
-    const response = await fetch("http://localhost:8000/health");
+    // Bound the probe: when a concurrent Demucs separation blocks the backend's
+    // event loop (or Docker-for-Mac's vpnkit stalls), an un-timed fetch hangs
+    // the whole 30s hook budget and hard-fails instead of falling through to
+    // the graceful "backend unavailable" skip path. 8s mirrors the deep-
+    // mastering probe and comfortably covers vpnkit's ~3s first round-trip.
+    const response = await fetch("http://localhost:8000/health", {
+      signal: AbortSignal.timeout(8_000),
+    });
     backendAvailable = response.ok;
   } catch {
     backendAvailable = false;

@@ -159,7 +159,38 @@ CI too) · **backend pytest 115 pass**.
   `MockTransport` (no `respx`) and the JSON branches now return 422 on a bad
   body (was a 500); `e2e/r2-upload.spec.ts` covers both transports and the
   webServer sets a Turnstile test key so the direct-R2 path actually runs.
-  **Still HELD (unchanged — needs live infra + go-ahead):** remove the legacy
-  multipart fallback, and **verify a real upload against the deployed Worker**
-  (Turnstile secret set). → the multipart removal replaces a currently-working
-  path; do behind a deploy + your go-ahead. [direct-R2 Tasks 5/6/8/9; #27/#28/#34]
+
+  **Live verification (2026-07-08) against the deployed Workers found THREE
+  blockers; TWO are now code-fixed on `feat/design-100`:**
+  1. *Single-use token reused on `/upload/complete`* — the Worker ran Turnstile
+     siteverify on BOTH initiate and complete while the client sent the same
+     single-use token to both, so complete always 403'd (duplicate token) and
+     no upload could finalize. **CODE-FIXED (51758f6):** Turnstile is verified
+     on `/upload/initiate` only; complete is authorized by possession of the
+     uploadId+key capability initiate minted.
+  2. *Client bundle carried no Turnstile site key* — `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+     was only a Worker runtime var, but Next inlines `NEXT_PUBLIC_*` at BUILD
+     time, so `getTurnstileSiteKey()` returned null in the browser and every
+     upload silently fell back to legacy multipart. **CODE-FIXED (9b7a222):**
+     the public key is now in committed `.env.production`; a local `pnpm build`
+     confirms it inlines into a client chunk.
+  3. *Missing R2 secrets → uncaught 500 with NO CORS headers at the SigV4
+     presign step* (a valid Turnstile token reached presign and threw; browsers
+     saw an opaque ERR_FAILED). **Code hardened (d4905ea):** presign paths now
+     return an explicit `503 {"detail":"R2 storage not configured"}` WITH CORS,
+     and a top-level catch wraps all handlers so any throw is a CORS-safe JSON
+     500 — BUT this only makes the failure legible; the upload stays BLOCKED
+     until the secrets are actually set (infra, below).
+
+  **Still HELD — remaining INFRA steps (needs live infra + go-ahead), in order:**
+  1. Set the R2 secrets on `aurialis-core`
+     (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_ACCOUNT_ID` via
+     `wrangler secret put`) — without these initiate still (now cleanly) 503s.
+  2. Redeploy BOTH workers: `aurialis-core` (ships the worker code fixes #1/#3)
+     and `aurialis` (a fresh `pnpm build` bakes the inlined site key into the
+     client bundle #2).
+  3. Re-verify a real end-to-end upload against the deployed Worker (valid
+     Turnstile token → initiate → PUT parts → complete → analyze).
+  4. **THEN** remove the legacy multipart fallback — it replaces a
+     currently-working path, so only after live re-verification passes.
+  [direct-R2 Tasks 5/6/8/9; #27/#28/#34]

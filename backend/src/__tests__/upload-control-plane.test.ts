@@ -332,6 +332,32 @@ describe("POST /upload/complete", () => {
     });
     expect(siteverifyCalls).toHaveLength(0);
   });
+
+  it("accepts S3-style QUOTED part etags (presigned PUT responses quote them)", async () => {
+    // In production the browser PUTs parts to S3 presigned URLs and reads the
+    // ETag response header, which the S3 spec QUOTES (`"abc"`). The binding's
+    // complete() wants the bare etag — the Worker must normalize or every real
+    // upload dies at finalize (verified live 2026-07-08: complete → 500).
+    stubTurnstile(true);
+
+    const key = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff.wav";
+    const created = await env.UPLOADS.createMultipartUpload(key);
+    const part = await created.uploadPart(1, new Uint8Array(1024).fill(9));
+
+    const req = makeRequest("/upload/complete", {
+      body: JSON.stringify({
+        key,
+        uploadId: created.uploadId,
+        parts: [{ partNumber: part.partNumber, etag: `"${part.etag}"` }],
+      }),
+    });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { key: string }).key).toBe(key);
+  });
 });
 
 describe("error handling — CORS-safe failures", () => {

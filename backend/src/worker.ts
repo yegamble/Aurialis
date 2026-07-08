@@ -217,10 +217,16 @@ async function handleComplete(request: Request, env: Env): Promise<Response> {
 
   const upload = env.UPLOADS.resumeMultipartUpload(body.key, body.uploadId);
   try {
-    // Pass etags through byte-for-byte. R2's resumeMultipartUpload.complete
-    // expects R2UploadedPart objects: { partNumber, etag }.
+    // Parts are PUT via S3 presigned URLs, whose responses carry the ETag
+    // QUOTED (`"abc"`) per the S3 spec — but the R2 binding's complete()
+    // expects the bare etag its own uploadPart() returns. Strip the quotes
+    // (and a weak-validator prefix, defensively) or finalize rejects every
+    // part. Verified live 2026-07-08: quoted etags → complete 500.
     await upload.complete(
-      body.parts.map((p) => ({ partNumber: p.partNumber, etag: p.etag }))
+      body.parts.map((p) => ({
+        partNumber: p.partNumber,
+        etag: p.etag.replace(/^(W\/)?"/, "").replace(/"$/, ""),
+      }))
     );
   } catch (err) {
     return errorResponse(

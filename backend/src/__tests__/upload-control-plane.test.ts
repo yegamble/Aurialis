@@ -334,6 +334,78 @@ describe("POST /upload/complete", () => {
   });
 });
 
+describe("error handling — CORS-safe failures", () => {
+  beforeEach(() => {
+    patchEnv({
+      TURNSTILE_SECRET_KEY: "test-secret",
+      R2_ACCESS_KEY_ID: "test-akid",
+      R2_SECRET_ACCESS_KEY: "test-secret-key",
+      R2_ACCOUNT_ID: "test-account",
+    });
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("returns 503 with CORS headers when R2 creds are missing on /upload/initiate", async () => {
+    stubTurnstile(true);
+    patchEnv({
+      R2_ACCESS_KEY_ID: "",
+      R2_SECRET_ACCESS_KEY: "",
+      R2_ACCOUNT_ID: "",
+    });
+    const req = makeRequest("/upload/initiate", {
+      body: JSON.stringify(VALID_INITIATE),
+      headers: { "cf-connecting-ip": "198.51.100.71" },
+    });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    const data = (await res.json()) as { detail: string };
+    expect(data.detail).toBe("R2 storage not configured");
+  });
+
+  it("returns 503 with CORS headers when R2 creds are missing on /analyze/deep", async () => {
+    patchEnv({
+      R2_ACCESS_KEY_ID: "",
+      R2_SECRET_ACCESS_KEY: "",
+      R2_ACCOUNT_ID: "",
+    });
+    const req = makeRequest("/analyze/deep", {
+      body: JSON.stringify({
+        key: "12345678-1234-1234-1234-123456789012.wav",
+        profile: "modern_pop_polish",
+      }),
+    });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    const data = (await res.json()) as { detail: string };
+    expect(data.detail).toBe("R2 storage not configured");
+  });
+
+  it("turns a thrown handler error into a 500 JSON response WITH CORS headers", async () => {
+    // A passthrough request reaches forwardToContainer, whose BACKEND container
+    // binding is not provisioned in the miniflare test env, so the handler
+    // throws. Before the top-level catch that surfaced as an opaque 500 with no
+    // CORS headers; now it must be a JSON error carrying the CORS headers.
+    const req = makeRequest("/health", { method: "GET" });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(500);
+    expect(res.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    const data = (await res.json()) as { detail: string };
+    expect(data.detail).toContain("Internal error");
+  });
+});
+
 describe("POST /analyze/deep — JSON forward path", () => {
   beforeEach(() => {
     patchEnv({

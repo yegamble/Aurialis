@@ -114,6 +114,43 @@ and integrated. One line per area landed:
 - [x] **Art-tile consolidation**: master toolbar + library table now source colours
   from the shared `src/lib/art-tile.ts` `artGradient` (one seed → one colour).
 
+## ✅ 2026-07-08 design-100 Stage 5 (local verification against real backend)
+
+Fresh-eyes browser walkthroughs (docker backend + Next server) + full test gate.
+All three walkthroughs verified WORKING in a real browser:
+- **Deep Mastering**: upload → Deep mode → Metal Wall profile → Analyze (real
+  sections→stems→script pipeline, no crash on completion) → full-width deep
+  timeline + legend → move editor (top-right) edit flips `edited` → Script A/B
+  toggle → toolbar Export → WAV + MP3 downloads (valid RIFF / MPEG headers).
+- **Smart Master Album**: 3 seeded tracks (distinct measured LUFS) → hero, stats,
+  LUFS bar chart, 3-tier suggestions, LUFS-only segmented → Master entire album →
+  per-track progress + ZIP (one WAV/track). **Independently confirmed** each
+  mastered track integrates to ~−14 LUFS (−14.06 / −14.11 / −14.25) via
+  `backend/.venv` pyloudnorm — album re-gain (5b33eb4) lands.
+- **Mobile 375×812**: drawer nav opens/closes on all four routes; /master keeps
+  compact meters + waveform + Phase Scope (Pro Mode); no horizontal overflow.
+
+Test-infra bugs found + fixed (the specs had latent failures that only surfaced
+once the raised health probe let them actually run against the real backend):
+- [x] **deep-mastering specs aborted at the 30s default test timeout** (real
+  pipeline is 40-90s) and hammered the CPU backend in parallel. Serial mode +
+  300s per-test timeout; fixed TS-004's occluded move click (dispatchEvent) and
+  controlled-slider edit (native value setter); rewired TS-005 to the C8 export
+  overlay. 5/5 pass. — d8937d9
+- [x] **smart-split beforeAll health probe had no timeout** → 30s hook hang under
+  load; **Backend Warning** test asserted a down-state off a racy probe of the
+  live backend. Bounded + retried the probe; made Backend Warning hermetic
+  (route `**/health` to abort). — d705585 / aae00a2
+- [x] **mixer TS-001 `waitForLoadState("networkidle")`** never settled because the
+  redesigned sidebar polls backend health; wait for the upload input instead. — cc038ed
+
+Final gate (prod E2E bundle built with `NEXT_PUBLIC_E2E_HOOKS=1`, matching CI):
+tsc 0 · lint 0 · **vitest 1607 pass** (2 CPU-timing micro-benchmarks flake only
+under concurrent docker+server load; pass in isolation) · **Playwright 100 pass /
+4 skip / 0 fail** (4 skips = smart-split separation TS-001×3 + TS-005×1, the
+pre-existing collection-time `test.skip(!backendAvailable)` footgun; they skip in
+CI too) · **backend pytest 115 pass**.
+
 ## ▢ Remaining — needs a decision or live infra (NOT autonomous)
 
 - [infra] **Finish + ship the R2 cutover.** Test debt now cleared on

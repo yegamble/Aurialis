@@ -33,7 +33,11 @@ async function uploadStems(page: Page, files: string[]) {
 test.describe("TS-001: Multi-File Stem Upload", () => {
   test("navigate to /mix from home page via multi-file upload", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    // Wait for the upload input to be ready rather than "networkidle": the
+    // redesigned sidebar polls the backend health endpoint, so the network
+    // never goes idle on the home route and `waitForLoadState("networkidle")`
+    // times out at 30s.
+    await page.locator('input[type="file"]').waitFor({ state: "attached" });
 
     // Unified UploadScreen routes multi-file uploads to /mix.
     await page.locator('input[type="file"]').setInputFiles(STEM_FILES);

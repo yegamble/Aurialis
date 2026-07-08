@@ -127,3 +127,48 @@ def test_no_tempfile_left_behind_on_rejection(
             "https://r2.example/obj", temp_dir=str(tmp_path)
         )
     assert list(tmp_path.iterdir()) == []
+
+
+class _OneShotStream(httpx.SyncByteStream):
+    """Faithful to real httpx: the body can be iterated exactly once.
+
+    MockTransport's in-memory responses tolerate a second iter_bytes() call,
+    which hid the StreamConsumed crash (magic-byte probe consumed the first
+    iterator, the copy loop opened a second) that broke every real R2
+    download. This stream reproduces production semantics.
+    """
+
+    def __init__(self, body: bytes, chunk: int = 64 * 1024) -> None:
+        self._chunks = [body[i : i + chunk] for i in range(0, len(body), chunk)]
+        self._consumed = False
+
+    def __iter__(self):
+        if self._consumed:
+            raise httpx.StreamConsumed()
+        self._consumed = True
+        yield from self._chunks
+
+
+def test_download_streams_body_exactly_once(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Regression: r2_download must consume ONE body iterator end to end.
+
+    Verified live 2026-07-08: with real httpx the old double-iter_bytes()
+    raised httpx.StreamConsumed on every JSON-path download (bare 500 in
+    prod). A one-shot stream makes the mock as strict as production.
+    """
+    body = _wav_bytes()
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, stream=_OneShotStream(body))
+
+    _patch_transport(monkeypatch, handler)
+
+    out = r2_download.download_to_tempfile(
+        "https://example.test/upload.wav", temp_dir=str(tmp_path)
+    )
+    try:
+        assert out.read_bytes() == body
+    finally:
+        out.unlink(missing_ok=True)

@@ -86,8 +86,13 @@ def download_to_tempfile(
                         detail=f"File exceeds {mb} MB limit",
                     )
 
+            # ONE iterator for the whole body. Real httpx raises StreamConsumed
+            # if iter_bytes() is called a second time after the magic-byte
+            # probe abandons the first iterator mid-stream (MockTransport
+            # responses tolerate re-reads, which is why tests never saw it).
+            chunks = response.iter_bytes(chunk_size=512 * 1024)
             magic_buf = bytearray()
-            for chunk in response.iter_bytes(chunk_size=64 * 1024):
+            for chunk in chunks:
                 magic_buf.extend(chunk)
                 if len(magic_buf) >= _MAGIC_PROBE_BYTES:
                     break
@@ -120,7 +125,7 @@ def download_to_tempfile(
                     if header_probe_done and fmt in _SOUNDFILE_FORMATS:
                         _probe_header(tmp_path, fmt)
 
-                    for chunk in response.iter_bytes(chunk_size=512 * 1024):
+                    for chunk in chunks:
                         cumulative += len(chunk)
                         if cumulative > max_bytes:
                             mb = max_bytes // (1024 * 1024)

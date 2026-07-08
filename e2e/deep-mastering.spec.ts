@@ -26,6 +26,16 @@ const BACKEND_URL =
   process.env.NEXT_PUBLIC_SEPARATION_API_URL ??
   "http://localhost:8000";
 
+// The real deep pipeline (sections → Demucs stems → script) takes ~40-90s per
+// run against a CPU-only backend, well over Playwright's 30s default per-test
+// timeout — so the inner `toBeVisible({ timeout: 180_000 })` waits could never
+// actually reach 180s and every test aborted at 30s. Two changes fix that:
+//   1. Serial mode so five heavy separations don't hit the CPU backend at once
+//      (concurrent Demucs runs thrash and each balloons past any timeout).
+//   2. A generous per-test timeout (set in beforeEach) that actually
+//      accommodates the pipeline.
+test.describe.configure({ mode: "serial" });
+
 /** Skip the suite if the deep-analysis backend isn't reachable. */
 test.beforeAll(async () => {
   try {
@@ -46,6 +56,10 @@ test.beforeAll(async () => {
 // active. These specs exercise the legacy analyze path (not R2), so neutralise
 // the token before every navigation to keep the transport deterministic.
 test.beforeEach(async ({ page }) => {
+  // The real deep pipeline runs well past Playwright's 30s default; give each
+  // test enough room that the inner `toBeVisible({ timeout: 180_000 })` waits
+  // are actually reachable instead of being capped by the test timeout.
+  test.setTimeout(300_000);
   await stubTurnstileNoToken(page);
 });
 
@@ -153,12 +167,24 @@ test.describe("TS-004 — edit a move and verify state persists", () => {
     const firstMove = page
       .locator('[data-testid^="deep-timeline-move-"]')
       .first();
-    await firstMove.click();
+    // On the short (~2s) fixture every move marker clusters near t=0 and the
+    // absolutely-positioned dots overlap, so a normal click on the DOM-first
+    // move is intercepted by whichever sibling paints on top. Dispatch the
+    // click straight to the located element to bypass hit-testing.
+    await firstMove.dispatchEvent("click");
     await expect(page.getByTestId("move-editor")).toBeVisible();
 
     const slider = page.getByTestId("move-editor-value");
     await slider.evaluate((el: HTMLInputElement) => {
-      el.value = String(Number(el.value) - 3);
+      // React tracks controlled-input values via a patched value setter, so a
+      // plain `el.value = …` is seen as "no change" and onChange never fires.
+      // Go through the native prototype setter so React's tracker detects the
+      // edit and the move flips to `edited`.
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      setter?.call(el, String(Number(el.value) - 3));
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
     });
@@ -180,14 +206,18 @@ test.describe("TS-005 — export matches real-time playback", () => {
     // The actual LUFS-curve parity is verified offline by the integration
     // test (T17 / T9b). Here we only verify that the export action triggers
     // a download — proving the script-aware render path runs end-to-end.
-    const downloadPromise = page.waitForEvent("download", { timeout: 60_000 });
+    //
+    // Export is a focused overlay (C8): open it from the toolbar Export
+    // button, then trigger the WAV export from the segmented panel.
+    await page.getByTestId("master-export-button").click();
     const exportButton = page
       .getByRole("button", { name: /export wav/i })
       .first();
-    if (await exportButton.isVisible()) {
-      await exportButton.click();
-      const download = await downloadPromise;
-      expect(download.suggestedFilename()).toMatch(/\.wav$/i);
-    }
+    await expect(exportButton).toBeVisible();
+
+    const downloadPromise = page.waitForEvent("download", { timeout: 60_000 });
+    await exportButton.click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/\.wav$/i);
   });
 });

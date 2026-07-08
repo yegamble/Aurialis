@@ -1,19 +1,29 @@
 "use client";
 
 import type { ReactElement, ReactNode } from "react";
-import { Library, Sparkles, Scissors, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Library, Sparkles, Scissors, Upload, Search, Check } from "lucide-react";
+import { checkBackendHealth } from "@/lib/api/separation";
+import { formatBytes, getStorageUsage } from "@/lib/storage-estimate";
+import { ArtTile } from "./ArtTile";
 
 export type ShellScreen = "library" | "album" | "stems" | "upload" | "master";
 
 export interface SidebarTrack {
   id: string;
   title: string;
+  /** True when the entry has saved analysis — renders a trailing check. */
+  analyzed?: boolean;
+  /** Optional seed override for the deterministic art tile (defaults to id). */
+  artSeed?: string;
 }
 
 export interface SidebarProps {
   activeScreen: ShellScreen;
   onSelect: (screen: ShellScreen) => void;
   tracks?: SidebarTrack[];
+  /** Label for the tracks group; falls back to "Tracks". */
+  collectionTitle?: string;
   activeTrackId?: string | null;
   onSelectTrack?: (id: string) => void;
   proMode?: boolean;
@@ -37,18 +47,60 @@ export function Sidebar({
   activeScreen,
   onSelect,
   tracks,
+  collectionTitle,
   activeTrackId,
   onSelectTrack,
   proMode,
   onProModeChange,
 }: SidebarProps): ReactElement {
   const showProToggle = proMode !== undefined && onProModeChange !== undefined;
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const [cacheSize, setCacheSize] = useState<string | null>(null);
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void getStorageUsage().then((bytes) => {
+      if (active && bytes !== null) setCacheSize(formatBytes(bytes));
+    });
+    void checkBackendHealth().then((health) => {
+      if (active) setBackendOnline(health.ok);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const filteredTracks = useMemo(() => {
+    if (!tracks) return tracks;
+    const q = query.trim().toLowerCase();
+    if (!q) return tracks;
+    return tracks.filter((t) => t.title.toLowerCase().includes(q));
+  }, [tracks, query]);
+
   return (
     <nav
       aria-label="Primary"
       data-testid="sidebar"
       className="flex w-60 flex-shrink-0 flex-col overflow-hidden border-r border-[rgba(255,255,255,0.08)] bg-[rgba(28,28,30,0.6)] backdrop-blur-xl"
     >
+      <div className="px-3 pb-1 pt-3.5">
+        <SearchBar ref={searchRef} value={query} onChange={setQuery} />
+      </div>
+
       <NavGroup label="Aurialis">
         {NAV_ITEMS.map((item) => {
           const active = activeScreen === item.screen;
@@ -65,12 +117,15 @@ export function Sidebar({
         })}
       </NavGroup>
 
-      {tracks && tracks.length > 0 ? (
-        <NavGroup label="Tracks">
-          {tracks.map((t) => (
+      {filteredTracks && filteredTracks.length > 0 ? (
+        <NavGroup label={collectionTitle ?? "Tracks"}>
+          {filteredTracks.map((t) => (
             <NavTrack
               key={t.id}
+              id={t.id}
               title={t.title}
+              seed={t.artSeed ?? t.id}
+              analyzed={t.analyzed ?? false}
               active={activeTrackId === t.id}
               onClick={() => onSelectTrack?.(t.id)}
             />
@@ -79,6 +134,37 @@ export function Sidebar({
       ) : null}
 
       <div className="flex-1" />
+
+      <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-3 text-[10.5px] text-[rgba(255,255,255,0.45)]">
+        <div className="mb-1 flex items-center justify-between">
+          <span>Cache</span>
+          <span data-testid="sidebar-cache-size" className="tabular-nums">
+            {cacheSize ?? "—"}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span>Backend</span>
+          <span
+            data-testid="sidebar-backend-status"
+            className="flex items-center gap-1"
+            style={{
+              color:
+                backendOnline === null
+                  ? "rgba(255,255,255,0.45)"
+                  : backendOnline
+                    ? "#30d158"
+                    : "#ff453a",
+            }}
+          >
+            <span aria-hidden>●</span>
+            {backendOnline === null
+              ? "checking…"
+              : backendOnline
+                ? "online"
+                : "offline"}
+          </span>
+        </div>
+      </div>
 
       {showProToggle ? (
         <div className="border-t border-[rgba(255,255,255,0.06)] px-3 py-3">
@@ -113,6 +199,38 @@ export function Sidebar({
         </div>
       ) : null}
     </nav>
+  );
+}
+
+interface SearchBarProps {
+  value: string;
+  onChange: (next: string) => void;
+  ref?: React.Ref<HTMLInputElement>;
+}
+
+function SearchBar({ value, onChange, ref }: SearchBarProps): ReactElement {
+  return (
+    <div
+      data-testid="sidebar-search"
+      className="flex items-center gap-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] px-2.5 py-1.5 text-[rgba(255,255,255,0.45)]"
+    >
+      <Search className="h-3 w-3 flex-shrink-0" aria-hidden />
+      <input
+        ref={ref}
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search library"
+        aria-label="Search library"
+        className="min-w-0 flex-1 bg-transparent text-[12px] text-[rgba(255,255,255,0.85)] placeholder:text-[rgba(255,255,255,0.45)] focus:outline-none"
+      />
+      <kbd
+        aria-hidden
+        className="rounded-[3px] bg-[rgba(255,255,255,0.08)] px-1 py-px text-[9px] font-normal text-[rgba(255,255,255,0.45)]"
+      >
+        ⌘K
+      </kbd>
+    </div>
   );
 }
 
@@ -161,12 +279,15 @@ function NavItem({ active, icon, onClick, children }: NavItemProps): ReactElemen
 }
 
 interface NavTrackProps {
+  id: string;
   title: string;
+  seed: string;
+  analyzed: boolean;
   active: boolean;
   onClick: () => void;
 }
 
-function NavTrack({ title, active, onClick }: NavTrackProps): ReactElement {
+function NavTrack({ id, title, seed, analyzed, active, onClick }: NavTrackProps): ReactElement {
   return (
     <li>
       <button
@@ -180,7 +301,15 @@ function NavTrack({ title, active, onClick }: NavTrackProps): ReactElement {
             : "text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.05)]")
         }
       >
-        <span className="truncate">{title}</span>
+        <ArtTile seed={seed} data-testid={`sidebar-track-art-${id}`} />
+        <span className="min-w-0 flex-1 truncate">{title}</span>
+        {analyzed ? (
+          <Check
+            data-testid={`sidebar-track-check-${id}`}
+            aria-label="Analyzed"
+            className="h-3 w-3 flex-shrink-0 text-[rgba(255,255,255,0.45)]"
+          />
+        ) : null}
       </button>
     </li>
   );

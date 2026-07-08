@@ -59,6 +59,65 @@ describe("LibraryView", () => {
     expect(screen.getByTestId("library-summary")).toHaveTextContent(/2 songs/i);
   });
 
+  it("renders uppercase column headers", () => {
+    render(
+      <LibraryView
+        entries={[analyzedEntry, draftEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Title")).toBeInTheDocument();
+    expect(screen.getByText("LUFS")).toBeInTheDocument();
+    expect(screen.getByText("Length")).toBeInTheDocument();
+    expect(screen.getByText("Modified")).toBeInTheDocument();
+  });
+
+  it("shows an em-dash for LUFS when the track has no measured loudness", () => {
+    render(
+      <LibraryView
+        entries={[draftEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    const row = screen.getByTestId("library-row");
+    expect(within(row).getByTestId("library-lufs")).toHaveTextContent("—");
+  });
+
+  it("renders the measured LUFS and flags drift >1.5 LU from target as amber", () => {
+    // No per-track target → album target = default (-14). Measured -10 → 4 LU drift.
+    const drifted = makeEntry({
+      fingerprint: "fp-drift",
+      fileName: "Loud.wav",
+      measuredLufs: -10,
+      script: { version: 1 } as never,
+    });
+    render(
+      <LibraryView
+        entries={[drifted]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    const lufs = within(screen.getByTestId("library-row")).getByTestId("library-lufs");
+    expect(lufs).toHaveTextContent("−10.0");
+    expect(lufs).toHaveAttribute("data-drift", "true");
+  });
+
+  it("renders a deterministic gradient art tile per row", () => {
+    render(
+      <LibraryView
+        entries={[analyzedEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    const art = within(screen.getByTestId("library-row")).getByTestId("library-art");
+    expect(art).toBeInTheDocument();
+    expect(art.getAttribute("style")).toMatch(/linear-gradient/);
+  });
+
   it("renders a row for every entry in the default (all) filter", () => {
     render(
       <LibraryView
@@ -129,6 +188,27 @@ describe("LibraryView", () => {
     expect(screen.getByTestId("album-hero-card")).toBeInTheDocument();
   });
 
+  it("passes album variance and issues through to the hero card", () => {
+    render(
+      <LibraryView
+        entries={[analyzedEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+        album={{
+          title: "Library album",
+          artist: "Loudness consistency across your tracks",
+          trackCount: 3,
+          avgLufs: -10.6,
+          variance: 2.4,
+          issues: 3,
+        }}
+        onOpenAlbum={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("album-variance")).toHaveTextContent("2.4 LU");
+    expect(screen.getByTestId("album-issues")).toHaveTextContent("3");
+  });
+
   it("does NOT render the album hero card when no album is supplied", () => {
     render(
       <LibraryView
@@ -152,6 +232,48 @@ describe("LibraryView", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /^Import$/i }));
     expect(onUpload).toHaveBeenCalledOnce();
+  });
+
+  it("renders a persistent import dropzone when onImportFiles is supplied", () => {
+    render(
+      <LibraryView
+        entries={[analyzedEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onImportFiles={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("library-dropzone")).toBeInTheDocument();
+    expect(screen.getByText(/Drop audio files to import/i)).toBeInTheDocument();
+  });
+
+  it("does NOT render the dropzone when onImportFiles is absent", () => {
+    render(
+      <LibraryView
+        entries={[analyzedEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("library-dropzone")).not.toBeInTheDocument();
+  });
+
+  it("calls onImportFiles when files are dropped on the dropzone", () => {
+    const onImportFiles = vi.fn();
+    render(
+      <LibraryView
+        entries={[analyzedEntry]}
+        onOpenEntry={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onImportFiles={onImportFiles}
+      />,
+    );
+    const file = new File([new Uint8Array(4)], "dropped.wav", { type: "audio/wav" });
+    fireEvent.drop(screen.getByTestId("library-dropzone"), {
+      dataTransfer: { files: [file] },
+    });
+    expect(onImportFiles).toHaveBeenCalledOnce();
+    expect(onImportFiles.mock.calls[0]![0][0].name).toBe("dropped.wav");
   });
 
   it("calls onOpenEntry with the fingerprint when a row is clicked", () => {

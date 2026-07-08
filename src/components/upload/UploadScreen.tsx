@@ -1,54 +1,24 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
 import { motion } from "motion/react";
 import { Upload, Music, Headphones, Download, Sparkles } from "lucide-react";
+import { useFileImport } from "./useFileImport";
 
 interface UploadScreenProps {
   onFilesUploaded: (files: File[]) => void;
 }
 
 export function UploadScreen({ onFilesUploaded }: UploadScreenProps) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleFiles = useCallback(
-    (files: File[]) => {
-      if (files.length === 0) return;
-      setUploadProgress(0);
-      const interval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev === null) return 0;
-          if (prev >= 100) {
-            clearInterval(interval);
-            setTimeout(() => onFilesUploaded(files), 300);
-            return 100;
-          }
-          return prev + Math.random() * 15 + 5;
-        });
-      }, 80);
-    },
-    [onFilesUploaded]
-  );
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) handleFiles(files);
-    },
-    [handleFiles]
-  );
-
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files ?? []);
-      if (files.length > 0) handleFiles(files);
-    },
-    [handleFiles]
-  );
+  const {
+    isDragging,
+    uploadProgress,
+    inputRef,
+    openPicker,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    onInputChange,
+  } = useFileImport(onFilesUploaded);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 relative overflow-hidden">
@@ -84,17 +54,14 @@ export function UploadScreen({ onFilesUploaded }: UploadScreenProps) {
           role="button"
           tabIndex={0}
           aria-label="Upload audio files. Drop audio here or click to browse."
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          onClick={() => inputRef.current?.click()}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          onClick={openPicker}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              inputRef.current?.click();
+              openPicker();
             }
           }}
           className={`
@@ -147,7 +114,7 @@ export function UploadScreen({ onFilesUploaded }: UploadScreenProps) {
           accept="audio/*,.zip"
           multiple
           className="hidden"
-          onChange={handleChange}
+          onChange={onInputChange}
           aria-hidden="true"
         />
       </motion.div>

@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { UploadScreen } from "@/components/upload/UploadScreen";
+import { ImportPanel } from "@/components/upload/ImportPanel";
 import { LibraryView } from "@/components/library/LibraryView";
+import { deriveLibraryAlbum } from "@/components/library/library-album";
 import { AppShell } from "@/components/shell/AppShell";
 import type { ShellScreen, SidebarTrack } from "@/components/shell/Sidebar";
+import { libraryEntriesToSidebarTracks } from "@/components/shell/sidebar-tracks";
 import { ResumeOrFreshDialog } from "@/components/library/ResumeOrFreshDialog";
 import { useAudioStore } from "@/lib/stores/audio-store";
 import { useLibraryStore } from "@/lib/stores/library-store";
@@ -20,8 +23,9 @@ import type { LibraryEntry } from "@/lib/storage/library-types";
 
 type LocalScreen = Extract<ShellScreen, "library" | "upload">;
 
-export default function UploadPage() {
+function LibraryImportPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const entries = useLibraryStore((s) => s.entries);
   const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
   const removeEntry = useLibraryStore((s) => s.removeEntry);
@@ -33,7 +37,13 @@ export default function UploadPage() {
     null,
   );
   const [confirmFp, setConfirmFp] = useState<string | null>(null);
-  const [screen, setScreen] = useState<LocalScreen>("library");
+  // `/?screen=upload` (sidebar Import from any route) forces the import screen.
+  // Capture the intent SYNCHRONOUSLY in the initial state so it survives the
+  // param-strip effect below racing hydration — reading it only after hydration
+  // could lose it to the strip and leave us on the Library screen.
+  const [screen, setScreen] = useState<LocalScreen>(
+    searchParams.get("screen") === "upload" ? "upload" : "library",
+  );
   const [initialized, setInitialized] = useState(false);
   const proMode = useSettingsStore((s) => s.proMode);
   const setProMode = useSettingsStore((s) => s.setProMode);
@@ -42,14 +52,24 @@ export default function UploadPage() {
     if (!hydrated) void hydrate();
   }, [hydrate, hydrated]);
 
-  // Derive initial screen once, on first render after hydration completes.
+  // After hydration, open a first-run empty library straight into upload. The
+  // explicit `?screen=upload` intent was already captured in the initial state.
   // Setting state during render (with a guard) is the recommended React 18+
   // pattern for derived initial state and avoids the cascading effect that
   // react-hooks/set-state-in-effect warns about.
   if (hydrated && !initialized) {
     setInitialized(true);
-    if (entries.length === 0) setScreen("upload");
+    if (screen !== "upload" && entries.length === 0) setScreen("upload");
   }
+
+  // Consume the one-shot `screen` query param and strip it from the URL so a
+  // reload/back doesn't re-force the import screen. The useSearchParams value
+  // captured above still reflects the original intent for the guard.
+  useEffect(() => {
+    if (searchParams.get("screen") && typeof window !== "undefined") {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [searchParams]);
 
   const proceedToMaster = useCallback(() => {
     router.push("/master");
@@ -167,12 +187,10 @@ export default function UploadPage() {
     [router],
   );
 
+  const album = useMemo(() => deriveLibraryAlbum(entries), [entries]);
+
   const sidebarTracks = useMemo<SidebarTrack[]>(
-    () =>
-      entries.slice(0, 12).map((e) => ({
-        id: e.fingerprint,
-        title: e.fileName.replace(/\.[^.]+$/, ""),
-      })),
+    () => libraryEntriesToSidebarTracks(entries),
     [entries],
   );
 
@@ -193,6 +211,14 @@ export default function UploadPage() {
             onOpenEntry={handleOpenLibraryEntry}
             onRequestDelete={handleRequestDelete}
             onUpload={() => setScreen("upload")}
+            onImportFiles={(files) => void handleFilesUploaded(files)}
+            album={album}
+            onOpenAlbum={() => router.push("/album")}
+          />
+        ) : entries.length > 0 ? (
+          <ImportPanel
+            onFilesUploaded={handleFilesUploaded}
+            onCancel={() => setScreen("library")}
           />
         ) : (
           <div className="relative h-full">
@@ -247,5 +273,15 @@ export default function UploadPage() {
         </div>
       ) : null}
     </>
+  );
+}
+
+export default function UploadPage() {
+  // useSearchParams (read in LibraryImportPage for `?screen=upload`) requires a
+  // Suspense boundary for static rendering under the App Router.
+  return (
+    <Suspense fallback={null}>
+      <LibraryImportPage />
+    </Suspense>
   );
 }

@@ -252,6 +252,160 @@ describe("POST /upload/abort", () => {
   });
 });
 
+describe("POST /upload/complete", () => {
+  beforeEach(() => {
+    patchEnv({
+      TURNSTILE_SECRET_KEY: "test-secret",
+      R2_ACCESS_KEY_ID: "test-akid",
+      R2_SECRET_ACCESS_KEY: "test-secret-key",
+      R2_ACCOUNT_ID: "test-account",
+    });
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("rejects a missing uploadId with 400", async () => {
+    const req = makeRequest("/upload/complete", {
+      body: JSON.stringify({
+        key: "12345678-1234-1234-1234-123456789012.wav",
+        parts: [{ partNumber: 1, etag: "etag" }],
+      }),
+    });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects missing parts with 400", async () => {
+    const req = makeRequest("/upload/complete", {
+      body: JSON.stringify({
+        key: "12345678-1234-1234-1234-123456789012.wav",
+        uploadId: "some-upload-id",
+        parts: [],
+      }),
+    });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(400);
+  });
+
+  it("completes a real multipart upload WITHOUT a Turnstile token and never calls siteverify", async () => {
+    // New contract: complete is authorized by possession of the uploadId + key
+    // that initiate minted, NOT by a Turnstile token (which is single-use and
+    // already spent on initiate). Drive a real R2 multipart upload through the
+    // miniflare binding, then complete it via the Worker with no token field.
+    const spy = stubTurnstile(true); // would flag any siteverify call
+
+    const key = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.wav";
+    const created = await env.UPLOADS.createMultipartUpload(key);
+    const part = await created.uploadPart(
+      1,
+      new Uint8Array(1024).fill(7),
+    );
+
+    const req = makeRequest("/upload/complete", {
+      body: JSON.stringify({
+        key,
+        uploadId: created.uploadId,
+        parts: [{ partNumber: part.partNumber, etag: part.etag }],
+      }),
+    });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { key: string };
+    expect(data.key).toBe(key);
+
+    // No Turnstile siteverify request was ever issued for /upload/complete.
+    const siteverifyCalls = spy.mock.calls.filter(([input]) => {
+      const u =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
+      return u === TURNSTILE_VERIFY_URL;
+    });
+    expect(siteverifyCalls).toHaveLength(0);
+  });
+});
+
+describe("error handling — CORS-safe failures", () => {
+  beforeEach(() => {
+    patchEnv({
+      TURNSTILE_SECRET_KEY: "test-secret",
+      R2_ACCESS_KEY_ID: "test-akid",
+      R2_SECRET_ACCESS_KEY: "test-secret-key",
+      R2_ACCOUNT_ID: "test-account",
+    });
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("returns 503 with CORS headers when R2 creds are missing on /upload/initiate", async () => {
+    stubTurnstile(true);
+    patchEnv({
+      R2_ACCESS_KEY_ID: "",
+      R2_SECRET_ACCESS_KEY: "",
+      R2_ACCOUNT_ID: "",
+    });
+    const req = makeRequest("/upload/initiate", {
+      body: JSON.stringify(VALID_INITIATE),
+      headers: { "cf-connecting-ip": "198.51.100.71" },
+    });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    const data = (await res.json()) as { detail: string };
+    expect(data.detail).toBe("R2 storage not configured");
+  });
+
+  it("returns 503 with CORS headers when R2 creds are missing on /analyze/deep", async () => {
+    patchEnv({
+      R2_ACCESS_KEY_ID: "",
+      R2_SECRET_ACCESS_KEY: "",
+      R2_ACCOUNT_ID: "",
+    });
+    const req = makeRequest("/analyze/deep", {
+      body: JSON.stringify({
+        key: "12345678-1234-1234-1234-123456789012.wav",
+        profile: "modern_pop_polish",
+      }),
+    });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    const data = (await res.json()) as { detail: string };
+    expect(data.detail).toBe("R2 storage not configured");
+  });
+
+  it("turns a thrown handler error into a 500 JSON response WITH CORS headers", async () => {
+    // A passthrough request reaches forwardToContainer, whose BACKEND container
+    // binding is not provisioned in the miniflare test env, so the handler
+    // throws. Before the top-level catch that surfaced as an opaque 500 with no
+    // CORS headers; now it must be a JSON error carrying the CORS headers.
+    const req = makeRequest("/health", { method: "GET" });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(500);
+    expect(res.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    const data = (await res.json()) as { detail: string };
+    expect(data.detail).toContain("Internal error");
+  });
+});
+
 describe("POST /analyze/deep — JSON forward path", () => {
   beforeEach(() => {
     patchEnv({

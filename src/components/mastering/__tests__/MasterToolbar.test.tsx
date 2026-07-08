@@ -56,6 +56,30 @@ describe("MasterToolbar", () => {
     expect(onBack).toHaveBeenCalledOnce();
   });
 
+  it("renders a Split stems action that calls onStems", () => {
+    const onStems = vi.fn();
+    render(<MasterToolbar {...baseProps} onStems={onStems} />);
+    const btn = screen.getByTestId("master-split-stems-button");
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(onStems).toHaveBeenCalledOnce();
+  });
+
+  it("renders a primary Export action that calls onExport", () => {
+    const onExport = vi.fn();
+    render(<MasterToolbar {...baseProps} onExport={onExport} />);
+    const btn = screen.getByTestId("master-export-button");
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(onExport).toHaveBeenCalledOnce();
+  });
+
+  it("omits the Split stems / Export actions when no handler is given", () => {
+    render(<MasterToolbar {...baseProps} />);
+    expect(screen.queryByTestId("master-split-stems-button")).toBeNull();
+    expect(screen.queryByTestId("master-export-button")).toBeNull();
+  });
+
   it("renders optional trailing slot children", () => {
     render(
       <MasterToolbar {...baseProps}>

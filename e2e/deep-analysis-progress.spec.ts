@@ -9,6 +9,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
+import { stubTurnstileNoToken } from "./helpers/turnstile";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEST_WAV = path.join(__dirname, "fixtures", "test-audio.wav");
@@ -16,6 +17,14 @@ const JOB_ID = "test-job-123";
 const TRACE_HEX = "0123456789abcdef0123456789abcdef";
 const SPAN_HEX = "0011223344556677";
 const TRACEPARENT = `00-${TRACE_HEX}-${SPAN_HEX}-01`;
+
+// The webServer sets a Cloudflare test site key, so the Turnstile gate is now
+// active. These specs mock only the legacy analyze path, so neutralise the
+// token before navigation to keep the browser on the multipart transport
+// (an auto-issued token would route uploads through the unmocked R2 plane).
+test.beforeEach(async ({ page }) => {
+  await stubTurnstileNoToken(page);
+});
 
 async function uploadAndOpenDeep(page: Page) {
   await page.goto("/");
@@ -30,6 +39,26 @@ async function uploadAndOpenDeep(page: Page) {
 
 /** Convenience for matching any host hitting `/path`. */
 const url = (suffix: string) => `**${suffix}`;
+
+/**
+ * The REAL `/jobs/{id}/result` backend response is the job's `partial_result`
+ * envelope — `{ sections, stems, script }` — NOT a bare MasteringScript. The
+ * frontend unwraps `.script`. Mocking the bare script here produced a false
+ * green that hid the "script.moves is not iterable" crash on real backends.
+ */
+const resultEnvelope = (moves: unknown[] = []) => ({
+  sections: [],
+  stems: [],
+  script: {
+    version: 1,
+    trackId: "t1",
+    sampleRate: 48000,
+    duration: 30,
+    profile: "modern_pop_polish",
+    sections: [],
+    moves,
+  },
+});
 
 test.describe("TS-001 — happy path: progress visible at every phase", () => {
   test("progress card cycles through sections → stems → done", async ({ page }) => {
@@ -85,15 +114,7 @@ test.describe("TS-001 — happy path: progress visible at every phase", () => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({
-          version: 1,
-          trackId: "t1",
-          sampleRate: 48000,
-          duration: 30,
-          profile: "modern_pop_polish",
-          sections: [],
-          moves: [],
-        }),
+        body: JSON.stringify(resultEnvelope()),
       })
     );
 
@@ -147,15 +168,7 @@ test.describe("TS-002 — backend down: error with Retry + technical details", (
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({
-          version: 1,
-          trackId: "t1",
-          sampleRate: 48000,
-          duration: 30,
-          profile: "modern_pop_polish",
-          sections: [],
-          moves: [],
-        }),
+        body: JSON.stringify(resultEnvelope()),
       })
     );
 
@@ -417,7 +430,7 @@ test.describe("Verbose progress (harness)", () => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ moves: [] }),
+        body: JSON.stringify(resultEnvelope()),
       })
     );
 

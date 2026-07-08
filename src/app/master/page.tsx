@@ -1,16 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Play, Pause, SkipBack, Music } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, ArrowLeft } from "lucide-react";
 import { WaveformDisplay } from "@/components/visualization/WaveformDisplay";
 import { SpectrumDisplay } from "@/components/visualization/SpectrumDisplay";
 import { LevelMeter } from "@/components/visualization/LevelMeter";
 import { Goniometer } from "@/components/visualization/Goniometer";
 import { MasterScreen } from "@/components/mastering/MasterScreen";
+import { libraryEntriesToSidebarTracks } from "@/components/shell/sidebar-tracks";
+import { openLibraryEntryFromList } from "@/lib/storage/library-resume";
 import { BigReadout } from "@/components/mastering/BigReadout";
-import { Sidebar, type ShellScreen } from "@/components/shell/Sidebar";
+import { DeepTimeline } from "@/components/mastering/DeepTimeline";
+import { PROFILE_CARDS } from "@/components/mastering/EngineerProfilePicker";
+import { type ShellScreen } from "@/components/shell/Sidebar";
+import { AppShell } from "@/components/shell/AppShell";
 import { ABToggle } from "@/components/mastering/ABToggle";
 import { MasterToolbar, type MasterMode } from "@/components/mastering/MasterToolbar";
 import { ExportView } from "@/components/export/ExportView";
@@ -65,6 +70,23 @@ function formatMbGr(db: number): string {
   return db.toFixed(1);
 }
 
+/**
+ * Human-readable stereo-correlation phrase for the Phase Scope status line
+ * (Direction C). Derived from the same live value that drives the CORR
+ * readout — never a mocked number.
+ */
+function correlationPhrase(c: number): string {
+  if (!Number.isFinite(c)) return "No signal";
+  if (c >= 0.6) return "Mono-compatible";
+  if (c >= 0.2) return "Mostly correlated";
+  if (c >= -0.2) return "Wide / decorrelated";
+  return "Out of phase";
+}
+
+function profileLabel(id: string): string {
+  return PROFILE_CARDS.find((p) => p.id === id)?.name ?? id;
+}
+
 function mbGrColorClass(db: number): string {
   const g = -db;
   if (g >= 6) return "text-red-400";
@@ -108,12 +130,17 @@ export default function MasterPage() {
   // Library bridge — used to persist + restore mastering settings per song.
   const loadedFromLibrary = useDeepStore((s) => s.loadedFromLibrary);
   const suppressLibraryAutoUpdate = useDeepStore((s) => s.suppressLibraryAutoUpdate);
+  const deepScript = useDeepStore((s) => s.script);
   const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
+  const libraryEntries = useLibraryStore((s) => s.entries);
   const updateLibrarySettings = useLibraryStore((s) => s.updateSettings);
   const updateMeasuredLufs = useLibraryStore((s) => s.updateMeasuredLufs);
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
+  // Focused "Export" screen state (design intent): the toolbar Export button
+  // opens a dedicated export view with a "Back to mastering" affordance.
+  const [showExport, setShowExport] = useState(false);
 
   // Simple mode: genre, intensity (0-100), and toggles. Hydrated from the
   // library entry on mount when loadedFromLibrary is set.
@@ -327,6 +354,11 @@ export default function MasterPage() {
     }
   }, [file, router]);
 
+  const sidebarTracks = useMemo(
+    () => libraryEntriesToSidebarTracks(libraryEntries),
+    [libraryEntries],
+  );
+
   if (!file) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -343,20 +375,44 @@ export default function MasterPage() {
     stop();
     if (next === "stems") router.push("/mix");
     else if (next === "album") router.push("/album");
+    else if (next === "upload") router.push("/?screen=upload");
     else router.push("/");
   };
 
+  // Switch to another library track without leaving the mastering workspace.
+  // Re-opens the entry (restoring its persisted chain + audio) and rehydrates
+  // the Simple-mode UI state the same way the initial mount does, so no control
+  // is left showing the previous track's values.
+  const handleSelectTrack = async (id: string): Promise<void> => {
+    if (id === activeFingerprint) return;
+    stop();
+    const res = await openLibraryEntryFromList(id);
+    if (!res.ok) return;
+    const nextFile = useAudioStore.getState().file;
+    if (nextFile) await loadFile(nextFile);
+    const settings = useLibraryStore
+      .getState()
+      .entries.find((e) => e.fingerprint === id)?.settings;
+    if (settings) {
+      setGenre(settings.simple.genre);
+      setIntensity(settings.simple.intensity);
+      setToggles({ ...INITIAL_TOGGLES, ...settings.simple.toggles });
+      setTonePreset(settings.tonePreset);
+      setOutputPreset(settings.outputPreset);
+    }
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden bg-black">
-      {isLgViewport && (
-        <Sidebar
-          activeScreen="master"
-          onSelect={handleSidebarSelect}
-          proMode={proMode}
-          onProModeChange={setProMode}
-        />
-      )}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <AppShell
+      activeScreen="master"
+      onSelect={handleSidebarSelect}
+      tracks={sidebarTracks}
+      activeTrackId={activeFingerprint}
+      onSelectTrack={(id) => void handleSelectTrack(id)}
+      proMode={proMode}
+      onProModeChange={setProMode}
+      variant="workspace"
+    >
       <MasterToolbar
         fileName={file.name}
         durationLabel={formatTime(duration)}
@@ -370,10 +426,32 @@ export default function MasterPage() {
           stop();
           router.push("/");
         }}
+        onStems={() => {
+          stop();
+          router.push("/mix");
+        }}
+        onExport={() => setShowExport(true)}
       >
         <LibraryStateBadge />
       </MasterToolbar>
 
+      {showExport ? (
+        <FocusedExport
+          fileName={file.name}
+          onBack={() => setShowExport(false)}
+        >
+          <ExportView
+            onExport={handleExport}
+            isExporting={isExporting}
+            lufs={metering.lufs}
+            truePeak={metering.truePeak}
+            lra={metering.lra}
+            lraReady={metering.lraReady}
+            dynamicRange={metering.dynamicRange}
+            durationSec={duration}
+          />
+        </FocusedExport>
+      ) : (
       <div className="flex-1 flex overflow-hidden">
         {isLgViewport && (
           <aside className="order-3 w-80 border-l border-[rgba(255,255,255,0.06)] overflow-y-auto bg-[rgba(20,20,22,0.6)] p-4 shrink-0">
@@ -403,7 +481,7 @@ export default function MasterPage() {
           </aside>
         )}
 
-        <main className="order-1 min-w-0 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
+        <div className="order-1 min-w-0 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
           {/* Top readouts row — design Direction A: 5-col metering grid */}
           <div
             className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5"
@@ -449,28 +527,45 @@ export default function MasterPage() {
             />
           </div>
 
-          <WaveformDisplay
-            audioData={waveformPeaks}
-            currentTime={currentTime}
-            duration={duration}
-            onSeek={seek}
-          />
+          {/* Waveform card — header: current time · "Waveform" · duration.
+              Honest label: the display is not M/S, so no Mid/Side claim. */}
+          <div className="rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] px-4 py-3">
+            <div className="mb-2 flex items-center justify-between text-[10px] tabular-nums text-[rgba(255,255,255,0.4)]">
+              <span>{formatTime(currentTime)}</span>
+              <span className="font-semibold uppercase tracking-[0.14em] text-[rgba(255,255,255,0.5)]">
+                Waveform
+              </span>
+              <span>{formatTime(duration)}</span>
+            </div>
+            <WaveformDisplay
+              audioData={waveformPeaks}
+              currentTime={currentTime}
+              duration={duration}
+              onSeek={seek}
+            />
+          </div>
 
-          <div className="flex items-center justify-center gap-4">
+          {/* Transport — bordered three-zone card: A/B left · controls
+              center · time right (design app.jsx Transport). */}
+          <div
+            data-testid="master-transport"
+            className="flex items-center gap-4 rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] px-4 py-2.5"
+          >
             <ABToggle isActive={isBypassed} onToggle={toggleBypass} />
+            <div className="flex-1" />
             <button
               onClick={stop}
-              className="w-10 h-10 rounded-full bg-[rgba(255,255,255,0.06)] flex items-center justify-center hover:bg-[rgba(255,255,255,0.1)] transition-colors"
+              className="w-8 h-8 rounded-full bg-[rgba(255,255,255,0.06)] flex items-center justify-center hover:bg-[rgba(255,255,255,0.1)] transition-colors"
               aria-label="Stop and return to beginning"
             >
-              <SkipBack className="w-4 h-4 text-[rgba(255,255,255,0.7)]" />
+              <SkipBack className="w-3.5 h-3.5 text-[rgba(255,255,255,0.7)]" />
             </button>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => (isPlaying ? pause() : play())}
               disabled={!isLoaded}
-              className="w-12 h-12 rounded-full bg-gradient-to-b from-[#0a84ff] to-[#0066cc] flex items-center justify-center shadow-[0_2px_20px_rgba(10,132,255,0.35)] disabled:opacity-40"
+              className="w-11 h-11 rounded-full bg-gradient-to-b from-[#0a84ff] to-[#0066cc] flex items-center justify-center shadow-[0_2px_20px_rgba(10,132,255,0.35)] disabled:opacity-40"
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? (
@@ -479,22 +574,108 @@ export default function MasterPage() {
                 <Play className="w-5 h-5 text-white ml-0.5" />
               )}
             </motion.button>
-            <div className="text-[rgba(255,255,255,0.5)] text-xs tabular-nums min-w-[80px] text-center">
-              {formatTime(currentTime)} / {formatTime(duration)}
+            <button
+              onClick={() => seek(Math.min(duration, currentTime + 5))}
+              disabled={!isLoaded}
+              className="w-8 h-8 rounded-full bg-[rgba(255,255,255,0.06)] flex items-center justify-center hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-40"
+              aria-label="Skip forward 5 seconds"
+            >
+              <SkipForward className="w-3.5 h-3.5 text-[rgba(255,255,255,0.7)]" />
+            </button>
+            <div className="flex-1" />
+            <div className="text-xs tabular-nums min-w-[90px] text-right text-[rgba(255,255,255,0.7)]">
+              {formatTime(currentTime)}{" "}
+              <span className="text-[rgba(255,255,255,0.4)]">
+                / {formatTime(duration)}
+              </span>
             </div>
           </div>
 
-          <SpectrumDisplay data={spectrumData} pro={proMode} />
-          <ExportView
-            onExport={handleExport}
-            isExporting={isExporting}
-            lufs={metering.lufs}
-            truePeak={metering.truePeak}
-            lra={metering.lra}
-            lraReady={metering.lraReady}
-            dynamicRange={metering.dynamicRange}
-            durationSec={duration}
-          />
+          {/* Spectrum card — header: "Spectrum" · range + source. */}
+          <div className="rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] px-4 py-3">
+            <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.5)]">
+              <span>Spectrum</span>
+              <span className="text-[rgba(255,255,255,0.4)]">
+                20 Hz — 20 kHz &middot; Bus output
+              </span>
+            </div>
+            <SpectrumDisplay data={spectrumData} pro={proMode} />
+          </div>
+
+          {/* Compact player meters — the desktop right rail is `hidden xl:block`,
+              so on phones/tablets these live/animated visuals would vanish
+              entirely. Surface a compact variant inline instead of hiding: L/R
+              level meters always, plus the Phase Scope goniometer in Pro Mode.
+              (Distinct testids so the desktop rail's contracts stay singular.) */}
+          <div data-testid="master-meters-compact" className="xl:hidden space-y-4">
+            <LevelMeter
+              leftLevel={peakLevels.left}
+              rightLevel={peakLevels.right}
+              lufs={metering.lufs === -Infinity ? 0 : metering.lufs}
+              truePeak={metering.truePeak === -Infinity ? 0 : metering.truePeak}
+              dynamicRange={metering.dynamicRange}
+              target={params.targetLufs}
+            />
+            {proMode ? (
+              <div
+                data-testid="master-goniometer-slot-mobile"
+                className="rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-3"
+              >
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.5)]">
+                  Phase Scope
+                </div>
+                <div className="flex justify-center">
+                  <Goniometer
+                    left={engine.leftAnalyserNode}
+                    right={engine.rightAnalyserNode}
+                    size={180}
+                    hideLabel
+                  />
+                </div>
+                <div
+                  data-testid="phase-scope-status-mobile"
+                  className="mt-2 flex items-center justify-center gap-1.5 text-[10px] text-[rgba(255,255,255,0.55)]"
+                >
+                  <span
+                    aria-hidden
+                    className="inline-block h-2 w-2 rounded-full"
+                    style={{
+                      background:
+                        metering.correlation >= 0 ? "#30d158" : "#ff453a",
+                    }}
+                  />
+                  <span>
+                    {correlationPhrase(metering.correlation)}
+                    {Number.isFinite(metering.correlation)
+                      ? ` · ${metering.correlation >= 0 ? "+" : ""}${metering.correlation.toFixed(2)}`
+                      : ""}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Deep timeline — promoted to a full-width main-canvas card below
+              the transport when a script is ready (design views.jsx
+              DeepTimelineBig). Header + Move/Edited/AI-Repair legend. */}
+          {mode === "deep" && deepScript ? (
+            <div
+              data-testid="deep-timeline-card"
+              className="rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-4"
+            >
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.5)]">
+                  Mastering Script &middot; {profileLabel(deepScript.profile)}
+                </span>
+                <div className="flex items-center gap-3 text-[10px] text-[rgba(255,255,255,0.5)]">
+                  <LegendDot color="#0a84ff" label="Move" />
+                  <LegendDot color="#ffd60a" label="Edited" />
+                  <LegendDot color="#ff7a00" label="AI Repair" />
+                </div>
+              </div>
+              <DeepTimeline script={deepScript} />
+            </div>
+          ) : null}
 
           {!isLgViewport && (
             <details className="group">
@@ -527,7 +708,7 @@ export default function MasterPage() {
               </div>
             </details>
           )}
-        </main>
+        </div>
 
         <aside
           data-testid="master-right-rail"
@@ -566,17 +747,108 @@ export default function MasterPage() {
             )}
           </div>
           {proMode ? (
-            <div data-testid="master-goniometer-slot">
-              <Goniometer
-                left={engine.leftAnalyserNode}
-                right={engine.rightAnalyserNode}
-              />
+            <div
+              data-testid="master-goniometer-slot"
+              className="rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-3"
+            >
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.5)]">
+                Phase Scope
+              </div>
+              <div className="flex justify-center">
+                <Goniometer
+                  left={engine.leftAnalyserNode}
+                  right={engine.rightAnalyserNode}
+                  size={200}
+                  hideLabel
+                />
+              </div>
+              <div
+                data-testid="phase-scope-status"
+                className="mt-2 flex items-center gap-1.5 text-[10px] text-[rgba(255,255,255,0.55)]"
+              >
+                <span
+                  aria-hidden
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{
+                    background:
+                      metering.correlation >= 0 ? "#30d158" : "#ff453a",
+                  }}
+                />
+                <span>
+                  {correlationPhrase(metering.correlation)}
+                  {Number.isFinite(metering.correlation)
+                    ? ` · ${metering.correlation >= 0 ? "+" : ""}${metering.correlation.toFixed(2)}`
+                    : ""}
+                </span>
+              </div>
             </div>
           ) : null}
         </aside>
       </div>
+      )}
+    </AppShell>
+  );
+}
+
+/**
+ * Focused "Export" screen state on /master — a dedicated view reached from the
+ * toolbar Export button. Header (Export + track name) + "Back to mastering";
+ * the existing ExportView is mounted inside unchanged.
+ */
+function FocusedExport({
+  fileName,
+  onBack,
+  children,
+}: {
+  fileName: string;
+  onBack: () => void;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <div
+      data-testid="master-export-focused"
+      className="flex-1 overflow-y-auto p-6"
+    >
+      <div className="mx-auto max-w-3xl">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold text-white">Export</h1>
+            <p className="truncate text-xs text-[rgba(255,255,255,0.5)]">
+              {fileName}
+            </p>
+          </div>
+          <button
+            type="button"
+            data-testid="export-back-button"
+            onClick={onBack}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] px-3 py-1.5 text-xs text-[rgba(255,255,255,0.75)] hover:bg-[rgba(255,255,255,0.1)]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to mastering
+          </button>
+        </div>
+        {children}
       </div>
     </div>
+  );
+}
+
+function LegendDot({
+  color,
+  label,
+}: {
+  color: string;
+  label: string;
+}): React.ReactElement {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span
+        aria-hidden
+        className="inline-block h-2 w-2 rounded-full"
+        style={{ background: color }}
+      />
+      {label}
+    </span>
   );
 }
 

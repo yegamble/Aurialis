@@ -43,6 +43,29 @@ describe("SeparationProgressCard", () => {
     ).toHaveAttribute("data-active", "false");
   });
 
+  it("renders the hero headline + subtitle while analyzing", () => {
+    render(
+      <SeparationProgressCard
+        status="analyzing"
+        activeStage="separating-stems"
+        progress={20}
+        elapsedSec={3}
+        errorDetails={null}
+      />,
+    );
+    const card = screen.getByTestId("separation-progress-card");
+    expect(card).toHaveTextContent(
+      /Aurialis is splitting your track into stems/i,
+    );
+    // Stage pills remain present with their preserved testids + active state.
+    expect(
+      screen.getByTestId("separation-progress-stage-separating-stems"),
+    ).toHaveAttribute("data-active", "true");
+    expect(
+      screen.getByTestId("separation-progress-bar-fill"),
+    ).toBeInTheDocument();
+  });
+
   it("renders stage durations when provided", () => {
     render(
       <SeparationProgressCard

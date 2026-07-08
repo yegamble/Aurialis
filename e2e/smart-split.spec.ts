@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
+import { stubTurnstileNoToken } from "./helpers/turnstile";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STEMS_DIR = path.join(__dirname, "fixtures", "stems");
@@ -18,12 +19,31 @@ const STEM_FILES = [
 let backendAvailable = false;
 
 test.beforeAll(async () => {
-  try {
-    const response = await fetch("http://localhost:8000/health");
-    backendAvailable = response.ok;
-  } catch {
-    backendAvailable = false;
+  // Probe the backend, but make the result reliable rather than a single racy
+  // shot. Two failure modes to avoid:
+  //   * An un-timed fetch hangs the whole 30s hook budget when a sibling
+  //     worker's load or Docker-for-Mac's vpnkit stalls the response, turning
+  //     the graceful skip into a hard hook failure — so bound each attempt to
+  //     8s (mirrors the deep-mastering probe; covers vpnkit's ~3s round-trip).
+  //   * A single momentary timeout under parallel load produces a false
+  //     "backend down", which flips the "Backend Warning" test from skip to a
+  //     run against a live backend (no warning shown → failure) — so retry a
+  //     few times before declaring the backend unavailable.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch("http://localhost:8000/health", {
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (response.ok) {
+        backendAvailable = true;
+        return;
+      }
+    } catch {
+      // fall through to retry
+    }
+    await new Promise((r) => setTimeout(r, 1_000));
   }
+  backendAvailable = false;
 });
 
 async function navigateToMix(page: Page) {
@@ -33,6 +53,13 @@ async function navigateToMix(page: Page) {
     timeout: 15000,
   });
 }
+
+// The webServer sets a Cloudflare test site key, so StemsView's Turnstile gate
+// is active. The single-file separation flow here mocks only the legacy
+// `/separate` path, so withhold a token to keep it on multipart transport.
+test.beforeEach(async ({ page }) => {
+  await stubTurnstileNoToken(page);
+});
 
 // TS-004: Multi-File Upload Bypass (no separation needed)
 test.describe("TS-004: Multi-File Upload Bypass", () => {
@@ -147,14 +174,18 @@ test.describe("Smart Repair UI", () => {
   });
 });
 
-// Backend unavailable warning
+// Backend unavailable warning.
+//
+// Assert the down-state UI hermetically instead of depending on whether the
+// real backend happens to be reachable. The previous form ran only when the
+// Node-side `backendAvailable` probe reported "down" and then asserted the
+// warning against whatever the browser's own health check found — so a live
+// backend + a racy probe false-negative produced a spurious failure. Route the
+// client health check to fail so the warning is deterministic regardless of the
+// real backend.
 test.describe("Backend Warning", () => {
   test("shows warning when backend not available", async ({ page }) => {
-    // This test is relevant when backend is down
-    if (backendAvailable) {
-      test.skip();
-      return;
-    }
+    await page.route("**/health", (route: Route) => route.abort());
 
     await navigateToMix(page);
 

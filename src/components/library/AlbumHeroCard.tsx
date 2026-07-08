@@ -8,8 +8,14 @@ export interface AlbumHeroCardProps {
   artist: string;
   trackCount: number;
   avgLufs?: number;
+  /** Loudness spread (range, LU) across analyzed tracks; undefined until ≥2. */
+  variance?: number;
+  /** Count of analyzed tracks drifting >1.5 LU from the album target. */
+  issues?: number;
   onClick?: () => void;
 }
+
+const DRIFT_LU = 1.5;
 
 function formatLufs(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value)) return "—";
@@ -17,11 +23,50 @@ function formatLufs(value: number | undefined): string {
   return value < 0 ? `−${abs}` : value > 0 ? `+${abs}` : abs;
 }
 
+function formatLu(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(1)} LU`;
+}
+
+function Stat({
+  label,
+  value,
+  testId,
+  amber,
+}: {
+  label: string;
+  value: string;
+  testId: string;
+  amber?: boolean;
+}): ReactElement {
+  return (
+    <>
+      <div className="h-6 w-px bg-[rgba(255,255,255,0.08)]" aria-hidden />
+      <div>
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.45)]">
+          {label}
+        </div>
+        <div
+          data-testid={testId}
+          className={
+            "text-sm font-medium tabular-nums " +
+            (amber ? "text-[#ff9f0a]" : "text-white")
+          }
+        >
+          {value}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function AlbumHeroCard({
   title,
   artist,
   trackCount,
   avgLufs,
+  variance,
+  issues,
   onClick,
 }: AlbumHeroCardProps): ReactElement {
   return (
@@ -52,6 +97,25 @@ export function AlbumHeroCard({
               {formatLufs(avgLufs)}
             </div>
           </div>
+          {variance !== undefined ? (
+            <Stat
+              label="Variance"
+              value={formatLu(variance)}
+              testId="album-variance"
+              amber={variance > DRIFT_LU}
+            />
+          ) : null}
+          {issues !== undefined ? (
+            <Stat
+              label="Issues"
+              value={String(issues)}
+              testId="album-issues"
+              amber={issues > 0}
+            />
+          ) : null}
+        </div>
+        <div className="mt-2 text-[11px] text-[rgba(255,255,255,0.4)]">
+          Check tonal &amp; loudness consistency
         </div>
       </div>
       <span aria-hidden className="text-[rgba(255,255,255,0.4)]">

@@ -36,7 +36,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EngineerProfilePicker } from "./EngineerProfilePicker";
-import { DeepTimeline } from "./DeepTimeline";
 import { DeepProgressCard } from "./DeepProgressCard";
 
 export interface DeepMasteringProps {
@@ -66,7 +65,6 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
   const progress = useDeepStore((s) => s.progress);
   const profile = useDeepStore((s) => s.profile);
   const scriptActive = useDeepStore((s) => s.scriptActive);
-  const script = useDeepStore((s) => s.script);
   const errorDetails = useDeepStore((s) => s.errorDetails);
   const startedAt = useDeepStore((s) => s.startedAt);
   const setScriptActive = useDeepStore((s) => s.setScriptActive);
@@ -370,8 +368,6 @@ export function DeepMastering({ audioFile = null }: DeepMasteringProps = {}): Re
         stageDurationsMs={stageView.stageDurationsMs}
         stageTraceText={stageView.stageTraceText}
       />
-
-      <DeepTimeline script={script} />
 
       <Dialog
         open={pendingProfile !== null}

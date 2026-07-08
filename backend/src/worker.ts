@@ -77,6 +77,21 @@ function int(env: Env, key: keyof Env, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+/**
+ * True iff every R2 credential needed to SigV4-presign is present and non-empty.
+ * When any is missing (e.g. secrets not set on the Worker) the presign step
+ * would otherwise throw an uncaught exception → HTTP 500 with NO CORS headers,
+ * which surfaces to the browser as an opaque ERR_FAILED. Callers turn a false
+ * result into an explicit 503 instead.
+ */
+function r2Configured(env: Env): boolean {
+  return Boolean(
+    env.R2_ACCESS_KEY_ID &&
+      env.R2_SECRET_ACCESS_KEY &&
+      env.R2_ACCOUNT_ID
+  );
+}
+
 // ----------------------- Upload control plane -----------------------
 
 interface InitiateBody {
@@ -144,6 +159,10 @@ async function handleInitiate(request: Request, env: Env): Promise<Response> {
     );
   }
 
+  if (!r2Configured(env)) {
+    return errorResponse(request, env, "R2 storage not configured", 503);
+  }
+
   const key = `${uuidv4()}.${ext}`;
   const chunkSize = int(env, "CHUNK_SIZE_BYTES", 16 * 1024 * 1024);
   const partCount = Math.ceil(body.size / chunkSize);
@@ -169,12 +188,16 @@ async function handleInitiate(request: Request, env: Env): Promise<Response> {
 }
 
 interface CompleteBody {
-  token: string;
   key: string;
   uploadId: string;
   parts: { partNumber: number; etag: string }[];
 }
 
+// Authorization for /upload/complete is possession of the R2 multipart
+// uploadId + key that /upload/initiate issued — an unguessable capability
+// already scoped to this upload. Turnstile is verified ONCE, on
+// /upload/initiate; re-verifying here would reject the (single-use) token the
+// client already spent on initiate. R2 itself rejects a bogus uploadId/key.
 async function handleComplete(request: Request, env: Env): Promise<Response> {
   let body: CompleteBody;
   try {
@@ -182,7 +205,6 @@ async function handleComplete(request: Request, env: Env): Promise<Response> {
   } catch {
     return errorResponse(request, env, "Invalid JSON body", 400);
   }
-  if (!body.token) return errorResponse(request, env, "Missing Turnstile token", 400);
   if (!body.key || !KEY_REGEX.test(body.key)) {
     return errorResponse(request, env, "Invalid key", 400);
   }
@@ -191,21 +213,6 @@ async function handleComplete(request: Request, env: Env): Promise<Response> {
   }
   if (!Array.isArray(body.parts) || body.parts.length === 0) {
     return errorResponse(request, env, "Missing parts", 400);
-  }
-
-  const turnstile = await verifyTurnstile(
-    body.token,
-    "upload-complete",
-    clientIp(request),
-    env
-  );
-  if (!turnstile.ok) {
-    return errorResponse(
-      request,
-      env,
-      `Turnstile verification failed: ${turnstile.reason}`,
-      403
-    );
   }
 
   const upload = env.UPLOADS.resumeMultipartUpload(body.key, body.uploadId);
@@ -322,6 +329,10 @@ async function handleAnalyzeOrSeparate(
     return errorResponse(request, env, "Invalid key", 400);
   }
 
+  if (!r2Configured(env)) {
+    return errorResponse(request, env, "R2 storage not configured", 503);
+  }
+
   const expirySec = int(env, "GET_PRESIGN_EXPIRY_SECONDS", 600);
   const fetchUrl = await presignGet(env, body.key, expirySec);
 
@@ -336,37 +347,55 @@ async function handleAnalyzeOrSeparate(
 
 // ----------------------- Router -----------------------
 
+async function route(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  // CORS preflight for every Worker-handled endpoint
+  if (request.method === "OPTIONS") {
+    return preflightResponse(request, env);
+  }
+
+  // Worker-handled control plane
+  if (path === "/upload/initiate" && request.method === "POST") {
+    return handleInitiate(request, env);
+  }
+  if (path === "/upload/complete" && request.method === "POST") {
+    return handleComplete(request, env);
+  }
+  if (path === "/upload/abort" && request.method === "POST") {
+    return handleAbort(request, env);
+  }
+
+  // Forwarded with potential body rewrite
+  if (
+    (path === "/analyze/deep" || path === "/separate") &&
+    request.method === "POST"
+  ) {
+    return handleAnalyzeOrSeparate(request, env);
+  }
+
+  // Everything else: transparent passthrough to the container
+  return forwardToContainer(request, env);
+}
+
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
-    const path = url.pathname;
-
-    // CORS preflight for every Worker-handled endpoint
-    if (request.method === "OPTIONS") {
-      return preflightResponse(request, env);
+    // Any handler that throws must still answer with a JSON body AND the same
+    // CORS headers the happy path uses — otherwise the browser sees an opaque
+    // ERR_FAILED (the response has no access-control-allow-origin) instead of a
+    // readable error. The R2-config guards above turn the common missing-secret
+    // case into an explicit 503; this catch is the backstop for everything else.
+    try {
+      return await route(request, env);
+    } catch (err) {
+      return errorResponse(
+        request,
+        env,
+        `Internal error: ${(err as Error).message}`,
+        500
+      );
     }
-
-    // Worker-handled control plane
-    if (path === "/upload/initiate" && request.method === "POST") {
-      return handleInitiate(request, env);
-    }
-    if (path === "/upload/complete" && request.method === "POST") {
-      return handleComplete(request, env);
-    }
-    if (path === "/upload/abort" && request.method === "POST") {
-      return handleAbort(request, env);
-    }
-
-    // Forwarded with potential body rewrite
-    if (
-      (path === "/analyze/deep" || path === "/separate") &&
-      request.method === "POST"
-    ) {
-      return handleAnalyzeOrSeparate(request, env);
-    }
-
-    // Everything else: transparent passthrough to the container
-    return forwardToContainer(request, env);
   },
 } satisfies ExportedHandler<Env>;
 

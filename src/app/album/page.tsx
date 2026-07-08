@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
 import { AlbumView, type AlbumTrackRow } from "@/components/album/AlbumView";
 import type { ShellScreen } from "@/components/shell/Sidebar";
+import { libraryEntriesToSidebarTracks } from "@/components/shell/sidebar-tracks";
 import { useLibraryStore } from "@/lib/stores/library-store";
 import { useSettingsStore } from "@/lib/stores/settings-store";
 import {
@@ -13,16 +14,22 @@ import {
   computeAlbumTargetLufs,
 } from "@/lib/stores/album-store";
 import { openLibraryEntryFromList } from "@/lib/storage/library-resume";
+import { masterAlbum, type AlbumMasterProgress } from "@/lib/album/master-album";
+import { createAlbumMasterDeps } from "@/lib/album/album-render";
 
 export default function AlbumPage(): React.ReactElement {
   const router = useRouter();
   const entries = useLibraryStore((s) => s.entries);
+  const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
   const hydrate = useLibraryStore((s) => s.hydrate);
   const hydrated = useLibraryStore((s) => s.hydrated);
   const proMode = useSettingsStore((s) => s.proMode);
   const setProMode = useSettingsStore((s) => s.setProMode);
   const targetLufsOverride = useAlbumStore((s) => s.targetLufsOverride);
   const [error, setError] = useState<string | null>(null);
+  const [master, setMaster] = useState<AlbumMasterProgress | null>(null);
+  const cancelRef = useRef(false);
+  const runningRef = useRef(false);
 
   useEffect(() => {
     if (!hydrated) void hydrate();
@@ -33,6 +40,11 @@ export default function AlbumPage(): React.ReactElement {
   // the configured per-track targets, so deltas reflect real loudness drift.
   const tracks = useMemo<AlbumTrackRow[]>(
     () => libraryEntriesToAlbumRows(entries),
+    [entries],
+  );
+
+  const sidebarTracks = useMemo(
+    () => libraryEntriesToSidebarTracks(entries),
     [entries],
   );
 
@@ -60,9 +72,48 @@ export default function AlbumPage(): React.ReactElement {
     [router],
   );
 
+  const handleMasterAll = useCallback(async () => {
+    if (runningRef.current) return;
+    const analyzed = tracks
+      .filter((t) => t.lufs !== null && Number.isFinite(t.lufs))
+      .map((t) => ({ id: t.id, title: t.title }));
+    if (analyzed.length === 0) return;
+
+    runningRef.current = true;
+    cancelRef.current = false;
+    const deps = createAlbumMasterDeps((id) =>
+      useLibraryStore.getState().entries.find((e) => e.fingerprint === id),
+    );
+    try {
+      const result = await masterAlbum(deps, {
+        tracks: analyzed,
+        targetLufs,
+        zipName: `${albumTitle} — mastered.zip`,
+        onProgress: setMaster,
+        isCancelled: () => cancelRef.current,
+      });
+      if (result.failed > 0 && result.succeeded === 0) {
+        setError("Album mastering failed — check that each track's audio is available.");
+      }
+    } catch {
+      setError("Album mastering failed unexpectedly.");
+    } finally {
+      deps.dispose();
+      runningRef.current = false;
+    }
+  }, [tracks, targetLufs, albumTitle]);
+
+  const handleCancelMaster = useCallback(() => {
+    cancelRef.current = true;
+  }, []);
+
   const handleSelect = useCallback(
     (next: ShellScreen) => {
-      if (next === "library" || next === "upload") {
+      if (next === "upload") {
+        router.push("/?screen=upload");
+        return;
+      }
+      if (next === "library") {
         router.push("/");
         return;
       }
@@ -80,6 +131,9 @@ export default function AlbumPage(): React.ReactElement {
       <AppShell
         activeScreen="album"
         onSelect={handleSelect}
+        tracks={sidebarTracks}
+        activeTrackId={activeFingerprint}
+        onSelectTrack={(id) => void handleOpenTrack(id)}
         proMode={proMode}
         onProModeChange={setProMode}
       >
@@ -89,7 +143,9 @@ export default function AlbumPage(): React.ReactElement {
           tracks={tracks}
           targetLufs={targetLufs}
           onOpenTrack={(id) => void handleOpenTrack(id)}
-          // onMasterAll deliberately not wired — backend contract pending.
+          onMasterAll={() => void handleMasterAll()}
+          master={master}
+          onCancelMaster={handleCancelMaster}
         />
       </AppShell>
       {error ? (

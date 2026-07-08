@@ -91,14 +91,106 @@ Ordered high→low value. Each is one atomic commit; green gate at every commit.
   the Pro Mode toggle (`Sidebar.tsx:88`); both /master and /mix pass
   `proMode`/`onProModeChange` into it. [#21]
 
+## ✅ 2026-07-07 design-100 (branch `feat/design-100`, Stage 3 merge + integration)
+
+Six area tracks (master, sidebar, library, album, export+mix, R2 tests) merged
+and integrated. One line per area landed:
+
+- [x] **Shell**: unified `AppShell` on `/`, `/master`, `/mix`, `/album`; shared
+  `libraryEntriesToSidebarTracks` builder feeds real tracks (analyzed check +
+  seeded art tile) into the sidebar on every route.
+- [x] **Master screen**: transport/waveform/spectrum cards, +5s skip, Direction-C
+  Phase Scope goniometer, full-width deep-timeline card, focused Export state.
+- [x] **Sidebar**: ⌘K search, OPFS/backend footer status, seeded art tiles.
+- [x] **Library + Import**: real-data table, album hero card, inline dropzone,
+  in-shell import; sidebar "Import" deep-links to `/?screen=upload` from any route.
+- [x] **Smart Master Album**: LUFS bar chart, hero stats, suggestions, client-side
+  master-all ZIP — now **re-gained to the album target** post-render (peak-guarded
+  by the persisted ceiling; renderer untouched).
+- [x] **Export + Mix**: WAV/MP3 formats, segmented sample-rate + dither, size
+  estimate, progress; `/mix` Export routes through shared options.
+- [x] **R2 test debt**: see the infra item below — gate mounted, 422 fix, both
+  transports covered; multipart-removal + live-Worker verify remain HELD.
+- [x] **Art-tile consolidation**: master toolbar + library table now source colours
+  from the shared `src/lib/art-tile.ts` `artGradient` (one seed → one colour).
+
+## ✅ 2026-07-08 design-100 Stage 5 (local verification against real backend)
+
+Fresh-eyes browser walkthroughs (docker backend + Next server) + full test gate.
+All three walkthroughs verified WORKING in a real browser:
+- **Deep Mastering**: upload → Deep mode → Metal Wall profile → Analyze (real
+  sections→stems→script pipeline, no crash on completion) → full-width deep
+  timeline + legend → move editor (top-right) edit flips `edited` → Script A/B
+  toggle → toolbar Export → WAV + MP3 downloads (valid RIFF / MPEG headers).
+- **Smart Master Album**: 3 seeded tracks (distinct measured LUFS) → hero, stats,
+  LUFS bar chart, 3-tier suggestions, LUFS-only segmented → Master entire album →
+  per-track progress + ZIP (one WAV/track). **Independently confirmed** each
+  mastered track integrates to ~−14 LUFS (−14.06 / −14.11 / −14.25) via
+  `backend/.venv` pyloudnorm — album re-gain (5b33eb4) lands.
+- **Mobile 375×812**: drawer nav opens/closes on all four routes; /master keeps
+  compact meters + waveform + Phase Scope (Pro Mode); no horizontal overflow.
+
+Test-infra bugs found + fixed (the specs had latent failures that only surfaced
+once the raised health probe let them actually run against the real backend):
+- [x] **deep-mastering specs aborted at the 30s default test timeout** (real
+  pipeline is 40-90s) and hammered the CPU backend in parallel. Serial mode +
+  300s per-test timeout; fixed TS-004's occluded move click (dispatchEvent) and
+  controlled-slider edit (native value setter); rewired TS-005 to the C8 export
+  overlay. 5/5 pass. — d8937d9
+- [x] **smart-split beforeAll health probe had no timeout** → 30s hook hang under
+  load; **Backend Warning** test asserted a down-state off a racy probe of the
+  live backend. Bounded + retried the probe; made Backend Warning hermetic
+  (route `**/health` to abort). — d705585 / aae00a2
+- [x] **mixer TS-001 `waitForLoadState("networkidle")`** never settled because the
+  redesigned sidebar polls backend health; wait for the upload input instead. — cc038ed
+
+Final gate (prod E2E bundle built with `NEXT_PUBLIC_E2E_HOOKS=1`, matching CI):
+tsc 0 · lint 0 · **vitest 1607 pass** (2 CPU-timing micro-benchmarks flake only
+under concurrent docker+server load; pass in isolation) · **Playwright 100 pass /
+4 skip / 0 fail** (4 skips = smart-split separation TS-001×3 + TS-005×1, the
+pre-existing collection-time `test.skip(!backendAvailable)` footgun; they skip in
+CI too) · **backend pytest 115 pass**.
+
 ## ▢ Remaining — needs a decision or live infra (NOT autonomous)
 
-- [infra] **Finish + ship the R2 cutover.** The rewire is ~70% done (both API
-  clients use `uploadFileToR2` with multipart fallback; `TurnstileGate`/
-  `useTurnstileToken` built). Remaining: **mount the gate** (it's destructured but
-  never rendered, so tokens never flow in prod); `test_main_json_endpoints.py`
-  (needs `respx` — not installed in the venv, or rewrite with `MockTransport`);
-  `e2e/r2-upload.spec.ts` + migrate existing specs; remove legacy multipart; then
-  **verify a real upload against the deployed Worker** (Turnstile secret set).
-  → replaces a currently-working path; do behind a deploy + your go-ahead.
+- [infra] **Finish + ship the R2 cutover.** Test debt now cleared on
+  `feat/design-100`: the gate is mounted (DeepMastering + StemsView render
+  `{turnstileGate}`); `test_main_json_endpoints.py` landed via httpx
+  `MockTransport` (no `respx`) and the JSON branches now return 422 on a bad
+  body (was a 500); `e2e/r2-upload.spec.ts` covers both transports and the
+  webServer sets a Turnstile test key so the direct-R2 path actually runs.
+
+  **Live verification (2026-07-08) against the deployed Workers found THREE
+  blockers; TWO are now code-fixed on `feat/design-100`:**
+  1. *Single-use token reused on `/upload/complete`* — the Worker ran Turnstile
+     siteverify on BOTH initiate and complete while the client sent the same
+     single-use token to both, so complete always 403'd (duplicate token) and
+     no upload could finalize. **CODE-FIXED (51758f6):** Turnstile is verified
+     on `/upload/initiate` only; complete is authorized by possession of the
+     uploadId+key capability initiate minted.
+  2. *Client bundle carried no Turnstile site key* — `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+     was only a Worker runtime var, but Next inlines `NEXT_PUBLIC_*` at BUILD
+     time, so `getTurnstileSiteKey()` returned null in the browser and every
+     upload silently fell back to legacy multipart. **CODE-FIXED (9b7a222):**
+     the public key is now in committed `.env.production`; a local `pnpm build`
+     confirms it inlines into a client chunk.
+  3. *Missing R2 secrets → uncaught 500 with NO CORS headers at the SigV4
+     presign step* (a valid Turnstile token reached presign and threw; browsers
+     saw an opaque ERR_FAILED). **Code hardened (d4905ea):** presign paths now
+     return an explicit `503 {"detail":"R2 storage not configured"}` WITH CORS,
+     and a top-level catch wraps all handlers so any throw is a CORS-safe JSON
+     500 — BUT this only makes the failure legible; the upload stays BLOCKED
+     until the secrets are actually set (infra, below).
+
+  **Still HELD — remaining INFRA steps (needs live infra + go-ahead), in order:**
+  1. Set the R2 secrets on `aurialis-core`
+     (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_ACCOUNT_ID` via
+     `wrangler secret put`) — without these initiate still (now cleanly) 503s.
+  2. Redeploy BOTH workers: `aurialis-core` (ships the worker code fixes #1/#3)
+     and `aurialis` (a fresh `pnpm build` bakes the inlined site key into the
+     client bundle #2).
+  3. Re-verify a real end-to-end upload against the deployed Worker (valid
+     Turnstile token → initiate → PUT parts → complete → analyze).
+  4. **THEN** remove the legacy multipart fallback — it replaces a
+     currently-working path, so only after live re-verification passes.
   [direct-R2 Tasks 5/6/8/9; #27/#28/#34]

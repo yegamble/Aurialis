@@ -87,6 +87,57 @@ describe("AlbumView", () => {
     expect(onOpenTrack).toHaveBeenCalledWith("fp-1");
   });
 
+  it("exposes the master-all button under a stable testid", () => {
+    render(<AlbumView {...baseProps} onMasterAll={vi.fn()} />);
+    expect(screen.getByTestId("album-master-all")).toBeInTheDocument();
+  });
+
+  it("disables master-all when no track has a measured LUFS", () => {
+    render(
+      <AlbumView
+        {...baseProps}
+        onMasterAll={vi.fn()}
+        tracks={[{ id: "n", title: "None", lufs: null, durationSec: 100 }]}
+      />,
+    );
+    expect(screen.getByTestId("album-master-all")).toBeDisabled();
+  });
+
+  it("enables master-all when at least one track is analyzed", () => {
+    render(<AlbumView {...baseProps} onMasterAll={vi.fn()} />);
+    expect(screen.getByTestId("album-master-all")).not.toBeDisabled();
+  });
+
+  it("renders per-track master progress with statuses and a cancel button", () => {
+    const onCancelMaster = vi.fn();
+    render(
+      <AlbumView
+        {...baseProps}
+        onMasterAll={vi.fn()}
+        onCancelMaster={onCancelMaster}
+        master={{
+          phase: "running",
+          total: 3,
+          completed: 1,
+          fraction: 1 / 3,
+          tracks: [
+            { id: "fp-1", title: "Velvet Static", status: "done" },
+            { id: "fp-2", title: "Slow Run", status: "rendering" },
+            { id: "fp-3", title: "Honey Walls", status: "error", error: "decode failed" },
+          ],
+        }}
+      />,
+    );
+    const progress = screen.getByTestId("album-master-progress");
+    expect(within(progress).getByText("Velvet Static")).toBeInTheDocument();
+    expect(within(progress).getByText(/decode failed/)).toBeInTheDocument();
+    const cancel = within(progress).getByRole("button", { name: /cancel/i });
+    fireEvent.click(cancel);
+    expect(onCancelMaster).toHaveBeenCalledOnce();
+    // master button disabled while running
+    expect(screen.getByTestId("album-master-all")).toBeDisabled();
+  });
+
   it("renders empty state when tracks is empty", () => {
     render(<AlbumView {...baseProps} tracks={[]} />);
     expect(screen.getByTestId("album-empty")).toBeInTheDocument();
@@ -96,5 +147,74 @@ describe("AlbumView", () => {
   it("renders the target LUFS in the loudness summary", () => {
     render(<AlbumView {...baseProps} />);
     expect(screen.getByTestId("album-target-lufs")).toHaveTextContent("−10.0");
+  });
+
+  it("renders the hero stats column with target, range and issues", () => {
+    render(<AlbumView {...baseProps} />);
+    const stats = screen.getByTestId("album-hero-stats");
+    // target
+    expect(within(stats).getByText(/−10\.0 LUFS/)).toBeInTheDocument();
+    // range = min → max of measured LUFS (−11.2 → −8.7)
+    expect(within(stats).getByText(/−11\.2\s*→\s*−8\.7/)).toBeInTheDocument();
+    // issues: none of the base tracks drift > 1.5 LU
+    expect(within(stats).getByText(/^Issues$/)).toBeInTheDocument();
+  });
+
+  it("counts issues as tracks drifting more than 1.5 LU from target", () => {
+    const props = {
+      ...baseProps,
+      targetLufs: -6,
+      tracks: [
+        { id: "a", title: "Loud", lufs: -8.7, durationSec: 100 },
+        { id: "b", title: "Fine", lufs: -6.2, durationSec: 100 },
+      ] as AlbumTrackRow[],
+    };
+    render(<AlbumView {...props} />);
+    const stats = screen.getByTestId("album-hero-stats");
+    // -8.7 vs -6 → 2.7 LU drift (issue); -6.2 vs -6 → 0.2 (ok) ⇒ 1 issue
+    expect(within(stats).getByTestId("album-hero-issues")).toHaveTextContent("1");
+  });
+
+  it("renders a consistency segmented control with LUFS active and others disabled", () => {
+    render(<AlbumView {...baseProps} />);
+    const seg = screen.getByTestId("album-consistency-segmented");
+    const lufs = within(seg).getByRole("button", { name: /^LUFS$/ });
+    expect(lufs).toHaveAttribute("aria-pressed", "true");
+    const tonal = within(seg).getByRole("button", { name: /^Tonal$/ });
+    const dyn = within(seg).getByRole("button", { name: /^Dynamics$/ });
+    expect(tonal).toBeDisabled();
+    expect(dyn).toBeDisabled();
+    expect(tonal).toHaveAttribute("title", "Coming soon");
+    expect(dyn).toHaveAttribute("title", "Coming soon");
+  });
+
+  it("renders a Smart suggestions card header", () => {
+    render(<AlbumView {...baseProps} />);
+    expect(screen.getByText(/Smart suggestions/i)).toBeInTheDocument();
+  });
+
+  it("renders 3-tier severity copy from the signed delta", () => {
+    const props = {
+      ...baseProps,
+      targetLufs: -10,
+      tracks: [
+        { id: "off", title: "WayOff", lufs: -13, durationSec: 100 }, // Δ-3.0 → off by
+        { id: "close", title: "Nearby", lufs: -11, durationSec: 100 }, // Δ-1.0 → close
+        { id: "on", title: "Bang", lufs: -10.2, durationSec: 100 }, // Δ-0.2 → on target
+      ] as AlbumTrackRow[],
+    };
+    render(<AlbumView {...props} />);
+    expect(screen.getByText(/Loudness off by −3\.0 LU/)).toBeInTheDocument();
+    expect(screen.getByText(/Close to target \(−1\.0 LU\)/)).toBeInTheDocument();
+    expect(screen.getByText(/^On target$/)).toBeInTheDocument();
+  });
+
+  it("shows an em-dash range when no track has a measured LUFS", () => {
+    const props = {
+      ...baseProps,
+      tracks: [{ id: "n", title: "None", lufs: null, durationSec: 100 }] as AlbumTrackRow[],
+    };
+    render(<AlbumView {...props} />);
+    expect(within(screen.getByTestId("album-hero-stats")).getByTestId("album-hero-range")).toHaveTextContent("—");
   });
 });

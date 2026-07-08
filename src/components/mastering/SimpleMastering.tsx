@@ -5,7 +5,16 @@ import { Wand2 } from "lucide-react";
 import { motion } from "motion/react";
 import type { GenreName } from "@/lib/audio/presets";
 import type { ToggleName } from "@/types/mastering";
+import type { OutputPresetName } from "@/lib/audio/ui-presets";
 import { GENRE_OPTIONS, QUICK_TOGGLE_OPTIONS } from "@/lib/audio/option-metadata";
+
+const OUTPUT_TARGETS: readonly OutputPresetName[] = [
+  "Spotify",
+  "Apple Music",
+  "YouTube",
+  "SoundCloud",
+  "CD",
+];
 
 interface SimpleMasteringProps {
   intensity: number;
@@ -15,6 +24,10 @@ interface SimpleMasteringProps {
   toggles: Record<ToggleName, boolean>;
   onToggle: (key: ToggleName) => void;
   onAutoMaster: () => void;
+  /** Currently-selected output-target platform, or null. */
+  outputPreset?: OutputPresetName | null;
+  /** Select an output-target platform (applies its loudness/ceiling preset). */
+  onOutputPresetChange?: (preset: OutputPresetName) => void;
 }
 
 export function SimpleMastering({
@@ -25,6 +38,8 @@ export function SimpleMastering({
   toggles,
   onToggle,
   onAutoMaster,
+  outputPreset = null,
+  onOutputPresetChange,
 }: SimpleMasteringProps) {
   const [isDragging, setIsDragging] = useState(false);
   const intensityRef = useRef(intensity);
@@ -185,6 +200,36 @@ export function SimpleMastering({
           ))}
         </div>
       </div>
+
+      {/* Output Target — platform loudness presets (design SimplePanel). */}
+      {onOutputPresetChange && (
+        <div>
+          <p className="text-[rgba(255,255,255,0.5)] text-xs uppercase tracking-wider mb-3">
+            Output Target
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {OUTPUT_TARGETS.map((p) => (
+              <button
+                key={p}
+                onClick={() => onOutputPresetChange(p)}
+                aria-pressed={outputPreset === p}
+                className={`px-3 py-1.5 rounded-lg text-[11px] transition-all
+                  ${
+                    outputPreset === p
+                      ? "bg-[#0a84ff]/[0.15] text-[#0a84ff]"
+                      : "bg-[rgba(255,255,255,0.04)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.06)]"
+                  }
+                `}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-[rgba(255,255,255,0.35)]">
+            Sets the loudness target for your chosen platform.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

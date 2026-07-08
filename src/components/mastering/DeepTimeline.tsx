@@ -84,12 +84,17 @@ export function DeepTimeline({
       width: [],
       airepair: [],
     };
-    if (!script) return map;
+    // Defensive: a malformed backend envelope (or a partially-populated
+    // script) may hand us a non-array `moves`. Render an empty timeline
+    // rather than throwing "script.moves is not iterable".
+    if (!script || !Array.isArray(script.moves)) return map;
     for (const move of script.moves) {
       map[laneForParam(move.param)].push(move);
     }
     return map;
   }, [script]);
+
+  const sections = Array.isArray(script?.sections) ? script.sections : [];
 
   if (!script) {
     return (
@@ -105,51 +110,55 @@ export function DeepTimeline({
   return (
     <div
       data-testid="deep-timeline"
-      className="relative rounded-md border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] overflow-hidden"
+      className="relative rounded-md border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)]"
     >
-      {/* Sections strip */}
-      <div
-        data-testid="deep-timeline-sections"
-        className="relative w-full border-b border-[rgba(255,255,255,0.06)]"
-        style={{ height: SECTIONS_HEIGHT }}
-      >
-        {script.sections.map((section) => (
-          <SectionBand
-            key={section.id}
-            section={section}
-            duration={duration}
-          />
-        ))}
-      </div>
-
-      {/* Lanes */}
-      {TIMELINE_LANES.map((lane) => (
+      {/* Content is clipped to the rounded frame; the move editor overlay is
+          a sibling below so it can float top-right without being clipped. */}
+      <div className="overflow-hidden rounded-md">
+        {/* Sections strip */}
         <div
-          key={lane.id}
-          data-testid={`deep-timeline-lane-${lane.id}`}
-          className="relative w-full border-b border-[rgba(255,255,255,0.04)] last:border-b-0"
-          style={{ height: LANE_HEIGHT }}
+          data-testid="deep-timeline-sections"
+          className="relative w-full border-b border-[rgba(255,255,255,0.06)]"
+          style={{ height: SECTIONS_HEIGHT }}
         >
-          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-[rgba(255,255,255,0.4)]">
-            {lane.label}
-          </span>
-          {movesByLane[lane.id].map((move) => (
-            <MoveMarker
-              key={move.id}
-              move={move}
+          {sections.map((section) => (
+            <SectionBand
+              key={section.id}
+              section={section}
               duration={duration}
-              isHovered={hoveredMoveId === move.id}
-              onHoverStart={() => setHoveredMoveId(move.id)}
-              onHoverEnd={() => setHoveredMoveId(null)}
-              onClick={() => {
-                setEditingMoveId(move.id);
-                onMoveClick?.(move);
-              }}
-              isAiRepair={lane.id === "airepair"}
             />
           ))}
         </div>
-      ))}
+
+        {/* Lanes */}
+        {TIMELINE_LANES.map((lane) => (
+          <div
+            key={lane.id}
+            data-testid={`deep-timeline-lane-${lane.id}`}
+            className="relative w-full border-b border-[rgba(255,255,255,0.04)] last:border-b-0"
+            style={{ height: LANE_HEIGHT }}
+          >
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-[rgba(255,255,255,0.4)]">
+              {lane.label}
+            </span>
+            {movesByLane[lane.id].map((move) => (
+              <MoveMarker
+                key={move.id}
+                move={move}
+                duration={duration}
+                isHovered={hoveredMoveId === move.id}
+                onHoverStart={() => setHoveredMoveId(move.id)}
+                onHoverEnd={() => setHoveredMoveId(null)}
+                onClick={() => {
+                  setEditingMoveId(move.id);
+                  onMoveClick?.(move);
+                }}
+                isAiRepair={lane.id === "airepair"}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
 
       {editingMoveId && script && renderEditorOverlay(
         script,
@@ -171,12 +180,10 @@ function renderEditorOverlay(
 ): React.ReactNode {
   const move = script.moves.find((m) => m.id === editingMoveId);
   if (!move) return null;
-  const left = (move.startSec / Math.max(script.duration, 0.001)) * 100;
   return (
     <div
       data-testid="deep-timeline-editor-overlay"
-      className="absolute z-10"
-      style={{ left: `${left}%`, top: SECTIONS_HEIGHT + LANE_HEIGHT * 5 + 4 }}
+      className="absolute right-2 top-2 z-20"
     >
       <MoveEditor
         move={move}

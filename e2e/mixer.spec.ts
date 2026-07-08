@@ -33,7 +33,11 @@ async function uploadStems(page: Page, files: string[]) {
 test.describe("TS-001: Multi-File Stem Upload", () => {
   test("navigate to /mix from home page via multi-file upload", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    // Wait for the upload input to be ready rather than "networkidle": the
+    // redesigned sidebar polls the backend health endpoint, so the network
+    // never goes idle on the home route and `waitForLoadState("networkidle")`
+    // times out at 30s.
+    await page.locator('input[type="file"]').waitFor({ state: "attached" });
 
     // Unified UploadScreen routes multi-file uploads to /mix.
     await page.locator('input[type="file"]').setInputFiles(STEM_FILES);
@@ -214,17 +218,24 @@ test.describe("TS-006: Send to Master", () => {
     await expect(page.getByText("mixed-stems.wav")).toBeVisible();
   });
 
-  test("export mix button triggers download", async ({ page }) => {
+  test("export mix opens the export dialog and triggers a download", async ({
+    page,
+  }) => {
     await navigateToMix(page);
     await uploadStems(page, STEM_FILES);
 
     const exportBtn = page.getByRole("button", { name: /export mix/i });
     await expect(exportBtn).toBeVisible();
 
-    // Set up download listener
-    const downloadPromise = page.waitForEvent("download", { timeout: 60000 });
-
+    // Export Mix now opens a dialog with the shared ExportPanel (format / SR /
+    // bit-depth / dither) instead of exporting immediately.
     await exportBtn.click();
+    const dialog = page.getByTestId("mix-export-dialog");
+    await expect(dialog).toBeVisible();
+
+    // Set up download listener, then export at the default WAV settings.
+    const downloadPromise = page.waitForEvent("download", { timeout: 60000 });
+    await dialog.getByRole("button", { name: /export wav/i }).click();
 
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe("mixed-stems.wav");

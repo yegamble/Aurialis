@@ -7,10 +7,10 @@
  *
  * Action values:
  *   "upload-initiate" — gates POST /upload/initiate
- *   "upload-complete" — gates POST /upload/complete
- * Validating on BOTH endpoints caps per-session abuse — a stolen token can't
- * drive an unbounded multipart upload because /upload/complete demands a
- * fresh token.
+ * Turnstile is verified ONCE, on /upload/initiate. /upload/complete is
+ * authorized by possession of the uploadId + key that initiate minted (an
+ * unguessable, already-scoped capability), so it does NOT re-verify — the
+ * single-use token is spent by the time complete runs.
  */
 
 const SITEVERIFY_URL =
@@ -24,7 +24,7 @@ interface SiteverifyResponse {
 
 export async function verifyTurnstile(
   token: string,
-  expectedAction: "upload-initiate" | "upload-complete",
+  expectedAction: "upload-initiate",
   remoteIp: string | null,
   env: Pick<Env, "TURNSTILE_SECRET_KEY">
 ): Promise<{ ok: true } | { ok: false; reason: string }> {

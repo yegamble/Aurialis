@@ -20,9 +20,10 @@ import tempfile
 from typing import Annotated
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, ValidationError
 
 from jobs import get_job, cleanup_expired, update_job
 from separation import start_separation, VALID_MODELS
@@ -161,7 +162,15 @@ async def _separate(
     Demucs separation."""
     ct = (request.headers.get("content-type") or "").lower()
     if ct.startswith("application/json"):
-        body = SeparateBody(**(await request.json()))
+        try:
+            body = SeparateBody(**(await request.json()))
+        except ValidationError as exc:
+            # Manual JSON parsing bypasses FastAPI's declared-body machinery, so
+            # a bad/missing fetchUrl must be translated to 422 by hand — otherwise
+            # the raw ValidationError surfaces as a 500.
+            raise HTTPException(
+                status_code=422, detail=jsonable_encoder(exc.errors())
+            ) from exc
         return await _separate_json(body)
     if file is None:
         raise HTTPException(
@@ -243,7 +252,12 @@ async def _analyze_deep(
     a deep-analysis job."""
     ct = (request.headers.get("content-type") or "").lower()
     if ct.startswith("application/json"):
-        body = AnalyzeDeepBody(**(await request.json()))
+        try:
+            body = AnalyzeDeepBody(**(await request.json()))
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=422, detail=jsonable_encoder(exc.errors())
+            ) from exc
         return await _analyze_deep_json(body)
     if file is None:
         raise HTTPException(

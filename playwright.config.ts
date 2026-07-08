@@ -24,5 +24,16 @@ export default defineConfig({
     command: process.env.CI ? "pnpm run start" : "pnpm run dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
+    // The Next dev/prod server can take well over the 60s default to become
+    // ready on a loaded machine; give it room so the suite doesn't false-fail
+    // at boot.
+    timeout: 180_000,
+    env: {
+      // Cloudflare's official always-passing test site key so the Turnstile
+      // gate activates during E2E (exercising the direct-to-R2 upload path in
+      // r2-upload.spec.ts instead of it self-skipping). Docs:
+      // https://developers.cloudflare.com/turnstile/troubleshooting/testing/
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+    },
   },
 });

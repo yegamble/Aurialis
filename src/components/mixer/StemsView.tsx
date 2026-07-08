@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { Play, Pause, SkipBack, Sparkles } from "lucide-react";
@@ -8,14 +8,18 @@ import { StemUpload } from "@/components/mixer/StemUpload";
 import { StemList } from "@/components/mixer/StemList";
 import { StemTimeline } from "@/components/mixer/StemTimeline";
 import { MixToolbar } from "@/components/mixer/MixToolbar";
+import { ExportPanel, type ExportSettings } from "@/components/export/ExportPanel";
 import { SeparationProgressCard } from "@/components/mix/SeparationProgressCard";
 import { useMixEngine } from "@/hooks/useMixEngine";
 import { useMixerStore } from "@/lib/stores/mixer-store";
 import { formatAutoMixStageLabel } from "@/lib/mix/auto-mix-label";
 import { useTurnstileToken } from "@/components/security/TurnstileGate";
-import { Sidebar, type ShellScreen } from "@/components/shell/Sidebar";
+import { type ShellScreen } from "@/components/shell/Sidebar";
+import { AppShell } from "@/components/shell/AppShell";
+import { libraryEntriesToSidebarTracks } from "@/components/shell/sidebar-tracks";
 import { useSettingsStore } from "@/lib/stores/settings-store";
-import { useIsLgViewport } from "@/hooks/use-is-lg-viewport";
+import { useLibraryStore } from "@/lib/stores/library-store";
+import { openLibraryEntryFromList } from "@/lib/storage/library-resume";
 import {
   startSeparation,
   downloadStem,
@@ -48,7 +52,10 @@ export function StemsView() {
   const router = useRouter();
   const proMode = useSettingsStore((s) => s.proMode);
   const setProMode = useSettingsStore((s) => s.setProMode);
-  const isLgViewport = useIsLgViewport();
+  const libraryEntries = useLibraryStore((s) => s.entries);
+  const activeFingerprint = useLibraryStore((s) => s.activeFingerprint);
+  const hydrateLibrary = useLibraryStore((s) => s.hydrate);
+  const libraryHydrated = useLibraryStore((s) => s.hydrated);
   const stems = useMixerStore((s) => s.stems);
   const isAutoMixing = useMixerStore((s) => s.isAutoMixing);
   const autoMixRunId = useMixerStore((s) => s.autoMixRunId);
@@ -81,6 +88,7 @@ export function StemsView() {
   const [isLoadingStems, setIsLoadingStems] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   // Separation state
   const [isSeparating, setIsSeparating] = useState(false);
@@ -113,6 +121,11 @@ export function StemsView() {
     const id = setInterval(() => setSeparationNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [isSeparating]);
+
+  // Hydrate the library so the shared sidebar can list real tracks on /mix.
+  useEffect(() => {
+    if (!libraryHydrated) void hydrateLibrary();
+  }, [libraryHydrated, hydrateLibrary]);
 
   // Detect which loaded stems have panned (stereo) content so we can offer the
   // client-side "Split L/R" control. Recomputes only when the stem set changes.
@@ -597,26 +610,24 @@ export function StemsView() {
     }
   };
 
-  const handleExportMix = async () => {
+  // Render the mix at the chosen settings and encode/download via the shared
+  // export path so /mix honors format/SR/bit-depth/dither (no more hardcoded
+  // 16-bit/44.1 kHz WAV). Invoked by the ExportPanel mounted in the dialog.
+  const handleMixExport = async (settings: ExportSettings) => {
     if (stems.length === 0 || isRendering) return;
     setIsRendering(true);
+    setLoadError(null);
     try {
       const { renderMix } = await import("@/lib/audio/mix-renderer");
-      const { encodeWav } = await import("@/lib/audio/wav-encoder");
+      const { encodeAndDownload } = await import("@/lib/audio/export");
 
-      const rendered = await renderMix(stems, 44100, masterParams);
-      const wavData = encodeWav(rendered, 16);
-      const blob = new Blob([wavData], { type: "audio/wav" });
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "mixed-stems.wav";
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const rendered = await renderMix(stems, settings.sampleRate, masterParams);
+      await encodeAndDownload(rendered, {
+        format: settings.format,
+        bitDepth: settings.bitDepth,
+        dither: settings.dither,
+        filename: "mixed-stems",
+      });
     } catch (e) {
       setLoadError(
         e instanceof Error ? e.message : "Failed to export mix"
@@ -632,24 +643,39 @@ export function StemsView() {
 
   const hasStemsLoaded = stems.length > 0;
 
+  const sidebarTracks = useMemo(
+    () => libraryEntriesToSidebarTracks(libraryEntries),
+    [libraryEntries],
+  );
+
+  const handleSelectTrack = useCallback(
+    async (id: string) => {
+      const res = await openLibraryEntryFromList(id);
+      if (res.ok) router.push("/master");
+    },
+    [router],
+  );
+
   const handleSidebarSelect = (next: ShellScreen) => {
     if (next === "stems") return;
     if (next === "album") router.push("/album");
+    else if (next === "upload") router.push("/?screen=upload");
     else router.push("/");
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-black">
+    <>
       {turnstileGate}
-      {isLgViewport && (
-        <Sidebar
-          activeScreen="stems"
-          onSelect={handleSidebarSelect}
-          proMode={proMode}
-          onProModeChange={setProMode}
-        />
-      )}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <AppShell
+        activeScreen="stems"
+        onSelect={handleSidebarSelect}
+        tracks={sidebarTracks}
+        activeTrackId={activeFingerprint}
+        onSelectTrack={(id) => void handleSelectTrack(id)}
+        proMode={proMode}
+        onProModeChange={setProMode}
+        variant="workspace"
+      >
       <MixToolbar
         onBack={() => {
           stop();
@@ -664,7 +690,7 @@ export function StemsView() {
         autoMixLabel={autoMixLabel}
         onSendToMaster={handleSendToMaster}
         sendDisabled={isRendering}
-        onExportMix={handleExportMix}
+        onExportMix={() => setShowExportDialog(true)}
         exportDisabled={isRendering}
       />
 
@@ -683,7 +709,7 @@ export function StemsView() {
         )}
 
         {/* Main content */}
-        <main className="min-w-0 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
+        <div className="min-w-0 flex-1 flex flex-col p-5 gap-4 overflow-y-auto">
           {/* Model selection dialog */}
           {showModelSelect && pendingSingleFile && (
             <div className="rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] p-6">
@@ -867,11 +893,69 @@ export function StemsView() {
                   </div>
                 </details>
               </div>
+
+              {/* Send-to-mastering CTA */}
+              <div
+                data-testid="send-to-master-card"
+                className="flex items-center gap-4 rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-4"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0a84ff]/10 text-[#0a84ff]">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold text-white">
+                    Send these stems to mastering?
+                  </div>
+                  <div className="text-[11.5px] text-[rgba(255,255,255,0.5)]">
+                    Aurialis will analyze each stem separately and run
+                    section-aware EQ/Comp on the bus.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSendToMaster}
+                  disabled={isRendering}
+                  className="shrink-0 rounded-lg bg-[#0a84ff] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[#0066cc] disabled:opacity-40"
+                >
+                  {isRendering ? "Rendering…" : "Smart Mix → Master"}
+                </button>
+              </div>
             </>
           )}
-        </main>
+        </div>
       </div>
-      </div>
-    </div>
+
+      {showExportDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Export mix"
+          data-testid="mix-export-dialog"
+          onClick={() => {
+            if (!isRendering) setShowExportDialog(false);
+          }}
+        >
+          <div
+            className="w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-medium text-white">Export mix</h2>
+              <button
+                type="button"
+                onClick={() => setShowExportDialog(false)}
+                disabled={isRendering}
+                className="rounded-md px-2 py-1 text-xs text-[rgba(255,255,255,0.5)] hover:text-white disabled:opacity-40"
+              >
+                Close
+              </button>
+            </div>
+            <ExportPanel onExport={handleMixExport} isExporting={isRendering} />
+          </div>
+        </div>
+      )}
+      </AppShell>
+    </>
   );
 }

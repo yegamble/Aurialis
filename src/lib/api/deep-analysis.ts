@@ -222,20 +222,54 @@ function deriveSubStatus(
   return null;
 }
 
-/** Fetch the full MasteringScript once the job is done. */
+/**
+ * Backend `/jobs/{id}/result` envelope. The route returns the job's
+ * `partial_result` verbatim: `{ sections, stems?, script }` where `script`
+ * is the actual {@link MasteringScript}. Older callers mistakenly cast the
+ * whole envelope to a MasteringScript, which crashed the timeline
+ * (`script.moves is not iterable`) after every real analysis.
+ */
+export interface DeepResultEnvelope {
+  sections?: unknown;
+  stems?: unknown;
+  script?: MasteringScript;
+  /** Present when script generation failed inside the worker. */
+  script_error?: string;
+}
+
+/**
+ * Fetch the full MasteringScript once the job is done. Unwraps the backend
+ * envelope (`{ sections, stems, script }`) and validates the `script` field
+ * exists — throwing a useful {@link DeepAnalysisError} otherwise, rather than
+ * handing malformed data downstream.
+ */
 export async function fetchDeepResult(
   jobId: string,
   signal?: AbortSignal
 ): Promise<MasteringScript> {
+  const url = `${DEEP_ANALYSIS_API_URL}/jobs/${jobId}/result`;
   const response = await fetchOrThrow(
     {
-      url: `${DEEP_ANALYSIS_API_URL}/jobs/${jobId}/result`,
+      url,
       jobId,
       errorPrefix: "Result fetch failed",
     },
     { signal }
   );
-  return (await response.json()) as MasteringScript;
+  const body = (await response.json()) as DeepResultEnvelope | null;
+  const script = body?.script;
+  if (!script || typeof script !== "object" || !Array.isArray(script.moves)) {
+    throw buildAndLogError({
+      message: body?.script_error
+        ? `Script generation failed: ${body.script_error}`
+        : "Analysis result is missing the mastering script",
+      url,
+      status: "backend-error",
+      jobId,
+      raw: JSON.stringify(body ?? null).slice(0, 2000),
+    });
+  }
+  return script;
 }
 
 /**

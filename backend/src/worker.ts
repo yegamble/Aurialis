@@ -270,6 +270,30 @@ async function handleAbort(request: Request, env: Env): Promise<Response> {
 
 // ----------------------- Container forward path -----------------------
 
+/**
+ * Re-emit an upstream (container) response with the worker's CORS headers.
+ * The container's FastAPI knows nothing about CORS — without this, any
+ * container error (or uvicorn's bare 500 while the container boots) reaches
+ * the browser without access-control-allow-origin and surfaces as an opaque
+ * "network error" instead of the real status/detail. Verified live
+ * 2026-07-08 during the R2 cutover.
+ */
+export function withCorsPassthrough(
+  request: Request,
+  env: Env,
+  upstream: Response
+): Response {
+  const headers = new Headers(upstream.headers);
+  for (const [k, v] of Object.entries(corsHeaders(request, env))) {
+    if (typeof v === "string") headers.set(k, v);
+  }
+  return new Response(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers,
+  });
+}
+
 async function forwardToContainer(
   request: Request,
   env: Env,
@@ -279,7 +303,7 @@ async function forwardToContainer(
   const stub = env.BACKEND.get(id);
 
   if (rewrittenBody === null) {
-    return stub.fetch(request);
+    return withCorsPassthrough(request, env, await stub.fetch(request));
   }
 
   // Build a new request preserving method + most headers, but with the new
@@ -291,7 +315,7 @@ async function forwardToContainer(
     headers,
     body: rewrittenBody,
   });
-  return stub.fetch(forwardReq);
+  return withCorsPassthrough(request, env, await stub.fetch(forwardReq));
 }
 
 interface AnalyzeJsonBody {

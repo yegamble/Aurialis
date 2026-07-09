@@ -15,7 +15,7 @@ import {
   waitOnExecutionContext,
 } from "cloudflare:test";
 
-import worker from "../worker";
+import worker, { withCorsPassthrough } from "../worker";
 
 // Test-only secrets injected via miniflare bindings configured in
 // vitest.worker.config.ts. Production secrets are never present at test
@@ -493,5 +493,43 @@ describe("POST /analyze/deep — JSON forward path", () => {
     const res = await worker.fetch(req, env, ctx);
     await waitOnExecutionContext(ctx);
     expect(res.status).toBe(204);
+  });
+});
+
+describe("withCorsPassthrough — container responses carry CORS", () => {
+  it("adds ACAO to an upstream error while preserving status and body", async () => {
+    // uvicorn's bare 500 (or any container error) has no CORS headers; the
+    // browser would mask it as an opaque "network error". The passthrough
+    // wrapper must re-emit it WITH the worker's CORS set.
+    const req = makeRequest("/analyze/deep", {
+      body: "{}",
+      headers: { origin: ORIGIN },
+    });
+    const upstream = new Response("Internal Server Error", {
+      status: 500,
+      statusText: "Internal Server Error",
+      headers: { "content-type": "text/plain" },
+    });
+    const wrapped = withCorsPassthrough(req, env, upstream);
+    expect(wrapped.status).toBe(500);
+    expect(wrapped.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(wrapped.headers.get("content-type")).toBe("text/plain");
+    expect(await wrapped.text()).toBe("Internal Server Error");
+  });
+
+  it("keeps upstream success bodies/headers intact", async () => {
+    const req = makeRequest("/separate", {
+      body: "{}",
+      headers: { origin: ORIGIN },
+    });
+    const upstream = new Response(JSON.stringify({ job_id: "j1" }), {
+      status: 200,
+      headers: { "content-type": "application/json", "x-upstream": "1" },
+    });
+    const wrapped = withCorsPassthrough(req, env, upstream);
+    expect(wrapped.status).toBe(200);
+    expect(wrapped.headers.get("x-upstream")).toBe("1");
+    expect(wrapped.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(((await wrapped.json()) as { job_id: string }).job_id).toBe("j1");
   });
 });

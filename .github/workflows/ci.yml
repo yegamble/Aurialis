@@ -46,6 +46,12 @@ jobs:
       NEXT_PUBLIC_SEPARATION_API_URL: http://localhost:8000
       NEXT_PUBLIC_DEEP_ANALYSIS_API_URL: http://localhost:8000
       NEXT_PUBLIC_E2E_HOOKS: "1"
+      # E2E runs in honest no-Turnstile dev mode (multipart to the mocked local
+      # backend). `.env.production` commits the real site key for deploys, and
+      # under the upload-strategy contract a configured key makes R2 REQUIRED —
+      # which would break every backend-driven spec. r2-upload.spec enables the
+      # gate per-page via the __aurialisTurnstileSiteKey E2E seam instead.
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: ""
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

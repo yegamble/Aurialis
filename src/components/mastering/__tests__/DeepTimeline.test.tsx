@@ -180,3 +180,89 @@ function within(laneTestId: string, moveTestId: string): boolean {
   const move = lane.querySelector(`[data-testid="${moveTestId}"]`);
   return move !== null;
 }
+
+describe("DeepTimeline envelope rendering (whole-track moves)", () => {
+  // Real scripts emit one whole-track envelope move per parameter
+  // (startSec = 0) — the timeline must show the envelope's breakpoints
+  // across the lane, not a single dot clipped at x=0.
+  const envelopeMove = () =>
+    move({
+      id: "env1",
+      param: "master.inputGain",
+      startSec: 0,
+      endSec: 30,
+      envelope: [
+        [0, 0],
+        [10, 0], // flat — no breakpoint
+        [15, 2], // change
+        [20, 2], // flat — no breakpoint
+        [25, -1], // change
+      ],
+    });
+
+  it("renders a dot per value-changing breakpoint plus the step line", () => {
+    render(<DeepTimeline script={script([envelopeMove()], [section()])} />);
+    // Primary marker keeps the stable testid; extra breakpoints are suffixed.
+    expect(screen.getByTestId("deep-timeline-move-env1")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("deep-timeline-move-env1-bp-1"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("deep-timeline-move-env1-bp-2"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("deep-timeline-move-env1-bp-3"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("deep-timeline-envelope-env1"),
+    ).toBeInTheDocument();
+  });
+
+  it("clamps the startSec=0 marker away from the lane edge (no half-clip)", () => {
+    render(<DeepTimeline script={script([envelopeMove()], [section()])} />);
+    const primary = screen.getByTestId("deep-timeline-move-env1");
+    // jsdom mangles clamp() serialization — assert the parts, not the exact form.
+    expect(primary.style.left).toContain("clamp(");
+    expect(primary.style.left).toContain("8px");
+    expect(primary.style.left).toContain("calc(100% - 8px)");
+  });
+
+  it("renders a flat envelope as a single centered dot without a step line", () => {
+    const flat = move({
+      id: "flat1",
+      startSec: 0,
+      envelope: [
+        [0, 1],
+        [30, 1],
+      ],
+    });
+    render(<DeepTimeline script={script([flat], [section()])} />);
+    expect(screen.getByTestId("deep-timeline-move-flat1")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("deep-timeline-move-flat1-bp-1"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("deep-timeline-envelope-flat1"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("deep-timeline-move-flat1").style.top).toBe(
+      "50%",
+    );
+  });
+
+  it("clicking a breakpoint dot opens the editor for the move", () => {
+    const onMoveClick = vi.fn();
+    render(
+      <DeepTimeline
+        script={script([envelopeMove()], [section()])}
+        onMoveClick={onMoveClick}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("deep-timeline-move-env1-bp-2"));
+    expect(onMoveClick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "env1" }),
+    );
+    expect(
+      screen.getByTestId("deep-timeline-editor-overlay"),
+    ).toBeInTheDocument();
+  });
+});

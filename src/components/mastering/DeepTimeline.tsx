@@ -12,9 +12,12 @@
  *       Width        (master.stereoWidth.width)
  *       AI Repair    (master.aiRepair.amount) — distinct accent + badge
  *
- * Each Move is rendered as a marker at its `startSec` on the appropriate
- * lane. Hovering a marker shows the move's `reason` in a tooltip. T15 wires
- * click → MoveEditor popover.
+ * Each Move renders its automation ENVELOPE across the appropriate lane:
+ * a subtle step-line plus a dot at every value-changing breakpoint (real
+ * scripts emit one whole-track envelope move per parameter, so a single
+ * startSec marker would collapse every lane to one dot at x=0). Hovering
+ * shows the move's `reason` (breakpoints show value @ time); clicking any
+ * dot opens the MoveEditor popover for the move.
  *
  * v1 uses absolutely-positioned DOM markers — script generators target
  * <30 moves per track, so React rerender cost stays well below the
@@ -30,6 +33,10 @@ import type {
 } from "@/types/deep-mastering";
 import { useDeepStore } from "@/lib/stores/deep-store";
 import { MoveEditor } from "./MoveEditor";
+import {
+  envelopeBreakpoints,
+  normalizedLevels,
+} from "./deep-timeline-envelope";
 
 const LANE_HEIGHT = 32;
 const SECTIONS_HEIGHT = 24;
@@ -233,6 +240,11 @@ interface MoveMarkerProps {
   onClick: () => void;
 }
 
+/** Vertical dot position inside the lane: 22%..78%, higher value = higher dot. */
+function levelToTopPct(level: number): number {
+  return 78 - level * 56;
+}
+
 function MoveMarker({
   move,
   duration,
@@ -242,49 +254,108 @@ function MoveMarker({
   onHoverEnd,
   onClick,
 }: MoveMarkerProps): React.ReactElement {
-  const left = (move.startSec / duration) * 100;
+  const points = envelopeBreakpoints(move);
+  const levels = normalizedLevels(points);
+  const xPct = (t: number) =>
+    duration > 0 ? Math.min(100, Math.max(0, (t / duration) * 100)) : 0;
+
+  const color = isAiRepair
+    ? "#ff7a00"
+    : move.edited
+      ? "#ffd60a"
+      : "#0a84ff";
+  const opacityClass = move.muted
+    ? "opacity-30"
+    : isHovered
+      ? "opacity-100"
+      : "opacity-80";
+
+  // Step path across the lane: hold each value until the next breakpoint,
+  // then step to it; extend the final value to the lane's right edge.
+  const stepPath = points
+    .map((p, i) => {
+      const x = xPct(p.t);
+      const y = levelToTopPct(levels[i]);
+      if (i === 0) return `M ${x} ${y}`;
+      return `H ${x} V ${y}`;
+    })
+    .join(" ")
+    .concat(" H 100");
+
   return (
-    <button
-      type="button"
-      data-testid={`deep-timeline-move-${move.id}`}
-      data-airepair={isAiRepair ? "true" : "false"}
-      onMouseEnter={onHoverStart}
-      onMouseLeave={onHoverEnd}
-      onFocus={onHoverStart}
-      onBlur={onHoverEnd}
-      onClick={onClick}
-      className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all ${
-        move.muted
-          ? "opacity-30"
-          : isHovered
-            ? "opacity-100 scale-125"
-            : "opacity-80"
-      } ${
-        isAiRepair
-          ? "bg-[#ff7a00] ring-1 ring-[rgba(255,255,255,0.3)]"
-          : move.edited
-            ? "bg-[#ffd60a]"
-            : "bg-[#0a84ff]"
-      }`}
-      style={{ left: `${left}%`, width: 10, height: 10 }}
-    >
-      {isAiRepair && (
-        <span
-          data-testid={`deep-timeline-ai-badge-${move.id}`}
-          className="absolute -top-3 left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wider text-[#ff7a00]"
+    <>
+      {points.length > 1 && (
+        <svg
+          aria-hidden="true"
+          data-testid={`deep-timeline-envelope-${move.id}`}
+          className={`absolute inset-0 h-full w-full pointer-events-none ${
+            move.muted ? "opacity-15" : "opacity-40"
+          }`}
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
         >
-          AI
-        </span>
+          <path
+            d={stepPath}
+            fill="none"
+            stroke={color}
+            strokeWidth={1}
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
       )}
-      {isHovered && (
-        <div
-          role="tooltip"
-          data-testid={`deep-timeline-tooltip-${move.id}`}
-          className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-[rgba(0,0,0,0.85)] px-2 py-1 text-[10px] text-white pointer-events-none"
+      {points.map((point, i) => (
+        <button
+          key={`${move.id}-${i}`}
+          type="button"
+          data-testid={
+            i === 0
+              ? `deep-timeline-move-${move.id}`
+              : `deep-timeline-move-${move.id}-bp-${i}`
+          }
+          data-airepair={isAiRepair ? "true" : "false"}
+          onMouseEnter={onHoverStart}
+          onMouseLeave={onHoverEnd}
+          onFocus={onHoverStart}
+          onBlur={onHoverEnd}
+          onClick={onClick}
+          className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full transition-all ${opacityClass} ${
+            isHovered ? "scale-125" : ""
+          } ${isAiRepair ? "ring-1 ring-[rgba(255,255,255,0.3)]" : ""}`}
+          style={{
+            // Clamp so edge breakpoints (startSec=0, duration) never render
+            // half-clipped outside the lane.
+            left: `clamp(8px, ${xPct(point.t)}%, calc(100% - 8px))`,
+            top: `${levelToTopPct(levels[i])}%`,
+            width: 10,
+            height: 10,
+            backgroundColor: color,
+          }}
         >
-          {move.reason || `${move.param} @ ${move.startSec.toFixed(2)}s`}
-        </div>
-      )}
-    </button>
+          {isAiRepair && i === 0 && (
+            <span
+              data-testid={`deep-timeline-ai-badge-${move.id}`}
+              className="absolute -top-3 left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wider text-[#ff7a00]"
+            >
+              AI
+            </span>
+          )}
+          {isHovered && (
+            <div
+              role="tooltip"
+              data-testid={
+                i === 0
+                  ? `deep-timeline-tooltip-${move.id}`
+                  : `deep-timeline-tooltip-${move.id}-bp-${i}`
+              }
+              className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-[rgba(0,0,0,0.85)] px-2 py-1 text-[10px] text-white pointer-events-none"
+            >
+              {i === 0
+                ? move.reason || `${move.param} @ ${move.startSec.toFixed(2)}s`
+                : `${point.v.toFixed(2)} @ ${point.t.toFixed(1)}s`}
+            </div>
+          )}
+        </button>
+      ))}
+    </>
   );
 }

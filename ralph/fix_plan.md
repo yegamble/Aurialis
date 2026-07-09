@@ -194,3 +194,22 @@ CI too) · **backend pytest 115 pass**.
   4. **THEN** remove the legacy multipart fallback — it replaces a
      currently-working path, so only after live re-verification passes.
   [direct-R2 Tasks 5/6/8/9; #27/#28/#34]
+
+  **✅ CUTOVER COMPLETE — live-verified 2026-07-08 (all held steps executed):**
+  R2 + Analytics Engine + Workers Paid re-enabled on the account (a billing
+  lapse had silently disabled all three — the "10136 enable R2" and containers
+  "Unauthorized" errors were the account plan, not tokens); bucket + lifecycle
+  + fresh secrets provisioned; both workers + the container image deployed
+  (CI token gained R2 + Cloudchamber scopes; wrangler bumped to 4.108).
+  Live end-to-end verification from the production browser: Turnstile gate →
+  initiate 200 → part PUTs → complete 200 → /analyze/deep JSON → real deep
+  analysis to done/100% with the script rendered. Two further production-only
+  bugs found and fixed during verification: quoted S3 part ETags rejected by
+  the R2 binding's complete() (worker now normalizes), and a double-consumed
+  httpx stream in backend r2_download (StreamConsumed → bare 500 on every
+  JSON download; now single-pass with a one-shot-stream regression test).
+  **The legacy multipart fallback is REMOVED** (src/lib/api/upload-strategy.ts):
+  site key configured → R2 required with an actionable no-token error; no site
+  key → dev-only multipart (local docker). Container error passthroughs now
+  carry CORS. [closed 2026-07-08]
+

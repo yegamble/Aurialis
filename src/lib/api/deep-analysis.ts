@@ -6,6 +6,7 @@
 
 import type { MasteringScript, ProfileId } from "@/types/deep-mastering";
 import { uploadFileToR2 } from "./r2-upload";
+import { resolveUploadStrategy, TurnstileRequiredError } from "./upload-strategy";
 
 export const DEEP_ANALYSIS_API_URL =
   process.env.NEXT_PUBLIC_DEEP_ANALYSIS_API_URL ??
@@ -155,11 +156,25 @@ export async function startDeepAnalysis(
   turnstileToken?: string,
   signal?: AbortSignal
 ): Promise<DeepStartResult> {
-  // R2 path when a Turnstile token is available (browser → R2, then JSON {key});
-  // otherwise the legacy multipart path the backend still accepts.
+  // Transport per the upload-strategy contract: R2 REQUIRED when Turnstile
+  // is configured; multipart is the dev-only path (no site key = no Worker).
+  let strategy;
+  try {
+    strategy = resolveUploadStrategy(turnstileToken);
+  } catch (e) {
+    if (e instanceof TurnstileRequiredError) {
+      throw buildAndLogError({
+        message: e.message,
+        url: `${DEEP_ANALYSIS_API_URL}/analyze/deep`,
+        status: "client",
+        raw: "Turnstile is configured but no token was available",
+      });
+    }
+    throw e;
+  }
   let init: RequestInit;
-  if (turnstileToken) {
-    const { key } = await uploadFileToR2(file, turnstileToken, DEEP_ANALYSIS_API_URL, {
+  if (strategy.kind === "r2") {
+    const { key } = await uploadFileToR2(file, strategy.token, DEEP_ANALYSIS_API_URL, {
       signal,
     });
     init = {
@@ -169,6 +184,7 @@ export async function startDeepAnalysis(
       signal,
     };
   } else {
+    // Dev-only: direct multipart to the local FastAPI backend.
     const formData = new FormData();
     formData.append("file", file);
     formData.append("profile", profile);

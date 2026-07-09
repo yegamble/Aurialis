@@ -4,6 +4,7 @@
  */
 
 import { uploadFileToR2 } from "./r2-upload";
+import { resolveUploadStrategy, TurnstileRequiredError } from "./upload-strategy";
 
 export const SEPARATION_API_URL =
   process.env.NEXT_PUBLIC_SEPARATION_API_URL ?? "http://localhost:8000";
@@ -102,12 +103,25 @@ export async function startSeparation(
 ): Promise<SeparationStartResult> {
   const url = `${SEPARATION_API_URL}/separate`;
 
-  // When a Turnstile token is available, upload directly to R2 and hand the
-  // backend just the object key (no request-size ceiling). Otherwise fall back
-  // to the legacy multipart path, which the backend still accepts.
+  // Transport per the upload-strategy contract: R2 REQUIRED when Turnstile
+  // is configured; multipart is the dev-only path (no site key = no Worker).
+  let strategy;
+  try {
+    strategy = resolveUploadStrategy(turnstileToken);
+  } catch (e) {
+    if (e instanceof TurnstileRequiredError) {
+      throw buildSeparationError({
+        message: e.message,
+        url,
+        status: "client",
+        raw: "Turnstile is configured but no token was available",
+      });
+    }
+    throw e;
+  }
   let init: RequestInit;
-  if (turnstileToken) {
-    const { key } = await uploadFileToR2(file, turnstileToken, SEPARATION_API_URL, {
+  if (strategy.kind === "r2") {
+    const { key } = await uploadFileToR2(file, strategy.token, SEPARATION_API_URL, {
       signal,
     });
     init = {
@@ -117,6 +131,7 @@ export async function startSeparation(
       signal,
     };
   } else {
+    // Dev-only: direct multipart to the local FastAPI backend.
     const formData = new FormData();
     formData.append("file", file);
     formData.append("model", model);

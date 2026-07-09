@@ -21,9 +21,14 @@ const file = () => new File([new Uint8Array(10)], "a.wav", { type: "audio/wav" }
 
 describe("startDeepAnalysis — R2 path vs legacy fallback", () => {
   beforeEach(() => uploadMock.mockReset());
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
 
   it("with a Turnstile token: uploads to R2, then POSTs JSON { key, profile }", async () => {
+    // Contract: the R2 path requires the site key to be CONFIGURED.
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key");
     uploadMock.mockResolvedValue({ key: "obj-123.wav" });
     const fetchMock = vi.fn(async () => okJson({ job_id: "j1", status: "queued" }));
     vi.stubGlobal("fetch", fetchMock);

@@ -29,7 +29,10 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
-import { stubTurnstileNoToken } from "./helpers/turnstile";
+import {
+  enableTurnstileGate,
+  stubTurnstileNoToken,
+} from "./helpers/turnstile";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEST_WAV = path.join(__dirname, "fixtures", "test-audio.wav");
@@ -79,9 +82,9 @@ test.describe("R2 upload transport selection", () => {
   test("no Turnstile token → legacy multipart POST, no R2 control-plane calls", async ({
     page,
   }) => {
-    // The webServer configures a Cloudflare test site key, so the gate now
-    // renders. Neutralise it (render without a token callback) so the browser
-    // stays on the deterministic legacy multipart path regardless of env.
+    // The webServer runs with NO site key (honest dev mode) — the strategy
+    // contract routes uploads to the dev-only multipart path. The no-token
+    // stub stays as a defensive guarantee should env leak a key.
     await stubTurnstileNoToken(page);
 
     let initiateCalls = 0;
@@ -151,9 +154,11 @@ test.describe("R2 upload transport selection", () => {
   test("with a Turnstile token → direct-to-R2 upload then JSON { key, profile }", async ({
     page,
   }) => {
+    // Enable the gate for THIS page (the webServer has no global site key),
+    // making the R2 path REQUIRED per the upload-strategy contract.
+    await enableTurnstileGate(page);
     // Stub the Turnstile widget BEFORE app code runs so no remote script loads
-    // and the gate yields a token synchronously (only matters when a site key
-    // is configured; otherwise the gate never renders and we skip below).
+    // and the gate yields a token synchronously.
     await page.addInitScript(() => {
       // @ts-expect-error - injected test double for the Turnstile global.
       window.turnstile = {
@@ -290,5 +295,37 @@ test.describe("R2 upload transport selection", () => {
       key: R2_KEY,
       profile: expect.any(String),
     });
+  });
+
+  test("site key configured but NO token → actionable error, nothing uploaded", async ({
+    page,
+  }) => {
+    // Strategy contract: with Turnstile configured, a missing token must be a
+    // clear user-facing error — never a silent multipart fallback.
+    await enableTurnstileGate(page);
+    await stubTurnstileNoToken(page); // widget renders, token never issued
+    await page.route("https://challenges.cloudflare.com/**", (route: Route) =>
+      route.abort(),
+    );
+
+    let initiateCalls = 0;
+    let analyzeCalls = 0;
+    await page.route(url("/upload/initiate"), (route: Route) => {
+      initiateCalls++;
+      return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+    });
+    await page.route(url("/analyze/deep"), (route: Route) => {
+      analyzeCalls++;
+      return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+    });
+
+    await uploadAndOpenDeep(page);
+    await page.getByTestId("deep-analyze-button").click();
+
+    await expect(
+      page.getByText(/verification required/i).first(),
+    ).toBeVisible({ timeout: 15_000 });
+    expect(initiateCalls).toBe(0);
+    expect(analyzeCalls).toBe(0);
   });
 });

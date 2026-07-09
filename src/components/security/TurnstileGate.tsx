@@ -15,12 +15,27 @@ import {
  * NEEDS: `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public, in wrangler.jsonc) + the
  * Worker secret `TURNSTILE_SECRET` (`wrangler secret put`, backend) to activate.
  * When the site key is ABSENT (local dev / tests) the gate renders nothing and
- * yields an empty token, so callers transparently fall back to the legacy
- * upload path — nothing is gated off.
+ * yields an empty token. When the site key is configured, uploads REQUIRE a
+ * token (see src/lib/api/upload-strategy.ts); without a site key (local dev)
+ * the dev-only multipart path is used — nothing is gated off.
  */
 
 /** Public Turnstile site key, or null when not configured. */
 export function getTurnstileSiteKey(): string | null {
+  // Dev/E2E-only runtime override (same guard as the __aurialis* store
+  // seams): lets e2e/r2-upload.spec.ts enable the gate per-spec while every
+  // other spec runs in honest no-site-key dev mode (multipart to the local
+  // backend). Never active in a production build without E2E hooks.
+  if (
+    typeof window !== "undefined" &&
+    (process.env.NODE_ENV !== "production" ||
+      process.env.NEXT_PUBLIC_E2E_HOOKS === "1")
+  ) {
+    const override = (
+      window as unknown as { __aurialisTurnstileSiteKey?: string }
+    ).__aurialisTurnstileSiteKey;
+    if (override) return override;
+  }
   const key = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   return key && key.length > 0 ? key : null;
 }

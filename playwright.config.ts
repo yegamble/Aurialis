@@ -28,12 +28,9 @@ export default defineConfig({
     // ready on a loaded machine; give it room so the suite doesn't false-fail
     // at boot.
     timeout: 180_000,
-    env: {
-      // Cloudflare's official always-passing test site key so the Turnstile
-      // gate activates during E2E (exercising the direct-to-R2 upload path in
-      // r2-upload.spec.ts instead of it self-skipping). Docs:
-      // https://developers.cloudflare.com/turnstile/troubleshooting/testing/
-      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
-    },
+    // No global Turnstile site key: backend-driven specs (smart-split,
+    // deep-mastering, mixer) run in honest no-site-key dev mode — the
+    // dev-only multipart path. r2-upload.spec.ts enables the gate per-spec
+    // via the __aurialisTurnstileSiteKey E2E seam (see e2e/helpers/turnstile.ts).
   },
 });

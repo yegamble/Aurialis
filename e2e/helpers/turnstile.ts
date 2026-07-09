@@ -6,11 +6,10 @@ import type { Page } from "@playwright/test";
  * fires a token callback. The gate still renders its container div, but the
  * empty token forces the deterministic legacy multipart upload path.
  *
- * Needed because the Playwright webServer now sets a Cloudflare *test* site key
- * (so r2-upload.spec can exercise the direct-to-R2 path). Every other spec that
- * triggers a token-gated upload must opt out, or the always-passing test widget
- * would auto-issue a token and route uploads through the (unmocked) R2 control
- * plane.
+ * The Playwright webServer runs WITHOUT a Turnstile site key, so specs run in
+ * honest dev mode (multipart to the local backend) by default. Specs that need
+ * the gate (r2-upload.spec.ts) enable it per-page via enableTurnstileGate();
+ * the no-token stub remains for defensive determinism.
  */
 export async function stubTurnstileNoToken(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -41,4 +40,21 @@ export async function stubTurnstileWithToken(
       remove: () => {},
     };
   }, token);
+}
+
+/**
+ * Enable the Turnstile gate for THIS page only via the app's dev/E2E seam
+ * (window.__aurialisTurnstileSiteKey, read by getTurnstileSiteKey). Under the
+ * upload-strategy contract this makes the R2 path REQUIRED, so pair it with
+ * stubTurnstileWithToken (R2 path) or stubTurnstileNoToken (error path).
+ */
+export async function enableTurnstileGate(
+  page: Page,
+  siteKey = "1x00000000000000000000AA",
+): Promise<void> {
+  await page.addInitScript((key: string) => {
+    (
+      window as unknown as { __aurialisTurnstileSiteKey?: string }
+    ).__aurialisTurnstileSiteKey = key;
+  }, siteKey);
 }
